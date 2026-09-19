@@ -26,6 +26,6 @@
     <Reference Include="System.Management" />
   </ItemGroup>
   <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Exec Command="copy /Y &quot;$(ProjectDir)$(OutDir)$(TargetFileName)&quot; &quot;$(SolutionDir)Output\Dragon ball_237b_Data\Managed\$(TargetFileName)&quot;" />
+    <Exec Command="if not exist &quot;$(MSBuildProjectDirectory)\..\Output\Dragon ball_237b_Data\Managed&quot; mkdir &quot;$(MSBuildProjectDirectory)\..\Output\Dragon ball_237b_Data\Managed&quot;&#xD;&#xA;copy /Y &quot;$(TargetPath)&quot; &quot;$(MSBuildProjectDirectory)\..\Output\Dragon ball_237b_Data\Managed\$(TargetFileName)&quot;" />
   </Target>
 </Project>
