@@ -1053,7 +1053,10 @@ namespace AssemblyCSharp.Functions
 				return false;
 			if (!method_23(SkillBetter))
 				return false;
-			bool flag = (SkillBetter.gclass47_0.sbyte_0 == 17 && skill.gclass47_0.sbyte_0 == 2) || (SkillBetter.gclass47_0.sbyte_0 == 9 && skill.gclass47_0.sbyte_0 == 0);
+
+			// Chỉ so sánh độ ưu tiên khi đã có một skill hợp lệ trước đó.
+			// Tránh truy cập skill.gclass47_0 khi skill đang null.
+			bool flag = skill != null && ((SkillBetter.gclass47_0.sbyte_0 == 17 && skill.gclass47_0.sbyte_0 == 2) || (SkillBetter.gclass47_0.sbyte_0 == 9 && skill.gclass47_0.sbyte_0 == 0));
 			if (skill != null && skill.int_1 >= SkillBetter.int_1 && !flag)
 				return false;
 			return true;
@@ -1061,16 +1064,25 @@ namespace AssemblyCSharp.Functions
 
 		public bool method_23(GClass63 skill)
 		{
-			if (GClass203.smethod_18() - skill.long_1 > skill.int_1)
+			if (skill == null)
+				return false;
+
+			long elapsed = GClass203.smethod_18() - skill.long_1;
+
+			// Skill train chỉ được xem là ứng viên khi cooldown đã thực sự kết thúc.
+			// Trước đây một số skill tấn công trong sbyte_1 vẫn lọt qua khi bool_0=true,
+			// khiến auto train giữ skill đang hồi thay vì chuyển ngay sang skill khác đã sẵn sàng.
+			if (elapsed >= skill.int_1)
 				skill.bool_0 = false;
-			if (skill.bool_0 && !sbyte_1.Contains(skill.gclass47_0.sbyte_0))
+			else
 				return false;
+
+			if (skill.bool_0)
+				return false;
+
 			if (!sbyte_2.Contains(skill.gclass47_0.sbyte_0))
-			{
-				if (GClass78.smethod_1().int_24 >= method_24(skill))
-					return true;
-				return false;
-			}
+				return GClass78.smethod_1().int_24 >= method_24(skill);
+
 			return false;
 		}
 
