@@ -3631,9 +3631,36 @@ public class GClass76 : GInterface4, GInterface6
 			return;
 		}
 		GClass73.gclass192_0.method_35(int_0, int_1, int_2, int_3, g);
-		method_138(g);
-		method_122(g);
-		method_121(g);
+
+		// Một số server có dữ liệu avatar/item khác khiến phần header panel ném exception.
+		// Không để lỗi ở một phần UI làm trắng toàn bộ Hành trang/Menu.
+		try
+		{
+			method_138(g);
+		}
+		catch (Exception ex)
+		{
+			GClass149.smethod_0("Data/Errors/inventoryPanel.txt", "method_138/header: " + ex.ToString());
+		}
+
+		try
+		{
+			method_122(g);
+		}
+		catch (Exception ex2)
+		{
+			GClass149.smethod_0("Data/Errors/inventoryPanel.txt", "method_122/currency: " + ex2.ToString());
+		}
+
+		try
+		{
+			method_121(g);
+		}
+		catch (Exception ex3)
+		{
+			GClass149.smethod_0("Data/Errors/inventoryPanel.txt", "method_121/tabs: " + ex3.ToString());
+		}
+
 		int num = int_28;
 		switch (num)
 		{
