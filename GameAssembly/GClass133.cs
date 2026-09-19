@@ -514,7 +514,12 @@ public class GClass133 : GClass131, GInterface6
 			{
 				short_0--;
 				if (short_0 == 0)
+				{
+					// Countdown từ server vừa kết thúc: login lại ngay trong tick hiện tại.
+					// Đồng thời đẩy timer fallback 30s về sau để nó không chen vào luồng retry.
+					GClass73.long_6 = GClass203.smethod_18() + 30000L;
 					GClass73.gclass133_0.method_9();
+				}
 				long_0 = long_1;
 			}
 		}
