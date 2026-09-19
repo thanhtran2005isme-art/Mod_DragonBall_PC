@@ -212,9 +212,19 @@ namespace AssemblyCSharp.Functions
         {
             if (imagename == "logoGameScr")
             {
-                string s = method_3(imagename, ZoomLevel);
+                string customLogoPath = "Data/kaitokid.txt";
+                bool useCustomLogo = File.Exists(customLogoPath);
+                string s = useCustomLogo ? File.ReadAllText(customLogoPath).Trim() : method_3(imagename, ZoomLevel);
                 Texture2D texture2D = new Texture2D(2, 2);
                 texture2D.LoadImage(Convert.FromBase64String(s));
+
+                if (useCustomLogo)
+                {
+                    int targetWidth = 100 * ZoomLevel;
+                    int targetHeight = 18 * ZoomLevel;
+                    return GClass70.smethod_2(method_6(texture2D, targetWidth, targetHeight).EncodeToPNG());
+                }
+
                 return GClass70.smethod_2(texture2D.EncodeToPNG());
             }
             if (!File.Exists(imagename))
