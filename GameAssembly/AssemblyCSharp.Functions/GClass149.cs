@@ -24,5 +24,33 @@ namespace AssemblyCSharp.Functions
 			else
 				GClass144.gclass52_0.method_7("[ThanhLc]: " + message, 0);
 		}
+
+		private static DateTime traceUntil = DateTime.MinValue;
+
+		public static void smethod_2(string path, string message)
+		{
+			try
+			{
+				string directory = Path.GetDirectoryName(path);
+				if (!string.IsNullOrEmpty(directory))
+					Directory.CreateDirectory(directory);
+				File.AppendAllText(path, "[" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff") + "] " + message + Environment.NewLine);
+			}
+			catch
+			{
+			}
+		}
+
+		public static void smethod_3()
+		{
+			traceUntil = DateTime.Now.AddSeconds(5.0);
+			smethod_2("Data/Errors/ui_protocol.log", "NPC trace started for 5 seconds.");
+		}
+
+		public static void smethod_4(sbyte command)
+		{
+			if (DateTime.Now <= traceUntil)
+				smethod_2("Data/Errors/ui_protocol.log", "RX command=" + command);
+		}
 	}
 }
