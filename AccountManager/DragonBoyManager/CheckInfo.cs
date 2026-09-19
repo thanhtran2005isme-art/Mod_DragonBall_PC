@@ -218,10 +218,10 @@ namespace DragonBoyManager
                     MainController.instance.groupBox1.Location = new Point(0, 0);
                     MainController.instance.groupBox1.Show();
                     MainController.instance.Size = new Size(765, 478);
-                    MainController.instance.Text = "\ud835\udcd3\ud835\udc93\ud835\udc82\ud835\udc88\ud835\udc90\ud835\udc8f \ud835\udcd1\ud835\udc82\ud835\udc8d\ud835\udc8d \ud835\udcdf\ud835\udc93\ud835\udc90 \ud835\udfd0.\ud835\udfd1.\ud835\udfd5 [\ud835\udc95\ud835\udc89\ud835\udc82\ud835\udc8f\ud835\udc89\ud835\udc8d\ud835\udc84.\ud835\udc84\ud835\udc90\ud835\udc8e - \ud835\udc6a\ud835\udc8d\ud835\udc8a\ud835\udc86\ud835\udc8f\ud835\udc95: " + StringCipher.Decrypt(DeviceInformation.GetRealName(MainController.instance.Username), HashGenerator.GenerateMD5(MainController.instance.Username)) + "]";
+                    MainController.instance.Text = "Dragon Ball Pro 2.3.7 [thanhlc.com - Client: KaitoKid]";
                     MainController.instance.label5.Text = ((MainController.language != 0) ? ("Current version: " + MainController.VERSION) : ("Phiên bản đang dùng: " + MainController.VERSION)) + " [22/7/2024]";
                     MainController.instance.label1.Text = ((MainController.language == 0) ? ("Phiên bản mới nhất: " + VERSION) : ("Newest version: " + VERSION));
-                    MainController.instance.label3.Text = ((MainController.language == 0) ? ("Người dùng: " + StringCipher.Decrypt(DeviceInformation.GetRealName(MainController.instance.Username), HashGenerator.GenerateMD5(MainController.instance.Username))) : ("User: " + StringCipher.Decrypt(DeviceInformation.GetRealName(MainController.instance.Username), HashGenerator.GenerateMD5(MainController.instance.Username))));
+                    MainController.instance.label3.Text = ((MainController.language == 0) ? "Người dùng: KaitoKid" : "User: KaitoKid");
                     TabSetting.instance.checkBox22.Visible = MainController.instance.Options[0].Contains("T");
                     if (StringCipher.Decrypt(DeviceInformation.GetRealName(MainController.instance.Username), HashGenerator.GenerateMD5(MainController.instance.Username)) == "")
                     {
