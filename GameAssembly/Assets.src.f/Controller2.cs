@@ -9,6 +9,7 @@ namespace Assets.src.f
 		{
 			try
 			{
+				AssemblyCSharp.Functions.GClass149.smethod_4(gclass208_0.sbyte_0);
 				sbyte sbyte_ = gclass208_0.sbyte_0;
 				if (sbyte_ <= 42)
 				{
