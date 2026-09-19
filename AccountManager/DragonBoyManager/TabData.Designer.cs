@@ -373,23 +373,26 @@ namespace DragonBoyManager
             // 
             this.comboBox1.FormattingEnabled = true;
             this.comboBox1.Items.AddRange(new object[] {
-            "Vũ Trụ 1",
-            "Vũ Trụ 2",
-            "Vũ Trụ 3",
-            "Vũ Trụ 4",
-            "Vũ Trụ 5",
-            "Vũ Trụ 6",
-            "Vũ Trụ 7",
-            "Vũ Trụ 8",
-            "Vũ Trụ 9",
-            "Vũ Trụ 10",
-            "Vũ Trụ 11",
-            "Vũ Trụ 12",
-            "Vũ Trụ 13",
-            "Universe 1",
+            "Vũ trụ 1",
+            "Vũ trụ 2",
+            "Vũ trụ 3",
+            "Vũ trụ 4",
+            "Vũ trụ 5",
+            "Vũ trụ 6",
+            "Vũ trụ 7",
+            "Vũ trụ 8",
+            "Vũ trụ 9",
+            "Vũ trụ 10",
+            "Vũ trụ 11",
+            "Vũ trụ 12",
             "Võ đài liên vũ trụ",
             "Super 1",
-            "Super 2"});
+            "Super 2",
+            "Vũ trụ 13",
+            "VIP 2",
+            "Vũ trụ 14",
+            "Vũ trụ 15",
+            "Super 3"});
             this.comboBox1.Location = new System.Drawing.Point(557, 121);
             this.comboBox1.Name = "comboBox1";
             this.comboBox1.Size = new System.Drawing.Size(84, 24);
