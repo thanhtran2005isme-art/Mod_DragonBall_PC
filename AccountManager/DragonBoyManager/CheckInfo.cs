@@ -85,8 +85,9 @@ namespace DragonBoyManager
                         Match match = Regex.Match(text2, licenseKey + ".*?(?=endkey)");
                         if (match == Match.Empty)
                         {
-                            ExitWithLog("Periodic license check: license key was not found in the server response.");
-                            return;
+                            LogDiagnostic("Periodic license check: license key was not found in the server response. Retrying in 60 seconds.");
+                            Thread.Sleep(60000);
+                            continue;
                         }
                         string[] array = match.ToString().Split('|');
                         MainController.instance.DayLeft = array[3];
@@ -147,8 +148,9 @@ namespace DragonBoyManager
                     Match match = Regex.Match(text2, licenseKey + ".*?(?=endkey)");
                     if (match == Match.Empty)
                     {
-                        ExitWithLog("Startup license check: license key was not found in the server response.");
-                        return;
+                        LogDiagnostic("Startup license check: license key was not found in the server response. Retrying in 5 seconds.");
+                        Thread.Sleep(5000);
+                        continue;
                     }
                     string[] array = match.ToString().Split('|');
                     MainController.instance.DayLeft = array[3];
