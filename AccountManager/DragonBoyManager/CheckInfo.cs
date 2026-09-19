@@ -23,6 +23,30 @@ namespace DragonBoyManager
 
         public static string VERSION;
 
+        private static readonly string DiagnosticLogPath = "Data/Errors/panel_exit.log";
+
+        private static void LogDiagnostic(string message)
+        {
+            try
+            {
+                string directory = Path.GetDirectoryName(DiagnosticLogPath);
+                if (!string.IsNullOrEmpty(directory))
+                    Directory.CreateDirectory(directory);
+                File.AppendAllText(
+                    DiagnosticLogPath,
+                    "[" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "] " + message + Environment.NewLine);
+            }
+            catch
+            {
+            }
+        }
+
+        private static void ExitWithLog(string reason)
+        {
+            LogDiagnostic("EXIT: " + reason);
+            Application.Exit();
+        }
+
         public static CheckInfo gI()
         {
             if (instance == null)
@@ -61,7 +85,7 @@ namespace DragonBoyManager
                         Match match = Regex.Match(text2, licenseKey + ".*?(?=endkey)");
                         if (match == Match.Empty)
                         {
-                            Application.Exit();
+                            ExitWithLog("Periodic license check: license key was not found in the server response.");
                             return;
                         }
                         string[] array = match.ToString().Split('|');
@@ -77,7 +101,7 @@ namespace DragonBoyManager
                         DateTime value = new DateTime(year, month, day);
                         if ((int)Math.Ceiling(new DateTime(year2, month2, day2).Subtract(value).TotalDays) < 0)
                         {
-                            Application.Exit();
+                            ExitWithLog("Periodic license check: license has expired. Expiry=" + MainController.instance.DayLeft);
                             return;
                         }
                         if (array[1] == "DBOPROTHANHLC" && array[5] == "ban")
@@ -88,18 +112,22 @@ namespace DragonBoyManager
                                 if (process.MainWindowTitle.StartsWith("LCT ["))
                                     process.Kill();
                             }
-                            Application.Exit();
+                            ExitWithLog("Periodic license check: product status is banned.");
                             return;
                         }
                     }
                     Thread.Sleep(600000);
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    LogDiagnostic("GetInformations exception: " + ex.GetType().FullName + ": " + ex.Message);
+                }
             }
         }
 
         public void GetInformation()
         {
+            LogDiagnostic("GetInformation started. LocalVersion=" + MainController.VERSION);
             while (IsConnectedToInternet() && !MainController.instance.EnableActive)
             {
                 try
@@ -119,7 +147,7 @@ namespace DragonBoyManager
                     Match match = Regex.Match(text2, licenseKey + ".*?(?=endkey)");
                     if (match == Match.Empty)
                     {
-                        Application.Exit();
+                        ExitWithLog("Startup license check: license key was not found in the server response.");
                         return;
                     }
                     string[] array = match.ToString().Split('|');
@@ -143,9 +171,10 @@ namespace DragonBoyManager
                     DateTime value = new DateTime(year, month, day);
                     int num = (int)Math.Ceiling(new DateTime(year2, month2, day2).Subtract(value).TotalDays);
                     VERSION = array[6];
+                    LogDiagnostic("License response parsed. Product=" + array[1] + "; Status=" + array[5] + "; RemoteVersion=" + VERSION + "; DaysLeft=" + num);
                     if (num < 0)
                     {
-                        Application.Exit();
+                        ExitWithLog("Startup license check: license has expired. Expiry=" + MainController.instance.DayLeft);
                         return;
                     }
                     if (array[5] != "hoantat" || array[1] != "DBOPROTHANHLC")
@@ -165,14 +194,19 @@ namespace DragonBoyManager
                     MainController.instance.label3.Text = ((MainController.language == 0) ? ("Người dùng: " + StringCipher.Decrypt(DeviceInformation.GetRealName(MainController.instance.Username), HashGenerator.GenerateMD5(MainController.instance.Username))) : ("User: " + StringCipher.Decrypt(DeviceInformation.GetRealName(MainController.instance.Username), HashGenerator.GenerateMD5(MainController.instance.Username))));
                     TabSetting.instance.checkBox22.Visible = MainController.instance.Options[0].Contains("T");
                     if (StringCipher.Decrypt(DeviceInformation.GetRealName(MainController.instance.Username), HashGenerator.GenerateMD5(MainController.instance.Username)) == "")
-                        Application.Exit();
+                    {
+                        ExitWithLog("Startup license check: resolved user name is empty.");
+                        return;
+                    }
                     if (File.ReadAllText(key) != licenseKey)
                         File.WriteAllText(key, licenseKey);
                     if (float.Parse(MainController.VERSION) < float.Parse(VERSION))
                     {
                         MessageBox.Show((MainController.language != 0) ? ("Version of your product is too old! [" + MainController.VERSION + "]\nPlease update new version [" + VERSION + "]") : ("Phiên bản bạn đang dùng quá cũ [" + MainController.VERSION + "]\nVui lòng update phiên bản mới [" + VERSION + "]"), "Require update !!");
-                        Application.Exit();
+                        ExitWithLog("Startup license check: local version is too old. Local=" + MainController.VERSION + "; Remote=" + VERSION);
+                        return;
                     }
+                    LogDiagnostic("Startup license check passed.");
                     Thread thread = new Thread((ThreadStart)delegate
                     {
                         gI().GetInformations();
@@ -181,7 +215,11 @@ namespace DragonBoyManager
                     thread.Start();
                     Thread.Sleep(10000);
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    LogDiagnostic("GetInformation exception: " + ex.GetType().FullName + ": " + ex.Message);
+                    Thread.Sleep(1000);
+                }
             }
         }
     }
