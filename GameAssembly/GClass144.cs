@@ -3889,7 +3889,7 @@ public class GClass144 : GClass131, GInterface4
 		}
 		else if (!GClass73.smethod_25(int_133, int_134, 40, 40))
 		{
-			if (gclass87_12 != null && GClass73.smethod_25(gclass87_12.int_1, gclass87_12.int_2, gclass87_12.int_3 / 2, gclass87_12.int_4))
+			if (gclass87_12 != null && GClass73.smethod_25(gclass87_12.int_1, gclass87_12.int_2, gclass87_12.int_3, gclass87_12.int_4))
 				GClass131.int_5 = 1;
 			else
 				GClass131.int_5 = -1;
@@ -3921,7 +3921,23 @@ public class GClass144 : GClass131, GInterface4
 				return;
 			}
 			if (Main.isPC)
+			{
 				method_68();
+
+				// Nút mũi tên/menu trên PC trước đây chỉ cập nhật trạng thái hover,
+				// nhưng không gọi command 11000 khi click. Xử lý click trực tiếp
+				// để mở Hành trang/Menu và dùng toàn bộ vùng của icon.
+				if (gclass87_12 != null &&
+					GClass73.smethod_24(gclass87_12.int_1, gclass87_12.int_2, gclass87_12.int_3, gclass87_12.int_4) &&
+					GClass73.bool_15 && GClass73.bool_16)
+				{
+					GClass73.bool_16 = false;
+					GClass73.bool_15 = false;
+					GClass131.int_5 = -1;
+					gclass87_12.method_1();
+					return;
+				}
+			}
 			if (!GClass20.smethod_5() && GClass73.smethod_24(int_125, int_126, 34, 34) && !GClass153.smethod_0().method_6())
 			{
 				GClass131.int_4 = 15;
