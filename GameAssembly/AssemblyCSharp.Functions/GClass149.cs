@@ -53,5 +53,15 @@ namespace AssemblyCSharp.Functions
 			if (DateTime.Now <= traceUntil)
 				smethod_2("Data/Errors/ui_protocol.log", "RX command=" + command);
 		}
+
+		private static string lastDiagnosticError = "";
+
+		public static void smethod_5(string path, string message)
+		{
+			if (message == lastDiagnosticError)
+				return;
+			lastDiagnosticError = message;
+			smethod_2(path, message);
+		}
 	}
 }
