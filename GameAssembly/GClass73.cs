@@ -2570,6 +2570,24 @@ public class GClass73 : GInterface6
 			}
 			smethod_8("PE", 1);
 			smethod_6(gclass122_0);
+
+			// Debug UI trực tiếp trên màn hình để phân biệt state mở panel/menu
+			// với lỗi render/clip mà không phụ thuộc đường dẫn file log.
+			try
+			{
+				GClass76 p = gclass76_0;
+				GClass144 gs = GClass144.smethod_8();
+				string dbg = "DBG P=" + (p != null && p.bool_0) +
+					" M=" + (gclass145_0 != null && gclass145_0.bool_0) +
+					" H=" + AssemblyCSharp.Functions.GClass167.smethod_0().bool_17 +
+					" T=" + gs.bool_62 + "/" + gs.bool_66 +
+					" tab=" + (p == null ? -1 : p.int_28) + "/" + (p == null ? -1 : p.int_29) +
+					" s8=" + (p == null ? -99 : p.sbyte_8);
+				GClass4.gclass4_6.method_6(gclass122_0, dbg, 5, 5, 0);
+			}
+			catch
+			{
+			}
 			GClass57.smethod_7(gclass122_0);
 			if (bool_0 && !bool_4)
 			{
