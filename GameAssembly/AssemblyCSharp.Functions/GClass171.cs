@@ -110,7 +110,7 @@ namespace AssemblyCSharp.Functions
 			if (GClass20.int_37 != 129)
 			{
 				if (gclass70_0 == null)
-					gclass70_0 = GClass167.smethod_0().method_4((!GClass151.bool_2) ? "logoGameScr" : "Data/logo.png", GClass122.int_12);
+					gclass70_0 = GClass167.smethod_0().method_4("logoGameScr", GClass122.int_12);
 				else
 					g.method_23(gclass70_0, 0, 0, GClass122.smethod_0(gclass70_0), GClass122.smethod_1(gclass70_0), 0, (GClass73.int_10 / 2 < GClass122.smethod_0(GClass144.gclass70_28)) ? (GClass122.smethod_0(GClass144.gclass70_28) + 25) : (GClass73.int_10 / 2), 5, (GClass73.int_10 / 2 < GClass122.smethod_0(GClass144.gclass70_28)) ? GClass122.int_2 : GClass122.int_0);
 			}
