@@ -14,7 +14,7 @@ public class GClass187
 
 	public static int int_2;
 
-	public static string string_2 = "2.5.0";
+	public static string string_2 = "2.3.7";
 
 	public static int int_3 = 237;
 
