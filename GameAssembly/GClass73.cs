@@ -723,8 +723,16 @@ public class GClass73 : GInterface6
 				}
 			}
 		}
-		catch (Exception)
+		catch (Exception ex)
 		{
+			try
+			{
+				smethod_6(gclass122_0);
+				AssemblyCSharp.Functions.GClass149.smethod_5("Data/Errors/render_error.log", "FRAME RENDER ERROR: " + ex.ToString());
+			}
+			catch
+			{
+			}
 		}
 	}
 
@@ -2474,13 +2482,28 @@ public class GClass73 : GInterface6
 			gclass122_0.method_5(0, 0, int_10, int_11);
 			if (gclass76_0.bool_0)
 			{
-				gclass76_0.method_94(gclass122_0);
-				if (gclass76_1 != null && gclass76_1.bool_0)
-					gclass76_1.method_94(gclass122_0);
-				if (gclass76_0.gclass91_0 != null && gclass76_0.gclass91_0.bool_0)
-					gclass76_0.gclass91_0.method_9(gclass122_0);
-				if (gclass76_1 != null && gclass76_1.gclass91_0 != null && gclass76_1.gclass91_0.bool_0)
-					gclass76_1.gclass91_0.method_9(gclass122_0);
+				try
+				{
+					gclass76_0.method_94(gclass122_0);
+					if (gclass76_1 != null && gclass76_1.bool_0)
+						gclass76_1.method_94(gclass122_0);
+					if (gclass76_0.gclass91_0 != null && gclass76_0.gclass91_0.bool_0)
+						gclass76_0.gclass91_0.method_9(gclass122_0);
+					if (gclass76_1 != null && gclass76_1.gclass91_0 != null && gclass76_1.gclass91_0.bool_0)
+						gclass76_1.gclass91_0.method_9(gclass122_0);
+				}
+				catch (Exception ex)
+				{
+					// Nếu panel/NPC render lỗi giữa lúc đang thay đổi clip/translate,
+					// reset graphics state để không để lại vùng trắng trên màn hình.
+					smethod_6(gclass122_0);
+					AssemblyCSharp.Functions.GClass149.smethod_5(
+						"Data/Errors/render_error.log",
+						"PANEL RENDER ERROR; int28=" + gclass76_0.int_28 +
+						"; int29=" + gclass76_0.int_29 +
+						"; sbyte8=" + gclass76_0.sbyte_8 +
+						"; error=" + ex.ToString());
+				}
 			}
 			GClass50.smethod_13(gclass122_0);
 			GClass130.smethod_3(gclass122_0);
