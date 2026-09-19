@@ -71,9 +71,9 @@ public class GClass134 : GClass131, GInterface6
 
 	private int int_8;
 
-	public static string string_2 = "Vũ trụ 1:dragon1.teamobi.com:14445:0,Vũ trụ 2:dragon2.teamobi.com:14445:0,Vũ trụ 3:dragon3.teamobi.com:14445:0,Vũ trụ 4:dragon4.teamobi.com:14445:0,Vũ trụ 5:dragon5.teamobi.com:14445:0,Vũ trụ 6:dragon6.teamobi.com:14445:0,Vũ trụ 7:dragon7.teamobi.com:14445:0,Vũ trụ 8:dragon10.teamobi.com:14446:0,Vũ trụ 9:dragon10.teamobi.com:14447:0,Vũ trụ 10:dragon10.teamobi.com:14445:0,Vũ trụ 11:dragon11.teamobi.com:14445:0,Vũ trụ 12:dragon12.teamobi.com:14445:0,Võ đài liên vũ trụ:dragonwar.teamobi.com:20000:0,Universe 1:dragon.indonaga.com:14445:1,Naga:dragon.indonaga.com:14446:2,0,0";
+	public static string string_2 = "Vũ trụ 1:dragon1.teamobi.com:14445:0,Vũ trụ 2:dragon2.teamobi.com:14445:0,Vũ trụ 3:dragon3.teamobi.com:14445:0,Vũ trụ 4:dragon4.teamobi.com:14445:0,Vũ trụ 5:dragon5.teamobi.com:14445:0,Vũ trụ 6:dragon6.teamobi.com:14445:0,Vũ trụ 7:dragon7.teamobi.com:14445:0,Vũ trụ 8:dragon10.teamobi.com:14446:0,Vũ trụ 9:dragon10.teamobi.com:14447:0,Vũ trụ 10:dragon10.teamobi.com:14445:0,Vũ trụ 11:dragon11.teamobi.com:14445:0,Vũ trụ 12:dragon12.teamobi.com:14445:0,Võ đài liên vũ trụ:dragonwar.teamobi.com:20000:0,Vũ trụ 15:dragon15.teamobi.com:14445:0,Universe 1:dragon.indonaga.com:14445:1,Naga:dragon.indonaga.com:14446:2,0,0";
 
-	public static string string_3 = "Vũ trụ 1:112.213.94.23:14445:0,Vũ trụ 2:210.211.109.199:14445:0,Vũ trụ 3:112.213.85.88:14445:0,Vũ trụ 4:27.0.12.164:14445:0,Vũ trụ 5:27.0.12.16:14445:0,Vũ trụ 6:27.0.12.173:14445:0,Vũ trụ 7:112.213.94.223:14445:0,Vũ trụ 8:27.0.14.66:14446:0,Vũ trụ 9:27.0.14.66:14447:0,Vũ trụ 10:27.0.14.66:14445:0,Vũ trụ 11:112.213.85.35:14445:0,Võ đài liên vũ trụ:27.0.12.173:20000:0,Universe 1:52.74.230.22:14445:1,Naga:52.74.230.22:14446:2,0,0";
+	public static string string_3 = "Vũ trụ 1:112.213.94.23:14445:0,Vũ trụ 2:210.211.109.199:14445:0,Vũ trụ 3:112.213.85.88:14445:0,Vũ trụ 4:27.0.12.164:14445:0,Vũ trụ 5:27.0.12.16:14445:0,Vũ trụ 6:27.0.12.173:14445:0,Vũ trụ 7:112.213.94.223:14445:0,Vũ trụ 8:27.0.14.66:14446:0,Vũ trụ 9:27.0.14.66:14447:0,Vũ trụ 10:27.0.14.66:14445:0,Vũ trụ 11:112.213.85.35:14445:0,Võ đài liên vũ trụ:27.0.12.173:20000:0,Vũ trụ 15:dragon15.teamobi.com:14445:0,Universe 1:52.74.230.22:14445:1,Naga:52.74.230.22:14446:2,0,0";
 
 	public static string string_4 = "Naga:dragon.indonaga.com:14446:2,2,0";
 
@@ -313,6 +313,7 @@ public class GClass134 : GClass131, GInterface6
 			int_13[sbyte_1[i]]++;
 		}
 		sbyte_0 = sbyte.Parse(array[array.Length - 1]);
+		smethod_10("Vũ trụ 15", "dragon15.teamobi.com", 14445, 0);
 		smethod_6();
 	}
 
@@ -554,6 +555,28 @@ public class GClass134 : GClass131, GInterface6
 			base.updateKey();
 	}
 
+	private static void smethod_10(string name, string host, short port, sbyte language)
+	{
+		if (string_0 == null || string_1 == null || short_0 == null || sbyte_1 == null)
+			return;
+		for (int i = 0; i < string_0.Length; i++)
+		{
+			if (string.Equals(string_0[i], name, StringComparison.OrdinalIgnoreCase))
+				return;
+		}
+		int oldLength = string_0.Length;
+		Array.Resize(ref string_0, oldLength + 1);
+		Array.Resize(ref string_1, oldLength + 1);
+		Array.Resize(ref short_0, oldLength + 1);
+		Array.Resize(ref sbyte_1, oldLength + 1);
+		string_0[oldLength] = name;
+		string_1[oldLength] = host;
+		short_0[oldLength] = port;
+		sbyte_1[oldLength] = language;
+		if (int_13 != null && language >= 0 && language < int_13.Length)
+			int_13[language]++;
+	}
+
 	public static void smethod_6()
 	{
 		GClass46 gClass = new GClass46();
@@ -623,6 +646,8 @@ public class GClass134 : GClass131, GInterface6
 				}
 				sbyte_0 = gClass.method_7();
 				gClass.method_4();
+				smethod_10("Vũ trụ 15", "dragon15.teamobi.com", 14445, 0);
+				smethod_6();
 				GClass142.smethod_3();
 				return;
 			}
