@@ -63,7 +63,10 @@ namespace DragonBoyManager
             };
             thread.Start();
 			if (!groupBox1.Enabled)
-				groupBox1.Hide();
+			{
+				groupBox1.Show();
+				Text = (language == 0) ? "Dragon Ball Pro - Đang kiểm tra giấy phép..." : "Dragon Ball Pro - Checking license...";
+			}
 			TabSetting.instance.LoadFunctionSetting();
 			TabSetting.instance.LoadGraphicSetting();
 			TabSetting.instance.LoadCaptcha();
