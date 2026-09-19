@@ -5952,7 +5952,10 @@ public class GClass144 : GClass131, GInterface4
 	public void method_109()
 	{
 		// Khi người dùng mở Hành trang/Menu thủ công, luôn thoát khỏi
-		// trạng thái animation/ghép đồ còn sót lại.
+		// các trạng thái animation/transition còn sót lại.
+		bool_62 = false;
+		bool_66 = false;
+		int_97 = 0;
 		GClass73.gclass76_0.sbyte_8 = -1;
 		GClass73.gclass76_0.method_40();
 		GClass73.gclass76_0.method_50();
