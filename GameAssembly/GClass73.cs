@@ -2514,7 +2514,10 @@ public class GClass73 : GInterface6
 						long_7 = GClass203.smethod_18();
 					}
 				}
-				if (GClass203.smethod_18() > long_6)
+				// Không để timer 30 giây của client chen vào trong lúc server
+				// đang yêu cầu chờ đăng nhập lại (GClass133.short_0 > 0).
+				// Khi short_0 về 0, GClass133 sẽ tự gọi method_9() để login ngay.
+				if (GClass133.short_0 <= 0 && GClass203.smethod_18() > long_6)
 				{
 					long_6 = GClass203.smethod_18() + 30000L;
 					if (gclass131_0 != null)
