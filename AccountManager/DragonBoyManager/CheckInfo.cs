@@ -218,7 +218,7 @@ namespace DragonBoyManager
                     MainController.instance.groupBox1.Location = new Point(0, 0);
                     MainController.instance.groupBox1.Show();
                     MainController.instance.Size = new Size(765, 478);
-                    MainController.instance.Text = "Dragon Ball Pro 2.3.7 [thanhlc.com - Client: KaitoKid]";
+                    MainController.instance.Text = "Dragon Ball Pro 2.3.7 [kaitokid.com - Client: KaitoKid]";
                     MainController.instance.label5.Text = ((MainController.language != 0) ? ("Current version: " + MainController.VERSION) : ("Phiên bản đang dùng: " + MainController.VERSION)) + " [22/7/2024]";
                     MainController.instance.label1.Text = ((MainController.language == 0) ? ("Phiên bản mới nhất: " + VERSION) : ("Newest version: " + VERSION));
                     MainController.instance.label3.Text = ((MainController.language == 0) ? "Người dùng: KaitoKid" : "User: KaitoKid");
