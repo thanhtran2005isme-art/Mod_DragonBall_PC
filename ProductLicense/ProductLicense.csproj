@@ -28,6 +28,9 @@
     <Reference Include="System.Management" />
     <Reference Include="System.Core" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="System.Resources.Extensions" Version="10.0.10" />
+  </ItemGroup>
   <Target Name="PostBuild" AfterTargets="PostBuildEvent">
     <Exec Command="copy /Y &quot;$(ProjectDir)$(OutDir)$(TargetFileName)&quot; &quot;$(SolutionDir)Output\$(TargetFileName)&quot;&#xD;&#xA;copy /Y &quot;$(ProjectDir)$(OutDir)$(TargetFileName).config&quot; &quot;$(SolutionDir)Output\$(TargetFileName).config&quot;&#xD;&#xA;copy /Y &quot;$(ProjectDir)$(OutDir)*.dll&quot; &quot;$(SolutionDir)Output\Lib\&quot;" />
   </Target>
