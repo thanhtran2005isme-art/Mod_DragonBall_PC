@@ -1039,6 +1039,8 @@ public class GClass7
 		GClass208 gClass = null;
 		try
 		{
+			AssemblyCSharp.Functions.GClass149.smethod_2("Data/Errors/ui_protocol.log", "TX NPC talk templateId=" + npcTemplateId);
+			AssemblyCSharp.Functions.GClass149.smethod_3();
 			gClass = method_33(12);
 			gClass.method_2().method_3(npcTemplateId);
 			ginterface0_0.sendMessage(gClass);
