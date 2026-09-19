@@ -92,7 +92,7 @@ namespace DragonBoyManager
                         Thread.Sleep(60000);
                         continue;
                     }
-                    string requestUri = StringCipher.Decrypt("zcSZUkCeLrQOBMin6dpcBbs+rtFS5bkHiPAQGs2TMuNm74h0D99a8rgpoTWuKyARkyI0v/4RKLK928A8MZGJ04NElY81xb6hw64kBixuPKSTuwiPUGjikBVFlHSQrDB8AWp1G2nwQYy7ecWU4xqvLmCc8PfGHzpjjIYheE5+Vi/Dv1QuZ6/HeFmgFMQ/Ys9kX0sI6Lgx+iB8cU0O1r9azg==", "thanhlc.com");
+                    string requestUri = StringCipher.Decrypt("zcSZUkCeLrQOBMin6dpcBbs+rtFS5bkHiPAQGs2TMuNm74h0D99a8rgpoTWuKyARkyI0v/4RKLK928A8MZGJ04NElY81xb6hw64kBixuPKSTuwiPUGjikBVFlHSQrDB8AWp1G2nwQYy7ecWU4xqvLmCc8PfGHzpjjIYheE5+Vi/Dv1QuZ6/HeFmgFMQ/Ys9kX0sI6Lgx+iB8cU0O1r9azg==", "kaitokid.com");
                     string text2 = new HttpClient().GetAsync(requestUri).Result.Content.ReadAsStringAsync().Result.ToString();
                     if (!string.IsNullOrEmpty(text2))
                     {

@@ -29,7 +29,7 @@ namespace AssemblyCSharp.Functions
 
 		public static int int_0 = int.Parse(File.ReadAllText("Data/QLTK/language.ini"));
 
-		public static string string_0 = "22/7/2024";
+		public static string string_0 = "22/7/2026";
 
 		public static string string_1 = "- [Dragon Ball Pro 2.3.7 v2.0] - Released " + string_0;
 
@@ -103,8 +103,8 @@ namespace AssemblyCSharp.Functions
 			switch (username)
 			{
 				case "username:21232F297A57A5A743894A0E4A801FC3":
-					//return "Lê Chí Thanh";
-					return "ElectroHeavenVN";
+					//return "Tran Thanh";
+					return "KaitoKid";
 				default:
 					return "";
 			}
