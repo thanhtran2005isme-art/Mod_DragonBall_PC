@@ -33,6 +33,6 @@
     </None>
   </ItemGroup>
   <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Exec Command="mkdir &quot;$(SolutionDir)Output&quot;&#xD;&#xA;copy /Y &quot;$(ProjectDir)$(OutDir)$(TargetFileName)&quot; &quot;$(SolutionDir)Output\$(TargetFileName)&quot;&#xD;&#xA;copy /Y &quot;$(ProjectDir)$(OutDir)$(TargetFileName).config&quot; &quot;$(SolutionDir)Output\$(TargetFileName).config&quot;&#xD;&#xA;mkdir &quot;$(SolutionDir)Output/Lib&quot;&#xD;&#xA;copy /Y &quot;$(ProjectDir)$(OutDir)*.dll&quot; &quot;$(SolutionDir)Output\Lib\&quot;" />
+    <Exec Command="if not exist &quot;$(MSBuildProjectDirectory)\..\Output&quot; mkdir &quot;$(MSBuildProjectDirectory)\..\Output&quot;&#xD;&#xA;copy /Y &quot;$(TargetPath)&quot; &quot;$(MSBuildProjectDirectory)\..\Output\$(TargetFileName)&quot;&#xD;&#xA;if exist &quot;$(TargetPath).config&quot; copy /Y &quot;$(TargetPath).config&quot; &quot;$(MSBuildProjectDirectory)\..\Output\$(TargetFileName).config&quot;&#xD;&#xA;if not exist &quot;$(MSBuildProjectDirectory)\..\Output\Lib&quot; mkdir &quot;$(MSBuildProjectDirectory)\..\Output\Lib&quot;&#xD;&#xA;copy /Y &quot;$(TargetDir)*.dll&quot; &quot;$(MSBuildProjectDirectory)\..\Output\Lib\&quot;" />
   </Target>
 </Project>
