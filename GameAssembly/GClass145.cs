@@ -107,6 +107,14 @@ public class GClass145
 	{
 		if (bool_0)
 			return;
+
+		// Menu NPC phải luôn được phép vẽ ngay khi mở.
+		// Nếu transition của GameScr bị kẹt (bool_62/bool_66), method_6()
+		// sẽ return im lặng và menu chỉ đổi trạng thái mở/đóng nhưng không hiện nội dung.
+		GClass144 gameScr = GClass144.smethod_8();
+		gameScr.bool_62 = false;
+		gameScr.bool_66 = false;
+		gameScr.int_97 = 0;
 		bool_9 = false;
 		bool_7 = false;
 		bool_8 = false;
