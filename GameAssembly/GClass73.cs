@@ -2476,7 +2476,28 @@ public class GClass73 : GInterface6
 			gclass88_4.method_9();
 			smethod_8("PA", 1);
 			if (gclass131_0 != null)
-				gclass131_0.paint(gclass122_0);
+			{
+				try
+				{
+					gclass131_0.paint(gclass122_0);
+				}
+				catch (Exception ex)
+				{
+					smethod_6(gclass122_0);
+					AssemblyCSharp.Functions.GClass149.smethod_5(
+						"Data/Errors/frame_render.log",
+						"SCREEN PAINT ERROR [" + gclass131_0.GetType().Name + "]: " + ex.ToString());
+					try
+					{
+						GClass4.gclass4_6.method_6(gclass122_0,
+							"SCREEN ERR: " + ex.GetType().Name + " - " + ex.Message,
+							5, 5, 0);
+					}
+					catch
+					{
+					}
+				}
+			}
 			smethod_8("PB", 1);
 			gclass122_0.method_1(-gclass122_0.method_3(), -gclass122_0.method_4());
 			gclass122_0.method_5(0, 0, int_10, int_11);
@@ -2607,8 +2628,21 @@ public class GClass73 : GInterface6
 			{
 			}
 		}
-		catch (Exception)
+		catch (Exception ex)
 		{
+			try
+			{
+				smethod_6(gclass122_0);
+				AssemblyCSharp.Functions.GClass149.smethod_5(
+					"Data/Errors/frame_render.log",
+					"FRAME ERROR: " + ex.ToString());
+				GClass4.gclass4_6.method_6(gclass122_0,
+					"FRAME ERR: " + ex.GetType().Name + " - " + ex.Message,
+					5, 17, 0);
+			}
+			catch
+			{
+			}
 		}
 	}
 
