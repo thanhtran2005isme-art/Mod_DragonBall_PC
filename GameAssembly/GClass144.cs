@@ -5952,12 +5952,39 @@ public class GClass144 : GClass131, GInterface4
 	public void method_109()
 	{
 		// Khi người dùng mở Hành trang/Menu thủ công, luôn thoát khỏi
-		// trạng thái animation/ghép đồ còn sót lại. Nếu sbyte_8 != -1,
-		// GClass76.method_94() sẽ bỏ qua toàn bộ panel bình thường và
-		// chỉ vẽ method_197(), dẫn tới khung trắng ở một số server.
+		// trạng thái animation/ghép đồ còn sót lại.
 		GClass73.gclass76_0.sbyte_8 = -1;
 		GClass73.gclass76_0.method_40();
 		GClass73.gclass76_0.method_50();
+
+		try
+		{
+			GClass76 panel = GClass73.gclass76_0;
+			GClass78 me = GClass78.smethod_1();
+			string serverName = (GClass134.string_0 != null && GClass134.int_14 >= 0 && GClass134.int_14 < GClass134.string_0.Length)
+				? GClass134.string_0[GClass134.int_14]
+				: "<unknown>";
+			int tabs = panel.string_2 == null ? -1 : panel.string_2.Length;
+			int tab3 = me == null || me.gclass128_3 == null ? -1 : me.gclass128_3.Length;
+			int inv = me == null || me.gclass128_0 == null ? -1 : me.gclass128_0.Length;
+			int body = me == null || me.gclass128_2 == null ? -1 : me.gclass128_2.Length;
+			AssemblyCSharp.Functions.GClass149.smethod_2(
+				"Data/Errors/ui_protocol.log",
+				"OPEN PANEL server=" + serverName +
+				"; client=" + GClass187.string_2 +
+				"; protocol=" + GClass187.int_3 +
+				"; sbyte8=" + panel.sbyte_8 +
+				"; int28=" + panel.int_28 +
+				"; int29=" + panel.int_29 +
+				"; tabs=" + tabs +
+				"; equipArray=" + tab3 +
+				"; inventory=" + inv +
+				"; bodyItems=" + body);
+		}
+		catch (Exception ex)
+		{
+			AssemblyCSharp.Functions.GClass149.smethod_2("Data/Errors/ui_protocol.log", "OPEN PANEL diagnostic exception: " + ex);
+		}
 	}
 
 	public void method_110(GClass208 message)
