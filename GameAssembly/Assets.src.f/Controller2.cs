@@ -842,7 +842,8 @@ namespace Assets.src.f
 					{
 						short short_2 = gclass208_0.method_1().method_6();
 						GClass50.smethod_8("second login = " + short_2);
-						GClass133.short_0 = short_2;
+						// Bỏ qua cooldown server, thử lại sau 2 giây.
+						GClass133.short_0 = 2;
 						GClass133.long_1 = (GClass133.long_0 = GClass203.smethod_18());
 						GClass73.smethod_29();
 						break;

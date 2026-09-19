@@ -77,7 +77,7 @@ namespace AssemblyCSharp.Functions
 		public void method_1(GClass122 g)
 		{
 			if (bool_0 && (GClass73.gclass131_0 == GClass73.gclass133_0 || GClass73.gclass131_0 == GClass73.gclass134_0))
-				GClass154.smethod_0().method_1(GClass4.gclass4_20, g, (GClass151.int_0 != 0) ? ("Login after " + ((bool_5 ? 2 : 25) - long_1) + "s...") : ("Đăng nhập sau " + (((!bool_5) ? 25 : 2) - long_1) + "s nữa..."), 5, 3, 0, GClass4.gclass4_11);
+				GClass154.smethod_0().method_1(GClass4.gclass4_20, g, (GClass151.int_0 != 0) ? ("Login after 1s...") : ("Đăng nhập sau 1s nữa..."), 5, 3, 0, GClass4.gclass4_11);
 		}
 
 		protected bool method_2()
@@ -100,7 +100,7 @@ namespace AssemblyCSharp.Functions
 					GClass160.smethod_0().bool_4 = false;
 					if (bool_2)
 					{
-						if (!bool_3 && GClass203.smethod_18() - long_0 >= ((!bool_5) ? 21000 : 1000))
+						if (!bool_3 && GClass203.smethod_18() - long_0 >= 1500)
 						{
 							if (GClass134.string_0[GClass134.int_14].ToLower().Replace(" ", "") != string_2)
 							{
@@ -118,7 +118,7 @@ namespace AssemblyCSharp.Functions
 							bool_3 = true;
 							GClass134.smethod_3();
 						}
-						else if (GClass203.smethod_18() - long_0 >= (bool_5 ? 2000 : 26000))
+						else if (GClass203.smethod_18() - long_0 >= 2000)
 						{
 							bool_2 = false;
 							bool_3 = false;
