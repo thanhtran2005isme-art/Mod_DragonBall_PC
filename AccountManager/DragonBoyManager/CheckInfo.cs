@@ -69,15 +69,29 @@ namespace DragonBoyManager
 
         public void GetInformations()
         {
-            while (IsConnectedToInternet() && MainController.instance.EnableActive)
+            while (MainController.instance.EnableActive)
             {
+                if (!IsConnectedToInternet())
+                {
+                    LogDiagnostic("Periodic license check: no internet connection. Retrying in 30 seconds.");
+                    Thread.Sleep(30000);
+                    continue;
+                }
                 try
                 {
                     if (!File.Exists(key))
+                    {
+                        LogDiagnostic("Startup license check: key.ini is missing. Retrying in 5 seconds.");
+                        Thread.Sleep(5000);
                         continue;
+                    }
                     string licenseKey = DeviceInformation.GenerateLicense("DRAGONBALL237");
                     if (File.ReadAllText(key) != licenseKey)
+                    {
+                        LogDiagnostic("Startup license check: key.ini does not match this device. Retrying in 5 seconds.");
+                        Thread.Sleep(5000);
                         continue;
+                    }
                     string requestUri = StringCipher.Decrypt("zcSZUkCeLrQOBMin6dpcBbs+rtFS5bkHiPAQGs2TMuNm74h0D99a8rgpoTWuKyARkyI0v/4RKLK928A8MZGJ04NElY81xb6hw64kBixuPKSTuwiPUGjikBVFlHSQrDB8AWp1G2nwQYy7ecWU4xqvLmCc8PfGHzpjjIYheE5+Vi/Dv1QuZ6/HeFmgFMQ/Ys9kX0sI6Lgx+iB8cU0O1r9azg==", "thanhlc.com");
                     string text2 = new HttpClient().GetAsync(requestUri).Result.Content.ReadAsStringAsync().Result.ToString();
                     if (!string.IsNullOrEmpty(text2))
@@ -129,15 +143,29 @@ namespace DragonBoyManager
         public void GetInformation()
         {
             LogDiagnostic("GetInformation started. LocalVersion=" + MainController.VERSION);
-            while (IsConnectedToInternet() && !MainController.instance.EnableActive)
+            while (!MainController.instance.EnableActive)
             {
+                if (!IsConnectedToInternet())
+                {
+                    LogDiagnostic("Startup license check: no internet connection. Retrying in 5 seconds.");
+                    Thread.Sleep(5000);
+                    continue;
+                }
                 try
                 {
                     if (!File.Exists(key))
+                    {
+                        LogDiagnostic("Periodic license check: key.ini is missing. Retrying in 60 seconds.");
+                        Thread.Sleep(60000);
                         continue;
+                    }
                     string licenseKey = DeviceInformation.GenerateLicense("DRAGONBALL237");
                     if (File.ReadAllText(key) != licenseKey)
+                    {
+                        LogDiagnostic("Periodic license check: key.ini does not match this device. Retrying in 60 seconds.");
+                        Thread.Sleep(60000);
                         continue;
+                    }
                     string requestUri = StringCipher.Decrypt("zcSZUkCeLrQOBMin6dpcBbs+rtFS5bkHiPAQGs2TMuNm74h0D99a8rgpoTWuKyARkyI0v/4RKLK928A8MZGJ04NElY81xb6hw64kBixuPKSTuwiPUGjikBVFlHSQrDB8AWp1G2nwQYy7ecWU4xqvLmCc8PfGHzpjjIYheE5+Vi/Dv1QuZ6/HeFmgFMQ/Ys9kX0sI6Lgx+iB8cU0O1r9azg==", "thanhlc.com");
                     string text2 = new HttpClient().GetAsync(requestUri).Result.Content.ReadAsStringAsync().Result.ToString();
                     if (string.IsNullOrEmpty(text2))
