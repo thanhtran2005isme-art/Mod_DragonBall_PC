@@ -2358,6 +2358,13 @@ public class GClass73 : GInterface6
 
 	public void method_17(int x, int y)
 	{
+		AssemblyCSharp.Functions.GClass149.smethod_2(
+			"Data/Errors/input_trace.log",
+			"MOUSE DOWN x=" + x + "; y=" + y +
+			"; screen=" + (gclass131_0 == null ? "<null>" : gclass131_0.GetType().Name) +
+			"; panel=" + (gclass76_0 != null && gclass76_0.bool_0) +
+			"; chat=" + GClass91.smethod_0().bool_0 +
+			"; popupMenu=" + (gclass145_0 != null && gclass145_0.bool_0));
 		bool_16 = false;
 		bool_29 = true;
 		bool_14 = true;
@@ -2374,6 +2381,13 @@ public class GClass73 : GInterface6
 
 	public void method_18(int x, int y)
 	{
+		AssemblyCSharp.Functions.GClass149.smethod_2(
+			"Data/Errors/input_trace.log",
+			"MOUSE UP x=" + x + "; y=" + y +
+			"; screen=" + (gclass131_0 == null ? "<null>" : gclass131_0.GetType().Name) +
+			"; panel=" + (gclass76_0 != null && gclass76_0.bool_0) +
+			"; chat=" + GClass91.smethod_0().bool_0 +
+			"; popupMenu=" + (gclass145_0 != null && gclass145_0.bool_0));
 		bool_14 = false;
 		bool_16 = true;
 		bool_17 = false;
