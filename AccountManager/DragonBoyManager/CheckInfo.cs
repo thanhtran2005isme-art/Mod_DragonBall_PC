@@ -81,15 +81,15 @@ namespace DragonBoyManager
                 {
                     if (!File.Exists(key))
                     {
-                        LogDiagnostic("Startup license check: key.ini is missing. Retrying in 5 seconds.");
-                        Thread.Sleep(5000);
+                        LogDiagnostic("Periodic license check: key.ini is missing. Retrying in 60 seconds.");
+                        Thread.Sleep(60000);
                         continue;
                     }
                     string licenseKey = DeviceInformation.GenerateLicense("DRAGONBALL237");
                     if (File.ReadAllText(key) != licenseKey)
                     {
-                        LogDiagnostic("Startup license check: key.ini does not match this device. Retrying in 5 seconds.");
-                        Thread.Sleep(5000);
+                        LogDiagnostic("Periodic license check: key.ini does not match this device. Retrying in 60 seconds.");
+                        Thread.Sleep(60000);
                         continue;
                     }
                     string requestUri = StringCipher.Decrypt("zcSZUkCeLrQOBMin6dpcBbs+rtFS5bkHiPAQGs2TMuNm74h0D99a8rgpoTWuKyARkyI0v/4RKLK928A8MZGJ04NElY81xb6hw64kBixuPKSTuwiPUGjikBVFlHSQrDB8AWp1G2nwQYy7ecWU4xqvLmCc8PfGHzpjjIYheE5+Vi/Dv1QuZ6/HeFmgFMQ/Ys9kX0sI6Lgx+iB8cU0O1r9azg==", "thanhlc.com");
@@ -155,15 +155,15 @@ namespace DragonBoyManager
                 {
                     if (!File.Exists(key))
                     {
-                        LogDiagnostic("Periodic license check: key.ini is missing. Retrying in 60 seconds.");
-                        Thread.Sleep(60000);
+                        LogDiagnostic("Startup license check: key.ini is missing. Retrying in 5 seconds.");
+                        Thread.Sleep(5000);
                         continue;
                     }
                     string licenseKey = DeviceInformation.GenerateLicense("DRAGONBALL237");
                     if (File.ReadAllText(key) != licenseKey)
                     {
-                        LogDiagnostic("Periodic license check: key.ini does not match this device. Retrying in 60 seconds.");
-                        Thread.Sleep(60000);
+                        LogDiagnostic("Startup license check: key.ini does not match this device. Retrying in 5 seconds.");
+                        Thread.Sleep(5000);
                         continue;
                     }
                     string requestUri = StringCipher.Decrypt("zcSZUkCeLrQOBMin6dpcBbs+rtFS5bkHiPAQGs2TMuNm74h0D99a8rgpoTWuKyARkyI0v/4RKLK928A8MZGJ04NElY81xb6hw64kBixuPKSTuwiPUGjikBVFlHSQrDB8AWp1G2nwQYy7ecWU4xqvLmCc8PfGHzpjjIYheE5+Vi/Dv1QuZ6/HeFmgFMQ/Ys9kX0sI6Lgx+iB8cU0O1r9azg==", "thanhlc.com");
