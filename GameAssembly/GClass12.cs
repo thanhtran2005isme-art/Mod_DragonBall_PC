@@ -3523,7 +3523,7 @@ public class GClass12 : GInterface3
 						}
 						if (gClass66 == null || gClass66.int_12 == 0 || gClass66.int_12 == 0)
 							break;
-						GClass7.OnMobCombatResponse(gClass66.int_25);
+						GClass7.OnMobCombatTerminalResponse(gClass66.int_25);
 						gClass66.method_22();
 						try
 						{

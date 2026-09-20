@@ -849,6 +849,11 @@ namespace AssemblyCSharp.Functions
 							{
 								if (GClass50.smethod_24(gclass194_.int_16, gclass194_.int_17, gClass2.int_4, gClass2.int_5) <= 48)
 								{
+									if (!GClass7.CanAutoTrainSendAttack())
+									{
+										smethod_1(GClass7.GetAdaptiveRetryDelay());
+										return;
+									}
 									GClass144.smethod_8().method_44(gclass194_);
 									GClass164.smethod_0().long_10 = -1L;
 								}

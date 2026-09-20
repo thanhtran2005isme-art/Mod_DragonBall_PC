@@ -130,7 +130,8 @@ namespace AssemblyCSharp.Functions
 				bool useProxy = GClass172.smethod_0().bool_1 && GClass151.bool_1;
 				list.Add("NET " + serverName + " | Ping " + GClass7.long_2 + "/" + GClass7.long_3 + "ms | Proxy " + (useProxy ? "ON" : "OFF"));
 				list.Add("Queue S:" + GClass14.GetSendQueueCount() + " R:" + GClass14.GetReceiveQueueCount());
-				list.Add("Combat " + ((GClass7.combatRtt >= 0L) ? (GClass7.combatRtt + "ms") : "--") + " | Pending " + GClass7.GetCombatPendingCount());
+				list.Add("Combat " + ((GClass7.combatRtt >= 0L) ? (GClass7.combatRtt + "ms") : "--") + " | Pending " + GClass7.GetCombatPendingCount() + " | ACK " + GClass7.GetCombatAckRate().ToString("0.0") + "/s");
+				list.Add("Adaptive W:" + GClass7.GetAdaptiveWindowLimit() + " | Pace " + GClass7.GetAdaptivePaceMs() + "ms | QD " + GClass7.combatQueueDelay + "ms");
 			}
 			if (GClass164.smethod_0().bool_0)
 				list.Add((GClass151.int_0 != 0) ? ("Auto Attack: " + GClass154.smethod_0().method_7(GClass164.smethod_0().bool_0)) : ("Auto đánh: " + GClass154.smethod_0().method_7(GClass164.smethod_0().bool_0)));

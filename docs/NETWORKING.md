@@ -84,3 +84,38 @@ Combat 4820ms | Pending 7
 - probe quá 30 giây được tự xóa; danh sách được chặn tối đa 128 phần tử.
 
 Đây là diagnostic, chưa dùng Combat RTT để throttle Auto Train.
+
+
+## Giai đoạn 2 — Adaptive combat scheduler
+
+Mục tiêu: không dùng kiểu `lag -> sleep vài giây -> farm lại`. Đồ sát quái được điều tiết theo phản hồi thật của server.
+
+### Metrics
+
+- `Combat RTT`: ATTACK -> HP/death/miss.
+- `ACK/s`: số phản hồi combat khớp attack mỗi giây, tính trên cửa sổ 5 giây.
+- `Min RTT`: Combat RTT thấp nhất của session hiện tại.
+- `Queue Delay`: `Combat RTT - Min RTT`.
+- `Pending`: attack đã gửi nhưng chưa nhận response.
+- `Adaptive Window`: số attack tối đa được phép đang bay.
+- `Pace`: khoảng cách gửi tối thiểu khi hệ thống nhận thấy congestion.
+
+### Điều khiển
+
+- Window khởi đầu 3, tối thiểu 2, tối đa 10.
+- RTT/queue delay thấp: tăng window từ từ.
+- RTT/queue delay cao: giảm window theo kiểu multiplicative decrease.
+- Nếu có pending nhưng lâu không có ACK, window tiếp tục tự giảm.
+- Ping `-120/-121` chỉ là tín hiệu phụ để cap window nhanh khi spike; quyết định chính vẫn dựa Combat RTT/ACK/Pending.
+- Khi congestion, pace được tính từ ACK rate để không tạo request nhanh hơn nhiều so với tốc độ server đang trả.
+- Đánh tay không bị throttle. Gate chỉ áp dụng khi `/dsq` đang bật.
+- Khi mob chết, xóa toàn bộ pending còn lại của đúng mob đó để tránh giữ request stale trong diagnostic/scheduler.
+
+HUD mới:
+
+```text
+Combat 6959ms | Pending 3 | ACK 2.4/s
+Adaptive W:3 | Pace 379ms | QD 6880ms
+```
+
+Khi server/session hồi, RTT giảm và ACK tiếp tục về thì window tự tăng lại; không cần timer resume cố định.

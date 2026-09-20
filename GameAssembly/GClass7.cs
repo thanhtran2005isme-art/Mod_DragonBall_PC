@@ -14,9 +14,23 @@ public class GClass7
 
 	private static readonly List<CombatProbe> combatProbes = new List<CombatProbe>();
 
+	private static readonly List<long> combatAckTimes = new List<long>();
+
 	public static long combatRtt = -1L;
 
 	public static long combatLastResponseAt = -1L;
+
+	public static long combatMinRtt = -1L;
+
+	public static long combatQueueDelay = 0L;
+
+	public static double combatAckRate = 0.0;
+
+	public static double adaptiveCombatWindow = 3.0;
+
+	private static long adaptiveLastAttackAt = -1L;
+
+	private static long adaptiveLastStallAdjustAt = -1L;
 
 	private GInterface0 ginterface0_0 = GClass14.smethod_0();
 
@@ -61,6 +75,7 @@ public class GClass7
 			pingInitialized = false;
 			ping120Waiting = false;
 			ping121Waiting = false;
+			ResetCombatAdaptiveState();
 			return;
 		}
 
@@ -109,6 +124,44 @@ public class GClass7
 			combatProbes.RemoveAt(0);
 	}
 
+	private static void RefreshCombatAckRate(long now)
+	{
+		for (int i = combatAckTimes.Count - 1; i >= 0; i--)
+		{
+			if (now - combatAckTimes[i] > 5000L)
+				combatAckTimes.RemoveAt(i);
+		}
+		if (combatAckTimes.Count >= 2)
+		{
+			long span = combatAckTimes[combatAckTimes.Count - 1] - combatAckTimes[0];
+			combatAckRate = (span > 0L) ? ((combatAckTimes.Count - 1) * 1000.0 / span) : 0.0;
+		}
+		else
+			combatAckRate = 0.0;
+	}
+
+	private static void UpdateAdaptiveWindow(long rtt, long now)
+	{
+		if (rtt <= 0L)
+			return;
+		if (combatMinRtt < 0L || rtt < combatMinRtt)
+			combatMinRtt = rtt;
+		combatQueueDelay = (combatMinRtt > 0L && rtt > combatMinRtt) ? (rtt - combatMinRtt) : 0L;
+
+		long moderateDelay = Math.Max(400L, combatMinRtt * 2L);
+		long severeDelay = Math.Max(1000L, combatMinRtt * 4L);
+		bool severe = rtt >= 3000L || combatQueueDelay >= severeDelay;
+		bool moderate = rtt >= 1200L || combatQueueDelay >= moderateDelay;
+		bool healthy = rtt <= 600L && combatQueueDelay <= Math.Max(150L, combatMinRtt);
+
+		if (severe)
+			adaptiveCombatWindow = Math.Max(2.0, adaptiveCombatWindow * 0.60);
+		else if (moderate)
+			adaptiveCombatWindow = Math.Max(2.0, adaptiveCombatWindow * 0.82);
+		else if (healthy)
+			adaptiveCombatWindow = Math.Min(10.0, adaptiveCombatWindow + 0.25);
+	}
+
 	private static void RecordCombatAttack(int mobId, long sentAt)
 	{
 		CleanupCombatProbes(sentAt);
@@ -117,9 +170,10 @@ public class GClass7
 			mobId = mobId,
 			sentAt = sentAt
 		});
+		adaptiveLastAttackAt = sentAt;
 	}
 
-	public static void OnMobCombatResponse(int mobId)
+	private static bool CompleteCombatProbe(int mobId, bool terminal)
 	{
 		long now = GClass203.smethod_18();
 		CleanupCombatProbes(now);
@@ -129,16 +183,151 @@ public class GClass7
 			{
 				combatRtt = now - combatProbes[i].sentAt;
 				combatLastResponseAt = now;
+				combatAckTimes.Add(now);
+				RefreshCombatAckRate(now);
+				UpdateAdaptiveWindow(combatRtt, now);
 				combatProbes.RemoveAt(i);
-				return;
+
+				if (terminal)
+				{
+					for (int j = combatProbes.Count - 1; j >= 0; j--)
+					{
+						if (combatProbes[j].mobId == mobId)
+							combatProbes.RemoveAt(j);
+					}
+				}
+				return true;
 			}
+		}
+		RefreshCombatAckRate(now);
+		return false;
+	}
+
+	public static void OnMobCombatResponse(int mobId)
+	{
+		CompleteCombatProbe(mobId, false);
+	}
+
+	public static void OnMobCombatTerminalResponse(int mobId)
+	{
+		CompleteCombatProbe(mobId, true);
+	}
+
+	private static void ApplyCombatStallControl(long now)
+	{
+		CleanupCombatProbes(now);
+		if (combatProbes.Count == 0)
+			return;
+
+		long reference = (combatLastResponseAt > 0L) ? combatLastResponseAt : combatProbes[0].sentAt;
+		long baseline = (combatMinRtt > 0L) ? combatMinRtt : 500L;
+		long stallThreshold = Math.Max(1500L, baseline * 3L);
+		if (now - reference >= stallThreshold && (adaptiveLastStallAdjustAt < 0L || now - adaptiveLastStallAdjustAt >= 1000L))
+		{
+			adaptiveCombatWindow = Math.Max(2.0, adaptiveCombatWindow * 0.75);
+			adaptiveLastStallAdjustAt = now;
 		}
 	}
 
 	public static int GetCombatPendingCount()
 	{
-		CleanupCombatProbes(GClass203.smethod_18());
+		long now = GClass203.smethod_18();
+		CleanupCombatProbes(now);
+		RefreshCombatAckRate(now);
 		return combatProbes.Count;
+	}
+
+	public static double GetCombatAckRate()
+	{
+		RefreshCombatAckRate(GClass203.smethod_18());
+		return combatAckRate;
+	}
+
+	public static int GetAdaptiveWindowLimit()
+	{
+		long now = GClass203.smethod_18();
+		ApplyCombatStallControl(now);
+		int limit = (int)Math.Floor(adaptiveCombatWindow);
+		if (limit < 2)
+			limit = 2;
+		if (limit > 10)
+			limit = 10;
+
+		long networkRtt = Math.Max(long_2, long_3);
+		long observedRtt = Math.Max(combatRtt, networkRtt);
+		if (observedRtt >= 3000L)
+			limit = Math.Min(limit, 3);
+		else if (observedRtt >= 1500L)
+			limit = Math.Min(limit, 4);
+		else if (observedRtt >= 800L)
+			limit = Math.Min(limit, 6);
+
+		return limit;
+	}
+
+	public static int GetAdaptivePaceMs()
+	{
+		long now = GClass203.smethod_18();
+		RefreshCombatAckRate(now);
+		long networkRtt = Math.Max(long_2, long_3);
+		bool congested = combatRtt >= 800L || networkRtt >= 800L || combatQueueDelay >= 300L;
+		if (!congested)
+			return 0;
+
+		int pace;
+		if (combatAckRate > 0.05)
+			pace = (int)(1000.0 / (combatAckRate * 1.10));
+		else
+			pace = 500;
+
+		if (pace < 100)
+			pace = 100;
+		if (pace > 1200)
+			pace = 1200;
+		return pace;
+	}
+
+	public static bool CanAutoTrainSendAttack()
+	{
+		long now = GClass203.smethod_18();
+		int pending = GetCombatPendingCount();
+		int windowLimit = GetAdaptiveWindowLimit();
+		if (pending >= windowLimit)
+			return false;
+
+		int pace = GetAdaptivePaceMs();
+		if (pace > 0 && adaptiveLastAttackAt > 0L && now - adaptiveLastAttackAt < pace)
+			return false;
+
+		return true;
+	}
+
+	public static int GetAdaptiveRetryDelay()
+	{
+		int pace = GetAdaptivePaceMs();
+		if (pace <= 0)
+			return 100;
+		long elapsed = (adaptiveLastAttackAt > 0L) ? (GClass203.smethod_18() - adaptiveLastAttackAt) : pace;
+		int remain = pace - (int)elapsed;
+		if (remain < 50)
+			remain = 50;
+		if (remain > 500)
+			remain = 500;
+		return remain;
+	}
+
+	private static void ResetCombatAdaptiveState()
+	{
+		combatProbes.Clear();
+		combatAckTimes.Clear();
+		combatRtt = -1L;
+		combatLastResponseAt = -1L;
+		combatMinRtt = -1L;
+		combatQueueDelay = 0L;
+		combatAckRate = 0.0;
+		adaptiveCombatWindow = 3.0;
+		adaptiveLastAttackAt = -1L;
+		adaptiveLastStallAdjustAt = -1L;
 	}
 
 	public void method_0(int id)

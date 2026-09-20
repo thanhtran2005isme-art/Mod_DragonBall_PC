@@ -656,6 +656,8 @@ namespace AssemblyCSharp.Functions
 						}
 						else
 						{
+							if (GClass166.smethod_0().bool_0 && !GClass7.CanAutoTrainSendAttack())
+								return;
 							GClass78.smethod_1().gclass63_0.long_1 = GClass203.smethod_18();
 							smethod_6();
 							long_0[num] = GClass203.smethod_18();
@@ -669,6 +671,8 @@ namespace AssemblyCSharp.Functions
 						{
 							if (gclass194_ != null && gclass194_.int_5 != 32 && GClass144.smethod_8().method_31(gclass194_))
 							{
+								if (GClass166.smethod_0().bool_0 && !GClass7.CanAutoTrainSendAttack())
+									return;
 								gClass.gclass63_0.long_1 = GClass203.smethod_18();
 								smethod_6();
 								long_0[num] = GClass203.smethod_18();
