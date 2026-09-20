@@ -58,7 +58,9 @@ namespace AssemblyCSharp.Functions
 				return false;
 			if (text.IndexOf("VIP", StringComparison.OrdinalIgnoreCase) >= 0)
 				return false;
-			return text.IndexOf("Nhận quà KOL", StringComparison.OrdinalIgnoreCase) >= 0 || text.IndexOf("Nhan qua KOL", StringComparison.OrdinalIgnoreCase) >= 0;
+			// Menu game có thể chèn xuống dòng/khoảng trắng khi render.
+			// Nút KOL thường được phân biệt đủ an toàn bởi "KOL" và không có "VIP".
+			return ContainsKol(text);
 		}
 
 		private static void Arm()
@@ -89,8 +91,12 @@ namespace AssemblyCSharp.Functions
 			try
 			{
 				string caption = GetCurrentMenuCaption();
+				debugLast = "OBS:" + npcId + ":" + menuId + "/" + optionId;
 				if (!string.IsNullOrEmpty(caption) && caption.IndexOf("VIP", StringComparison.OrdinalIgnoreCase) >= 0)
+				{
+					debugLast = "OBS_VIP";
 					return;
+				}
 
 				long now = GClass203.smethod_18();
 				bool regularClaim = IsRegularKolClaim(caption);
