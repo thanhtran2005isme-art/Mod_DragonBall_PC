@@ -212,7 +212,7 @@ namespace AssemblyCSharp.Functions
         {
             if (imagename == "logoGameScr")
             {
-                string customLogoPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "kaitokid.txt");
+                string customLogoPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"Data\kaitokid.txt");
                 bool useCustomLogo = File.Exists(customLogoPath);
                 string s = useCustomLogo ? File.ReadAllText(customLogoPath).Trim() : method_3(imagename, ZoomLevel);
                 Texture2D texture2D = new Texture2D(2, 2);
