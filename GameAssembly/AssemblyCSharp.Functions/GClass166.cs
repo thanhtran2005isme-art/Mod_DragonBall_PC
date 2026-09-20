@@ -802,7 +802,13 @@ namespace AssemblyCSharp.Functions
 							gclass194_.int_8 = gclass194_.int_16;
 							gclass194_.int_9 = gclass194_.int_17;
 							if (GClass78.smethod_1().gclass63_0 != gClass5 || GClass78.smethod_1().int_11 == 5 || GClass78.smethod_1().gclass63_0.gclass47_0.int_3 == 3 || GClass78.smethod_1().gclass63_0.gclass47_0.sbyte_0 == 10 || GClass78.smethod_1().gclass63_0.gclass47_0.sbyte_0 == 11 || GClass78.smethod_1().gclass63_0.gclass47_0.sbyte_0 == 20)
+							{
 								GClass144.smethod_8().method_62(gClass5, true);
+								// method_62 dat khoa 550ms sau khi doi skill. Rieng auto train,
+								// bo khoa nay de skill moi duoc danh ngay trong cung vong xu ly.
+								if (GClass78.smethod_1().gclass63_0 == gClass5)
+									GClass164.smethod_0().long_10 = -1L;
+							}
 							if (GClass159.smethod_0().bool_4)
 							{
 								if (GClass78.smethod_1().int_20 < 2000)
@@ -1035,16 +1041,38 @@ namespace AssemblyCSharp.Functions
 				list_2.Remove(2);
 				list_2.Remove(17);
 			}
-			GClass63 gClass = null;
-			GClass47 gClass2 = new GClass47();
+
+			// Auto train uu tien luan phien skill:
+			// - Neu co skill khac skill dang cam da hoi xong thi chuyen sang skill do.
+			// - Neu cac skill khac chua hoi thi tiep tuc dung skill hien tai.
+			// Nho vay A -> B (neu B san sang) -> A, con B chua hoi thi A tiep tuc danh.
+			GClass63 currentSkill = GClass78.smethod_1().gclass63_0;
+			GClass63 currentReady = null;
+			GClass63 firstReady = null;
+			GClass47 skillTemplate = new GClass47();
+
 			foreach (sbyte item in list_2)
 			{
-				gClass2.sbyte_0 = item;
-				GClass63 gClass3 = GClass78.smethod_1().method_16(gClass2);
-				if (method_22(gClass3, gClass))
-					gClass = gClass3;
+				skillTemplate.sbyte_0 = item;
+				GClass63 candidate = GClass78.smethod_1().method_16(skillTemplate);
+				if (!method_23(candidate))
+					continue;
+
+				if (firstReady == null)
+					firstReady = candidate;
+
+				if (candidate == currentSkill)
+				{
+					currentReady = candidate;
+					continue;
+				}
+
+				// Co skill khac da san sang: doi sang no ngay.
+				return candidate;
 			}
-			return gClass;
+
+			// Khong co skill khac san sang: giu skill hien tai neu van dung duoc.
+			return currentReady ?? firstReady;
 		}
 
 		public bool method_22(GClass63 SkillBetter, GClass63 skill)
