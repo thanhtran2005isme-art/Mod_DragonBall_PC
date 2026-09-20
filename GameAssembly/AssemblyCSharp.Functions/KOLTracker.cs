@@ -12,6 +12,11 @@ namespace AssemblyCSharp.Functions
 		private static int queryMenuId = -1;
 		private static int queryOptionId = -1;
 		private static bool hasQuery;
+		private static int candidateNpcId = -1;
+		private static int candidateMenuId = -1;
+		private static int candidateOptionId = -1;
+		private static bool hasCandidate;
+		private static long candidateAt = -1L;
 		private static long nextSyncAt = -1L;
 		private static bool backgroundSyncPending;
 		private static long backgroundSyncExpiresAt = -1L;
@@ -74,17 +79,47 @@ namespace AssemblyCSharp.Functions
 			try
 			{
 				string caption = GetCurrentMenuCaption();
-				if (!IsRegularKolClaim(caption))
+				if (!string.IsNullOrEmpty(caption) && caption.IndexOf("VIP", StringComparison.OrdinalIgnoreCase) >= 0)
 					return;
 
-				queryNpcId = npcId;
-				queryMenuId = menuId;
-				queryOptionId = optionId;
+				long now = GClass203.smethod_18();
+				bool regularClaim = IsRegularKolClaim(caption);
+				bool inKolContext = now <= armedUntil;
+				if (!regularClaim && !inKolContext)
+					return;
+
+				// Chua tin request nay ngay. Giu lam candidate va chi xac nhan
+				// sau khi response tiep theo thuc su parse duoc progress KOL.
+				candidateNpcId = npcId;
+				candidateMenuId = menuId;
+				candidateOptionId = optionId;
+				hasCandidate = true;
+				candidateAt = now;
+			}
+			catch
+			{
+			}
+		}
+
+		private static void ConfirmCandidate(int npcId)
+		{
+			try
+			{
+				if (!hasCandidate || candidateNpcId != npcId)
+					return;
+				long now = GClass203.smethod_18();
+				if (candidateAt < 0L || now - candidateAt > 5000L)
+				return;
+
+				queryNpcId = candidateNpcId;
+				queryMenuId = candidateMenuId;
+				queryOptionId = candidateOptionId;
 				hasQuery = true;
+				hasCandidate = false;
+				candidateAt = -1L;
 				backgroundSyncPending = false;
 				backgroundSyncExpiresAt = -1L;
-				nextSyncAt = GClass203.smethod_18() + SyncIntervalMs;
-				Arm();
+				nextSyncAt = now + SyncIntervalMs;
 			}
 			catch
 			{
@@ -158,7 +193,10 @@ namespace AssemblyCSharp.Functions
 				long now = GClass203.smethod_18();
 				bool sameBackgroundNpc = backgroundSyncPending && npcId == queryNpcId;
 				if (kolContext || now <= armedUntil || sameBackgroundNpc)
-					TryUpdateProgress(chat);
+				{
+					if (TryUpdateProgress(chat))
+						ConfirmCandidate(npcId);
+				}
 
 				if (sameBackgroundNpc)
 				{
@@ -185,7 +223,10 @@ namespace AssemblyCSharp.Functions
 				long now = GClass203.smethod_18();
 				bool sameBackgroundNpc = backgroundSyncPending && npcId == queryNpcId;
 				if (kolContext || now <= armedUntil || sameBackgroundNpc)
-					TryUpdateProgress(chat);
+				{
+					if (TryUpdateProgress(chat))
+						ConfirmCandidate(npcId);
+				}
 
 				if (sameBackgroundNpc)
 				{
