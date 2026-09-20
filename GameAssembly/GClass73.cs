@@ -3157,6 +3157,7 @@ public class GClass73 : GInterface6
 		}
 		case 88817:
 			GClass96.smethod_4("", 1, GClass78.smethod_1().gclass79_0);
+			KOLTracker.ObserveMenuRequest(GClass78.smethod_1().gclass79_0.gclass127_0.int_0, gclass145_0.int_0, 0);
 			GClass7.smethod_0().method_61(GClass78.smethod_1().gclass79_0.gclass127_0.int_0, gclass145_0.int_0, 0);
 			return;
 		case 88818:
@@ -3190,6 +3191,7 @@ public class GClass73 : GInterface6
 			else
 			{
 				GClass96.smethod_4("", 1, GClass78.smethod_1().gclass79_0);
+				KOLTracker.ObserveMenuRequest(GClass78.smethod_1().gclass79_0.gclass127_0.int_0, num, 0);
 				GClass7.smethod_0().method_61(GClass78.smethod_1().gclass79_0.gclass127_0.int_0, num, 0);
 			}
 			return;
@@ -3198,11 +3200,13 @@ public class GClass73 : GInterface6
 		{
 			int menuId3 = (int)p;
 			GClass96.smethod_4("", 1, GClass78.smethod_1().gclass79_0);
+			KOLTracker.ObserveMenuRequest(GClass78.smethod_1().gclass79_0.gclass127_0.int_0, menuId3, gclass145_0.int_0);
 			GClass7.smethod_0().method_61(GClass78.smethod_1().gclass79_0.gclass127_0.int_0, menuId3, gclass145_0.int_0);
 			return;
 		}
 		case 88822:
 			GClass96.smethod_4("", 1, GClass78.smethod_1().gclass79_0);
+			KOLTracker.ObserveMenuRequest(GClass78.smethod_1().gclass79_0.gclass127_0.int_0, gclass145_0.int_0, 0);
 			GClass7.smethod_0().method_61(GClass78.smethod_1().gclass79_0.gclass127_0.int_0, gclass145_0.int_0, 0);
 			return;
 		case 88823:
