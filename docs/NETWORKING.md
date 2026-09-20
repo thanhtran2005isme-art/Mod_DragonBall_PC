@@ -141,3 +141,25 @@ LOGIN
 Không có vòng spam song song và không tạo nhiều login request đang bay cùng lúc. Khi nhận map-info `-24` (đã vào game), retry pending được hủy ngay.
 
 Các server khác không dùng slot contender; packet `122` giữ đúng thời gian chờ server gửi.
+
+
+### Credential source khi retry SV15
+
+Game mở từ `DragonBoyManager.exe` nhận `--username`, `--password`, `--server` và lưu trong `GClass172`.
+Slot retry phải dùng lại đúng nguồn này. Không dùng `GClass133.method_9()` làm đường chính vì hàm đó đọc `GClass1["acc"] / ["pass"]`, là cache của màn login và có thể khác tài khoản mà Manager vừa mở.
+
+Luồng hiện tại:
+
+```text
+DragonBoyManager
+-> command line username/password/server
+-> GClass172
+-> login lần đầu
+
+SV15 quá tải
+-> slot retry
+-> GClass172 credential
+-> gửi login lại
+```
+
+Chỉ fallback sang login-cache cũ nếu không có credential từ Manager.

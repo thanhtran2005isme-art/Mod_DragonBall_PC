@@ -522,7 +522,11 @@ public class GClass133 : GClass131, GInterface6
 		if (GClass73.gclass133_0 == null)
 			GClass73.gclass133_0 = new GClass133();
 		GClass50.smethod_8("[SV15 SLOT] login attempt #" + server15SlotRetryCount);
-		GClass73.gclass133_0.method_9();
+		if (!AssemblyCSharp.Functions.GClass172.smethod_0().RetryManagerLogin())
+		{
+			// Fallback cho trường hợp game không được mở từ DragonBoyManager.
+			GClass73.gclass133_0.method_9();
+		}
 	}
 
 	public void method_9()

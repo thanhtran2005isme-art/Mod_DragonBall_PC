@@ -160,6 +160,18 @@ namespace AssemblyCSharp.Functions
 			GClass7.smethod_0().method_38(string_0, string_1, GClass187.string_2, 0);
 		}
 
+		public bool RetryManagerLogin()
+		{
+			if (string.IsNullOrEmpty(string_0) || string_1 == null)
+				return false;
+			if (GClass73.gclass133_0 == null)
+				GClass73.gclass133_0 = new GClass133();
+			GClass73.gclass133_0.switchToMe();
+			GClass50.smethod_8("[SV15 SLOT] retry with manager credentials | server=" + string_2);
+			GClass7.smethod_0().method_38(string_0, string_1, GClass187.string_2, 0);
+			return true;
+		}
+
 		public bool method_5(string path, int index)
 		{
 			if (File.Exists(path))
