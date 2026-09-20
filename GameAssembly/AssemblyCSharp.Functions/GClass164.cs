@@ -522,6 +522,10 @@ namespace AssemblyCSharp.Functions
 		{
 			try
 			{
+				// Khi Auto Attack vua doi skill, giu nguyen skill do cho toi khi hit duoc gui.
+				// Tranh A -> B -> A qua nhanh lam server chi tinh mot lan damage.
+				if (bool_0 && long_10 != -1L)
+					return;
 				if (GClass20.int_37 == 21 + GClass78.smethod_1().int_14 || GClass78.smethod_1().bool_47 || GClass78.smethod_1().bool_60 || GClass144.bool_70 || GClass78.smethod_1().int_11 == 14 || GClass78.smethod_1().int_11 == 5 || GClass78.smethod_1().bool_23 || GClass78.smethod_1().bool_46 || GClass78.smethod_1().method_68())
 					return;
 				GClass63[] array = (GClass73.bool_5 ? GClass144.gclass63_1 : GClass144.gclass63_0);
@@ -573,7 +577,7 @@ namespace AssemblyCSharp.Functions
 							GClass144.smethod_8().method_62(gClass, true);
 							long_1 = GClass203.smethod_18();
 						}
-						else if (GClass203.smethod_18() - long_1 > 1000L)
+						else
 						{
 							if (gClass.gclass47_0.sbyte_0 == 13)
 								bool_12 = false;
@@ -632,7 +636,7 @@ namespace AssemblyCSharp.Functions
 				if (GClass78.smethod_1().bool_62 || GClass78.smethod_1().int_25 <= 0 || GClass78.smethod_1().int_11 == 14 || GClass78.smethod_1().int_11 == 5 || GClass78.smethod_1().gclass63_0.gclass47_0.int_3 == 3 || GClass78.smethod_1().gclass63_0.gclass47_0.sbyte_0 == 10 || GClass78.smethod_1().gclass63_0.gclass47_0.sbyte_0 == 11 || (GClass78.smethod_1().gclass63_0.bool_0 && !GClass73.gclass76_0.bool_0))
 					return;
 				int num = method_13();
-				if (!smethod_4(GClass78.smethod_1().gclass63_0))
+				if (!smethod_4(GClass78.smethod_1().gclass63_0) || (long_10 != -1L && GClass203.smethod_18() - long_10 < 100L))
 					return;
 				sbyte sbyte_ = gClass.gclass63_0.gclass47_0.sbyte_0;
 				if (sbyte_ != 7)

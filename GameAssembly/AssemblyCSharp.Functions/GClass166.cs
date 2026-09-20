@@ -804,10 +804,7 @@ namespace AssemblyCSharp.Functions
 							if (GClass78.smethod_1().gclass63_0 != gClass5 || GClass78.smethod_1().int_11 == 5 || GClass78.smethod_1().gclass63_0.gclass47_0.int_3 == 3 || GClass78.smethod_1().gclass63_0.gclass47_0.sbyte_0 == 10 || GClass78.smethod_1().gclass63_0.gclass47_0.sbyte_0 == 11 || GClass78.smethod_1().gclass63_0.gclass47_0.sbyte_0 == 20)
 							{
 								GClass144.smethod_8().method_62(gClass5, true);
-								// method_62 dat khoa 550ms sau khi doi skill. Rieng auto train,
-								// bo khoa nay de skill moi duoc danh ngay trong cung vong xu ly.
-								if (GClass78.smethod_1().gclass63_0 == gClass5)
-									GClass164.smethod_0().long_10 = -1L;
+								// Giu long_10 de doi 100ms cho server nhan SELECT SKILL truoc packet ATTACK.
 							}
 							if (GClass159.smethod_0().bool_4)
 							{
@@ -840,11 +837,21 @@ namespace AssemblyCSharp.Functions
 							}
 							if (smethod_0().bool_1 && gclass194_.int_6 <= 1)
 								return;
+
+							// Doi toi thieu 100ms sau SELECT SKILL. Khong doi skill tiep trong luc cho.
+							if (GClass164.smethod_0().long_10 != -1L && GClass203.smethod_18() - GClass164.smethod_0().long_10 < 100L)
+							{
+								smethod_1(100);
+								return;
+							}
+
 							if (int_0 != 0)
 							{
-								GClass144.smethod_8().method_62(gClass5, true);
 								if (GClass50.smethod_24(gclass194_.int_16, gclass194_.int_17, gClass2.int_4, gClass2.int_5) <= 48)
+								{
 									GClass144.smethod_8().method_44(gclass194_);
+									GClass164.smethod_0().long_10 = -1L;
+								}
 								return;
 							}
 							if (GClass78.smethod_1().int_11 == 5 || GClass78.smethod_1().gclass63_0.gclass47_0.int_3 == 3 || GClass78.smethod_1().gclass63_0.gclass47_0.sbyte_0 == 10 || GClass78.smethod_1().gclass63_0.gclass47_0.sbyte_0 == 11)
@@ -1047,6 +1054,12 @@ namespace AssemblyCSharp.Functions
 			// - Neu cac skill khac chua hoi thi tiep tuc dung skill hien tai.
 			// Nho vay A -> B (neu B san sang) -> A, con B chua hoi thi A tiep tuc danh.
 			GClass63 currentSkill = GClass78.smethod_1().gclass63_0;
+
+			// Neu vua SELECT SKILL ma chua gui hit, khong duoc doi sang skill khac.
+			// GClass164.method_15 se mo khoa long_10 sau khi packet attack duoc gui.
+			if (GClass164.smethod_0().long_10 != -1L && currentSkill != null && list_2.Contains(currentSkill.gclass47_0.sbyte_0))
+				return currentSkill;
+
 			GClass63 currentReady = null;
 			GClass63 firstReady = null;
 			GClass47 skillTemplate = new GClass47();
