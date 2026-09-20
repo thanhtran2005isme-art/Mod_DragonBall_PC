@@ -12,17 +12,22 @@ namespace AssemblyCSharp.Functions
 		private static int queryMenuId = -1;
 		private static int queryOptionId = -1;
 		private static int queryKind;
+		private static int queryParentMenuId = -1;
+		private static bool queryHasParent;
 		private static bool hasQuery;
 		private static int candidateNpcId = -1;
 		private static int candidateMenuId = -1;
 		private static int candidateOptionId = -1;
 		private static int candidateKind;
+		private static int candidateParentMenuId = -1;
+		private static bool candidateHasParent;
 		private static bool hasCandidate;
 		private static long candidateAt = -1L;
 		private static long nextSyncAt = -1L;
 		private const int BackgroundIdle = 0;
 		private const int BackgroundWaitMenu = 1;
 		private const int BackgroundWaitProgress = 2;
+		private const int BackgroundWaitSubMenu = 3;
 
 		private static int backgroundSyncState;
 		private static long backgroundSyncExpiresAt = -1L;
@@ -174,13 +179,28 @@ namespace AssemblyCSharp.Functions
 					return;
 				}
 
+				long now = GClass203.smethod_18();
+				if (hasCandidate && candidateKind == 32 && candidateNpcId == npcId
+					&& candidateAt >= 0L && now - candidateAt <= 15000L)
+				{
+					candidateParentMenuId = candidateMenuId;
+					candidateHasParent = true;
+				}
+				else
+				{
+					candidateParentMenuId = -1;
+					candidateHasParent = false;
+				}
+
 				candidateNpcId = npcId;
 				candidateMenuId = select;
 				candidateOptionId = 0;
 				candidateKind = 32;
 				hasCandidate = true;
-				candidateAt = GClass203.smethod_18();
-				debugLast = "P32:" + npcId + ":" + select;
+				candidateAt = now;
+				debugLast = candidateHasParent
+					? ("P32:" + npcId + ":" + candidateParentMenuId + ">" + select)
+					: ("P32:" + npcId + ":" + select);
 			}
 			catch
 			{
@@ -201,9 +221,13 @@ namespace AssemblyCSharp.Functions
 				queryMenuId = candidateMenuId;
 				queryOptionId = candidateOptionId;
 				queryKind = candidateKind;
+				queryParentMenuId = candidateParentMenuId;
+				queryHasParent = candidateHasParent;
 				hasQuery = true;
 				hasCandidate = false;
 				candidateAt = -1L;
+				candidateParentMenuId = -1;
+				candidateHasParent = false;
 				backgroundSyncState = BackgroundIdle;
 				backgroundSyncExpiresAt = -1L;
 				nextSyncAt = now + SyncIntervalMs;
@@ -232,7 +256,8 @@ namespace AssemblyCSharp.Functions
 				{
 					if (now < backgroundSyncExpiresAt)
 						return;
-					debugLast = (backgroundSyncState == BackgroundWaitMenu) ? "TO_MENU" : "TO_PROG";
+					debugLast = (backgroundSyncState == BackgroundWaitMenu) ? "TO_MENU"
+						: ((backgroundSyncState == BackgroundWaitSubMenu) ? "TO_SUB" : "TO_PROG");
 					backgroundSyncState = BackgroundIdle;
 					backgroundSyncExpiresAt = -1L;
 					nextSyncAt = now + SyncIntervalMs;
@@ -261,14 +286,24 @@ namespace AssemblyCSharp.Functions
 
 				if (queryKind == 32)
 				{
-					// Menu động từ server dùng action 11057 -> packet 32.
-					// Replay đúng lựa chọn đã học và chờ progress trả về.
+					if (queryHasParent)
+					{
+						backgroundSyncState = BackgroundWaitMenu;
+						backgroundSyncExpiresAt = now + SyncTimeoutMs;
+						nextSyncAt = now + SyncIntervalMs;
+						debugOpenSent++;
+						debugLast = "OPEN32";
+						GClass7.smethod_0().method_44();
+						GClass7.smethod_0().method_60(queryNpcId);
+						return;
+					}
+
 					backgroundSyncState = BackgroundWaitProgress;
 					backgroundSyncExpiresAt = now + SyncTimeoutMs;
 					nextSyncAt = now + SyncIntervalMs;
 					debugQuerySent++;
-					debugLast = "Q32";
 					GClass7.smethod_0().method_59((short)queryNpcId, (sbyte)queryMenuId);
+					debugLast = "Q32";
 					return;
 				}
 
@@ -292,7 +327,19 @@ namespace AssemblyCSharp.Functions
 		// Trả true để controller ẩn menu của lần sync nền.
 		public static bool ObserveNpcMenu()
 		{
-			if (backgroundSyncState != BackgroundWaitMenu)
+			if (queryKind == 32 && queryHasParent && backgroundSyncState == BackgroundWaitMenu)
+			{
+				long now32 = GClass203.smethod_18();
+				debugMenuResponse++;
+				backgroundSyncState = BackgroundWaitSubMenu;
+				backgroundSyncExpiresAt = now32 + SyncTimeoutMs;
+				debugQuerySent++;
+				GClass7.smethod_0().method_59((short)queryNpcId, (sbyte)queryParentMenuId);
+				debugLast = "Q32A";
+				return true;
+			}
+
+			if (queryKind != 22 || backgroundSyncState != BackgroundWaitMenu)
 				return false;
 
 			long now = GClass203.smethod_18();
@@ -336,6 +383,29 @@ namespace AssemblyCSharp.Functions
 					Arm();
 
 				long now = GClass203.smethod_18();
+
+				if (queryKind == 32 && queryHasParent && backgroundSyncState == BackgroundWaitMenu)
+				{
+					debugMenuResponse++;
+					backgroundSyncState = BackgroundWaitSubMenu;
+					backgroundSyncExpiresAt = now + SyncTimeoutMs;
+					debugQuerySent++;
+					GClass7.smethod_0().method_59((short)queryNpcId, (sbyte)queryParentMenuId);
+					debugLast = "Q32A";
+					return true;
+				}
+
+				if (queryKind == 32 && queryHasParent && backgroundSyncState == BackgroundWaitSubMenu)
+				{
+					debugMenuResponse++;
+					backgroundSyncState = BackgroundWaitProgress;
+					backgroundSyncExpiresAt = now + SyncTimeoutMs;
+					debugQuerySent++;
+					GClass7.smethod_0().method_59((short)queryNpcId, (sbyte)queryMenuId);
+					debugLast = "Q32B";
+					return true;
+				}
+
 				bool backgroundProgress = backgroundSyncState == BackgroundWaitProgress;
 				bool freshCandidate = hasCandidate && candidateAt >= 0L && now - candidateAt <= 5000L;
 				bool parsedProgress = false;
@@ -512,10 +582,12 @@ namespace AssemblyCSharp.Functions
 				string text = "KOL: " + Current + "/" + Total + " (" + percent.ToString("0.##") + "%)";
 				if (Completed)
 					text += " - HOAN THANH";
-				string state = (backgroundSyncState == BackgroundWaitMenu) ? "WM" : ((backgroundSyncState == BackgroundWaitProgress) ? "WP" : "I");
+				string state = (backgroundSyncState == BackgroundWaitMenu) ? "WM"
+					: ((backgroundSyncState == BackgroundWaitSubMenu) ? "WS"
+					: ((backgroundSyncState == BackgroundWaitProgress) ? "WP" : "I"));
 				text += " | Q:" + (hasQuery ? "Y" : "N")
 					+ " K:" + queryKind
-					+ " N:" + queryNpcId + " M:" + queryMenuId + "/" + queryOptionId
+					+ " N:" + queryNpcId + " M:" + (queryHasParent ? (queryParentMenuId + ">") : "") + queryMenuId + "/" + queryOptionId
 					+ " S:" + state
 					+ " A:" + debugOpenSent + "/" + debugMenuResponse + "/" + debugQuerySent + "/" + debugProgressResponse
 					+ " " + debugLast;
