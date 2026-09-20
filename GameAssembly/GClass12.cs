@@ -2814,6 +2814,8 @@ public class GClass12 : GInterface3
 				{
 					GClass36.smethod_0("Loi OPEN_UI_MENU " + ex2.ToString());
 				}
+				if (KOLTracker.ObserveNpcMenu())
+					break;
 				if (GClass78.smethod_1().gclass79_0 != null)
 				{
 					for (int j = 0; j < GClass78.smethod_1().gclass79_0.gclass127_0.string_1.Length; j++)

@@ -18,7 +18,11 @@ namespace AssemblyCSharp.Functions
 		private static bool hasCandidate;
 		private static long candidateAt = -1L;
 		private static long nextSyncAt = -1L;
-		private static bool backgroundSyncPending;
+		private const int BackgroundIdle = 0;
+		private const int BackgroundWaitMenu = 1;
+		private const int BackgroundWaitProgress = 2;
+
+		private static int backgroundSyncState;
 		private static long backgroundSyncExpiresAt = -1L;
 
 		public static bool HasProgress { get; private set; }
@@ -117,7 +121,7 @@ namespace AssemblyCSharp.Functions
 				hasQuery = true;
 				hasCandidate = false;
 				candidateAt = -1L;
-				backgroundSyncPending = false;
+				backgroundSyncState = BackgroundIdle;
 				backgroundSyncExpiresAt = -1L;
 				nextSyncAt = now + SyncIntervalMs;
 			}
@@ -136,19 +140,25 @@ namespace AssemblyCSharp.Functions
 					return;
 				if (!(GClass73.gclass131_0 is GClass144))
 					return;
+
+				long now = GClass203.smethod_18();
+
+				// Khi đang chờ response của sync nền, chỉ chờ hoặc timeout.
+				if (backgroundSyncState != BackgroundIdle)
+				{
+					if (now < backgroundSyncExpiresAt)
+						return;
+					backgroundSyncState = BackgroundIdle;
+					backgroundSyncExpiresAt = -1L;
+					nextSyncAt = now + SyncIntervalMs;
+					return;
+				}
+
+				// Không chen sync nền khi người chơi đang thao tác menu/dialog.
 				if (GClass73.gclass145_0 != null && GClass73.gclass145_0.bool_0)
 					return;
 				if (GClass96.gclass96_0 != null)
 					return;
-
-				long now = GClass203.smethod_18();
-				if (backgroundSyncPending)
-				{
-					if (now < backgroundSyncExpiresAt)
-						return;
-					backgroundSyncPending = false;
-					backgroundSyncExpiresAt = -1L;
-				}
 
 				if (nextSyncAt < 0L)
 				{
@@ -158,16 +168,42 @@ namespace AssemblyCSharp.Functions
 				if (now < nextSyncAt)
 					return;
 
-				backgroundSyncPending = true;
+				// Flow thật của client: flush vị trí -> mở NPC (33) -> đợi response menu
+				// -> ObserveNpcMenu() mới gửi packet 22 Nhận quà KOL.
+				backgroundSyncState = BackgroundWaitMenu;
 				backgroundSyncExpiresAt = now + SyncTimeoutMs;
 				nextSyncAt = now + SyncIntervalMs;
+				GClass7.smethod_0().method_44();
+				GClass7.smethod_0().method_60(queryNpcId);
+			}
+			catch
+			{
+				backgroundSyncState = BackgroundIdle;
+				backgroundSyncExpiresAt = -1L;
+			}
+		}
+
+		// Gọi sau khi packet 33 OPEN_UI_MENU đã được đọc hết.
+		// Trả true để controller ẩn menu của lần sync nền.
+		public static bool ObserveNpcMenu()
+		{
+			if (backgroundSyncState != BackgroundWaitMenu)
+				return false;
+
+			long now = GClass203.smethod_18();
+			backgroundSyncState = BackgroundWaitProgress;
+			backgroundSyncExpiresAt = now + SyncTimeoutMs;
+			try
+			{
 				GClass7.smethod_0().method_61(queryNpcId, queryMenuId, queryOptionId);
 			}
 			catch
 			{
-				backgroundSyncPending = false;
+				backgroundSyncState = BackgroundIdle;
 				backgroundSyncExpiresAt = -1L;
+				nextSyncAt = now + SyncIntervalMs;
 			}
+			return true;
 		}
 
 		public static bool ObserveNpcDialog(int npcId, string chat, string[] menu)
@@ -191,7 +227,7 @@ namespace AssemblyCSharp.Functions
 					Arm();
 
 				long now = GClass203.smethod_18();
-				bool sameBackgroundNpc = backgroundSyncPending && npcId == queryNpcId;
+				bool sameBackgroundNpc = backgroundSyncState == BackgroundWaitProgress && npcId == queryNpcId;
 				if (kolContext || now <= armedUntil || sameBackgroundNpc)
 				{
 					if (TryUpdateProgress(chat))
@@ -200,8 +236,9 @@ namespace AssemblyCSharp.Functions
 
 				if (sameBackgroundNpc)
 				{
-					backgroundSyncPending = false;
+					backgroundSyncState = BackgroundIdle;
 					backgroundSyncExpiresAt = -1L;
+					nextSyncAt = now + SyncIntervalMs;
 					return true;
 				}
 			}
@@ -221,7 +258,7 @@ namespace AssemblyCSharp.Functions
 					Arm();
 
 				long now = GClass203.smethod_18();
-				bool sameBackgroundNpc = backgroundSyncPending && npcId == queryNpcId;
+				bool sameBackgroundNpc = backgroundSyncState == BackgroundWaitProgress && npcId == queryNpcId;
 				if (kolContext || now <= armedUntil || sameBackgroundNpc)
 				{
 					if (TryUpdateProgress(chat))
@@ -230,8 +267,9 @@ namespace AssemblyCSharp.Functions
 
 				if (sameBackgroundNpc)
 				{
-					backgroundSyncPending = false;
+					backgroundSyncState = BackgroundIdle;
 					backgroundSyncExpiresAt = -1L;
+					nextSyncAt = now + SyncIntervalMs;
 					return true;
 				}
 			}
