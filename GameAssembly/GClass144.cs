@@ -975,7 +975,8 @@ public class GClass144 : GClass131, GInterface4
 		gclass70_23 = ((!GClass167.smethod_0().bool_22) ? GClass73.smethod_43("/mainImage/myTexture2dbtnlf.png") : GClass167.smethod_0().method_5("btnlf"));
 		gclass70_24 = (GClass167.smethod_0().bool_22 ? GClass167.smethod_0().method_5("btnl2") : GClass73.smethod_43("/mainImage/myTexture2dbtnl2.png"));
 		gclass70_25 = ((!GClass167.smethod_0().bool_22) ? GClass73.smethod_43("/mainImage/myTexture2dbtnlf2.png") : GClass167.smethod_0().method_5("btnlf2"));
-		gclass70_28 = (GClass167.smethod_0().bool_22 ? GClass167.smethod_0().method_5("panel") : GClass73.smethod_43("/mainImage/myTexture2dpanel.png"));
+		// Dung panel HUD goc de loai bo logo Thanh VLC duoc nhung trong asset "panel" tuy bien.
+		gclass70_28 = GClass73.smethod_43("/mainImage/myTexture2dpanel.png");
 		gclass70_29 = GClass73.smethod_43("/mainImage/panel2.png");
 		gclass70_30 = (GClass167.smethod_0().bool_22 ? GClass167.smethod_0().method_5("hp") : GClass73.smethod_43("/mainImage/myTexture2dHP.png"));
 		gclass70_32 = GClass73.smethod_43("/mainImage/SP.png");
