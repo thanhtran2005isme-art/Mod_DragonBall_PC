@@ -252,6 +252,39 @@ namespace AssemblyCSharp.Functions
 
         public GClass70 method_5(string imagename)
 		{
+            if (imagename == "imgTitle")
+            {
+                try
+                {
+                    // Logo lon o man hinh khoi dong/login dung chung Data\kaitokid.txt.
+                    string gameDirectory = Path.GetDirectoryName(Application.dataPath);
+                    if (string.IsNullOrEmpty(gameDirectory))
+                        gameDirectory = Directory.GetCurrentDirectory();
+
+                    string customLogoPath = Path.Combine(gameDirectory, @"Data\kaitokid.txt");
+                    if (!File.Exists(customLogoPath))
+                        return null;
+
+                    string customBase64 = File.ReadAllText(customLogoPath).Trim();
+                    if (string.IsNullOrEmpty(customBase64))
+                        return null;
+
+                    Texture2D customTexture = new Texture2D(2, 2);
+                    customTexture.LoadImage(Convert.FromBase64String(customBase64));
+
+                    // Splash cu rong 400 px o zoom 2. Giu chieu rong tuong duong
+                    // nhung bao toan ti le anh KaitoKid de logo khong bi meo.
+                    int targetWidth = 200 * GClass122.int_12;
+                    int targetHeight = customTexture.height * targetWidth / customTexture.width;
+                    return GClass70.smethod_2(method_6(customTexture, targetWidth, targetHeight).EncodeToPNG());
+                }
+                catch (Exception ex)
+                {
+                    GClass149.smethod_5("Data/Errors/logo_error.log", "LOGIN LOGO ERROR: " + ex.ToString());
+                    return null;
+                }
+            }
+
 			string s = method_2(imagename);
 			Texture2D texture2D = new Texture2D(2, 2);
 			texture2D.LoadImage(Convert.FromBase64String(s));
