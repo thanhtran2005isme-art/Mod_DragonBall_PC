@@ -164,10 +164,11 @@ namespace AssemblyCSharp.Functions
 		{
 			if (string.IsNullOrEmpty(string_0) || string_1 == null)
 				return false;
-			if (GClass73.gclass133_0 == null)
-				GClass73.gclass133_0 = new GClass133();
-			GClass73.gclass133_0.switchToMe();
-			GClass50.smethod_8("[SV15 SLOT] retry with manager credentials | server=" + string_2);
+
+			// Credential da duoc DragonBoyManager truyen vao luc mo game va dang
+			// nam san trong RAM. Retry SV15 gui packet login truc tiep, khong
+			// switch ve LoginScr / khong nap lai acc-pass / khong chon lai server.
+			GClass50.smethod_8("[SV15 SLOT] direct retry with manager credentials | server=" + string_2);
 			GClass7.smethod_0().method_38(string_0, string_1, GClass187.string_2, 0);
 			return true;
 		}

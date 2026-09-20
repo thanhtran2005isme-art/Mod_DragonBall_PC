@@ -5,6 +5,7 @@ Không dùng file này để giải thích kiến trúc dài; chi tiết nằm t
 
 ## 2026-09-20
 
+- Tối ưu retry SV15: bỏ chuyển về màn login ở mỗi lần tranh slot; dùng credential Manager trong RAM và gửi packet login trực tiếp.
 - Fix SV15 slot retry: dùng lại `username/password/server` do DragonBoyManager truyền qua command line, không đọc nhầm `acc/pass` cache của màn login.
 - SV15 slot contender: tự retry khi server báo `quá tải`/`vui lòng đợi` hoặc packet 122, mỗi lần có jitter 650–1100 ms và chỉ gửi request mới sau phản hồi trước.
 - Giai đoạn 2 adaptive combat: ACK rate + adaptive window + packet pacing cho Đồ sát quái; giảm request khi session nghẽn và tự tăng lại khi RTT phục hồi.

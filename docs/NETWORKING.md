@@ -163,3 +163,16 @@ SV15 quá tải
 ```
 
 Chỉ fallback sang login-cache cũ nếu không có credential từ Manager.
+
+
+### Direct retry — không quay lại màn login
+
+Khi game được mở bằng `DragonBoyManager.exe`, username/password/server chỉ cần đọc một lần từ command line và được giữ trong `GClass172`.
+
+Retry SV15 hiện gọi trực tiếp:
+
+```text
+GClass7.method_38(managerUsername, managerPassword, version, 0)
+```
+
+Không còn `GClass133.switchToMe()` trước mỗi retry, nên không quay lại LoginScr, không nạp lại acc/pass và không chọn lại server. Fallback qua `GClass133.method_9()` chỉ dùng khi không có credential Manager.
