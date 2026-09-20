@@ -5,9 +5,6 @@ Không dùng file này để giải thích kiến trúc dài; chi tiết nằm t
 
 ## 2026-09-20
 
-- Fix race retry SV15: khóa auto-login cũ `GClass172.method_3()` trong lúc slot contender pending/in-flight, tránh quay lại LoginScr và gửi login trùng.
-- Tối ưu retry SV15: bỏ chuyển về màn login ở mỗi lần tranh slot; dùng credential Manager trong RAM và gửi packet login trực tiếp.
-- Fix SV15 slot retry: dùng lại `username/password/server` do DragonBoyManager truyền qua command line, không đọc nhầm `acc/pass` cache của màn login.
 - SV15 slot contender: tự retry khi server báo `quá tải`/`vui lòng đợi` hoặc packet 122, mỗi lần có jitter 650–1100 ms và chỉ gửi request mới sau phản hồi trước.
 - Giai đoạn 2 adaptive combat: ACK rate + adaptive window + packet pacing cho Đồ sát quái; giảm request khi session nghẽn và tự tăng lại khi RTT phục hồi.
 - Thêm Combat RTT: đo từ lúc client gửi ATTACK mob tới lúc server trả HP/death/miss của đúng mob; HUD hiển thị Combat RTT và số attack Pending.

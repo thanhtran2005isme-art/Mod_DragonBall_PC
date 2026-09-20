@@ -87,10 +87,6 @@ namespace AssemblyCSharp.Functions
 
 		public void method_3()
 		{
-			// Khi SV15 slot contender đang chờ jitter hoặc đang chờ response,
-			// không cho auto-login cũ chen vào và switch về LoginScr.
-			if (GClass133.IsServer15SlotContenderActive())
-				return;
 			if (!bool_0 || !GClass134.bool_6)
 				return;
 			if (!method_2())
@@ -162,19 +158,6 @@ namespace AssemblyCSharp.Functions
 				GClass73.gclass133_0 = new GClass133();
 			GClass73.gclass133_0.switchToMe();
 			GClass7.smethod_0().method_38(string_0, string_1, GClass187.string_2, 0);
-		}
-
-		public bool RetryManagerLogin()
-		{
-			if (string.IsNullOrEmpty(string_0) || string_1 == null)
-				return false;
-
-			// Credential da duoc DragonBoyManager truyen vao luc mo game va dang
-			// nam san trong RAM. Retry SV15 gui packet login truc tiep, khong
-			// switch ve LoginScr / khong nap lai acc-pass / khong chon lai server.
-			GClass50.smethod_8("[SV15 SLOT] direct retry with manager credentials | server=" + string_2);
-			GClass7.smethod_0().method_38(string_0, string_1, GClass187.string_2, 0);
-			return true;
 		}
 
 		public bool method_5(string path, int index)

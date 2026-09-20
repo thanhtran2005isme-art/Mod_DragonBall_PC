@@ -118,8 +118,6 @@ public class GClass133 : GClass131, GInterface6
 
 	private static bool server15SlotRetryPending;
 
-	private static bool server15SlotAttemptInFlight;
-
 	private static long server15SlotRetryAt = -1L;
 
 	public static int server15SlotRetryCount;
@@ -456,11 +454,6 @@ public class GClass133 : GClass131, GInterface6
 		}
 	}
 
-	public static bool IsServer15SlotContenderActive()
-	{
-		return IsServer15() && (server15SlotRetryPending || server15SlotAttemptInFlight);
-	}
-
 	public static bool IsServer15BusyMessage(string message)
 	{
 		if (!IsServer15() || string.IsNullOrEmpty(message))
@@ -481,7 +474,6 @@ public class GClass133 : GClass131, GInterface6
 		}
 		server15SlotRetryAt = now + jitter;
 		server15SlotRetryPending = true;
-		server15SlotAttemptInFlight = false;
 		server15SlotLastReason = reason ?? "";
 		short_0 = 0;
 		GClass73.long_6 = now + 30000L;
@@ -491,7 +483,6 @@ public class GClass133 : GClass131, GInterface6
 	public static void CancelServer15SlotRetry()
 	{
 		server15SlotRetryPending = false;
-		server15SlotAttemptInFlight = false;
 		server15SlotRetryAt = -1L;
 		server15SlotLastReason = "";
 		short_0 = 0;
@@ -524,7 +515,6 @@ public class GClass133 : GClass131, GInterface6
 		}
 
 		server15SlotRetryPending = false;
-		server15SlotAttemptInFlight = true;
 		server15SlotRetryAt = -1L;
 		server15SlotRetryCount++;
 		GClass73.long_6 = now + 30000L;
@@ -532,12 +522,7 @@ public class GClass133 : GClass131, GInterface6
 		if (GClass73.gclass133_0 == null)
 			GClass73.gclass133_0 = new GClass133();
 		GClass50.smethod_8("[SV15 SLOT] login attempt #" + server15SlotRetryCount);
-		if (!AssemblyCSharp.Functions.GClass172.smethod_0().RetryManagerLogin())
-		{
-			// Fallback cho trường hợp game không được mở từ DragonBoyManager.
-			server15SlotAttemptInFlight = false;
-			GClass73.gclass133_0.method_9();
-		}
+		GClass73.gclass133_0.method_9();
 	}
 
 	public void method_9()
