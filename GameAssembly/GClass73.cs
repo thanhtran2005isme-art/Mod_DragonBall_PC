@@ -2465,7 +2465,7 @@ public class GClass73 : GInterface6
 		g.method_16(0);
 		g.method_15(0, 0, int_10, int_11);
 		g.method_31(GClass133.gclass70_0, int_10 / 2, int_11 / 2 - 24, GClass188.int_3);
-		GClass4.gclass4_3.method_6(g, "[thanhlc.com]", int_10 / 2, int_11 / 2, 2);
+		GClass4.gclass4_3.method_6(g, "[kaitokid.com]", int_10 / 2, int_11 / 2, 2);
 		GClass4.gclass4_4.method_6(g, "Client: " + GClass151.smethod_1(GClass151.string_3.Split(',')[0]) + " " + GClass151.string_1, 5, int_11 - 13, 0);
 	}
 
