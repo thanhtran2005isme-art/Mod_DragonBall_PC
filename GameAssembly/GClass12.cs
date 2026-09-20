@@ -2381,7 +2381,6 @@ public class GClass12 : GInterface3
 				}
 				else
 				{
-					GClass133.CancelServer15SlotRetry();
 					GClass73.smethod_30(loginMessage);
 					if (GClass73.gclass131_0 == GClass73.gclass133_0)
 						GClass73.gclass134_0.switchToMe();
