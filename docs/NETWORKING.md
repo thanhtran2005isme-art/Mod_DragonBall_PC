@@ -176,3 +176,17 @@ GClass7.method_38(managerUsername, managerPassword, version, 0)
 ```
 
 Không còn `GClass133.switchToMe()` trước mỗi retry, nên không quay lại LoginScr, không nạp lại acc/pass và không chọn lại server. Fallback qua `GClass133.method_9()` chỉ dùng khi không có credential Manager.
+
+
+### Khóa auto-login cũ khi slot contender hoạt động
+
+Sau phản hồi `quá tải`, các cờ login cũ được hạ xuống. Trước đây `GClass172.method_3()` nhìn thấy trạng thái này và tự chạy lại flow Manager (~2 giây), dẫn tới `method_4() -> LoginScr.switchToMe()` dù slot contender đã có direct retry riêng.
+
+Hiện slot contender có hai trạng thái:
+
+```text
+PENDING   = đang chờ jitter trước lần thử tiếp theo
+IN_FLIGHT = đã gửi LOGIN và đang chờ server phản hồi
+```
+
+Trong cả hai trạng thái, `GClass172.method_3()` return ngay. Khi server trả `quá tải`/packet 122 thì IN_FLIGHT -> PENDING; khi nhận map-info `-24` hoặc lỗi login khác thì contender được hủy.

@@ -87,6 +87,10 @@ namespace AssemblyCSharp.Functions
 
 		public void method_3()
 		{
+			// Khi SV15 slot contender đang chờ jitter hoặc đang chờ response,
+			// không cho auto-login cũ chen vào và switch về LoginScr.
+			if (GClass133.IsServer15SlotContenderActive())
+				return;
 			if (!bool_0 || !GClass134.bool_6)
 				return;
 			if (!method_2())
