@@ -124,6 +124,8 @@ namespace AssemblyCSharp.Functions
 			list.Add("[" + GClass20.int_37 + "] " + GClass20.string_1 + "- K" + GClass20.int_39 + " [" + (GClass157.smethod_0().method_9() + 1) + (GClass153.smethod_0().method_6() ? "/20]" : "/15]"));
 			list.Add("TG: " + DateTime.Now.ToString("HH:mm:ss - d/M/yyyy"));
 			list.Add("X: " + GClass78.smethod_1().int_4 + " Y: " + GClass78.smethod_1().int_5);
+			if (KOLTracker.HasProgress)
+				list.Add(KOLTracker.GetHudText());
 			if (GClass14.smethod_0().isConnected())
 			{
 				string serverName = string.IsNullOrEmpty(GClass133.string_4) ? "?" : GClass133.string_4;
