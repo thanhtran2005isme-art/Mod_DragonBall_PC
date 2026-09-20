@@ -87,6 +87,10 @@ namespace AssemblyCSharp.Functions
 
 		public void method_3()
 		{
+			// Lan dau mo game van giu timer/flow cu. Sau khi SV15 bao qua tai,
+			// slot contender tu dieu khien retry 600-1000ms de tranh login trung.
+			if (GClass133.IsServer15SlotContenderActive())
+				return;
 			if (!bool_0 || !GClass134.bool_6)
 				return;
 			if (!method_2())
@@ -158,6 +162,20 @@ namespace AssemblyCSharp.Functions
 				GClass73.gclass133_0 = new GClass133();
 			GClass73.gclass133_0.switchToMe();
 			GClass7.smethod_0().method_38(string_0, string_1, GClass187.string_2, 0);
+		}
+
+		public bool RetryServer15WithLegacyLoginFlow()
+		{
+			if (string.IsNullOrEmpty(string_0) || string_1 == null)
+				return false;
+
+			// Giu dung flow cu: quay ve LoginScr roi gui lai credential Manager.
+			// Chi rut ngan thoi gian cho sau khi server SV15 bao qua tai.
+			bool_2 = false;
+			bool_3 = false;
+			long_0 = GClass203.smethod_18();
+			method_4();
+			return true;
 		}
 
 		public bool method_5(string path, int index)

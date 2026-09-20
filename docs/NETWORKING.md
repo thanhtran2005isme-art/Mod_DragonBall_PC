@@ -141,3 +141,20 @@ LOGIN
 Không có vòng spam song song và không tạo nhiều login request đang bay cùng lúc. Khi nhận map-info `-24` (đã vào game), retry pending được hủy ngay.
 
 Các server khác không dùng slot contender; packet `122` giữ đúng thời gian chờ server gửi.
+
+
+### SV15 retry 600–1000 ms, giữ màn login cũ
+
+Lần mở game đầu tiên từ DragonBoyManager vẫn dùng state machine gốc của `GClass172` (mốc 1.5 s / 2 s).
+
+Chỉ sau khi SV15 trả `quá tải` / `vui lòng đợi` hoặc packet 122, slot contender chọn ngẫu nhiên **600–1000 ms** rồi gọi lại flow cũ:
+
+```text
+quá tải
+-> jitter 600–1000 ms
+-> GClass172.method_4()
+-> LoginScr.switchToMe()
+-> gửi username/password Manager
+```
+
+Trong lúc retry pending hoặc đang chờ phản hồi, auto-login 2 giây cũ được tạm chặn để tránh gửi hai login request cho cùng một vòng.
