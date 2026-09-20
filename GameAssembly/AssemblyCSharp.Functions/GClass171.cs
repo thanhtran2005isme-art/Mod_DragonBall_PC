@@ -60,6 +60,7 @@ namespace AssemblyCSharp.Functions
 		public void method_4()
 		{
 			GClass7.smethod_0().UpdatePingSchedule();
+			KOLTracker.Update();
 			GClass164.smethod_0().method_2();
 			GClass158.smethod_0().method_5();
 			GClass159.smethod_0().method_5();
