@@ -379,7 +379,7 @@ namespace AssemblyCSharp.Functions
 						GClass78.smethod_1().gclass63_0.long_1 = GClass203.smethod_18();
 						bool_9 = false;
 					}
-					else if (GClass203.smethod_18() - long_1 > 1000L)
+					else
 					{
 						GClass144.smethod_8().method_62(gClass, false);
 						long_1 = GClass203.smethod_18();
@@ -522,7 +522,7 @@ namespace AssemblyCSharp.Functions
 		{
 			try
 			{
-				if (GClass20.int_37 == 21 + GClass78.smethod_1().int_14 || GClass203.smethod_18() - long_1 < 1000L || GClass78.smethod_1().bool_47 || GClass78.smethod_1().bool_60 || GClass144.bool_70 || GClass78.smethod_1().int_11 == 14 || GClass78.smethod_1().int_11 == 5 || GClass78.smethod_1().bool_23 || GClass78.smethod_1().bool_46 || GClass78.smethod_1().method_68())
+				if (GClass20.int_37 == 21 + GClass78.smethod_1().int_14 || GClass78.smethod_1().bool_47 || GClass78.smethod_1().bool_60 || GClass144.bool_70 || GClass78.smethod_1().int_11 == 14 || GClass78.smethod_1().int_11 == 5 || GClass78.smethod_1().bool_23 || GClass78.smethod_1().bool_46 || GClass78.smethod_1().method_68())
 					return;
 				GClass63[] array = (GClass73.bool_5 ? GClass144.gclass63_1 : GClass144.gclass63_0);
 				foreach (GClass63 gClass in array)
@@ -531,9 +531,9 @@ namespace AssemblyCSharp.Functions
 						break;
 					if (bool_12 || !GClass78.smethod_1().gclass163_0.bool_3)
 					{
-						if (gClass == null || !gclass88_0.method_1(gClass) || GClass203.smethod_18() - gClass.long_1 <= gClass.int_1 + 100 || gClass.gclass47_0.int_3 == 2)
+						if (gClass == null || !gclass88_0.method_1(gClass) || GClass203.smethod_18() - gClass.long_1 <= gClass.int_1 || gClass.gclass47_0.int_3 == 2)
 						{
-							if (gClass == null || !gclass88_0.method_1(gClass) || GClass203.smethod_18() - gClass.long_1 <= gClass.int_1 + 100 || gClass.gclass47_0.int_3 != 2)
+							if (gClass == null || !gclass88_0.method_1(gClass) || GClass203.smethod_18() - gClass.long_1 <= gClass.int_1 || gClass.gclass47_0.int_3 != 2)
 								continue;
 							int num = 0;
 							int num2 = ((gClass.gclass47_0.int_2 == 2) ? 1 : ((gClass.gclass47_0.int_2 == 1) ? (gClass.int_5 * GClass78.smethod_1().int_36 / 100) : gClass.int_5));
@@ -571,7 +571,6 @@ namespace AssemblyCSharp.Functions
 						if (gClass != GClass78.smethod_1().gclass63_0)
 						{
 							GClass144.smethod_8().method_62(gClass, true);
-							GClass171.smethod_0().method_0(200);
 							long_1 = GClass203.smethod_18();
 						}
 						else if (GClass203.smethod_18() - long_1 > 1000L)
@@ -619,13 +618,7 @@ namespace AssemblyCSharp.Functions
 
 		public long method_14(GClass63 skill)
 		{
-			if (skill.gclass47_0.sbyte_0 != 20 && skill.gclass47_0.sbyte_0 != 22 && skill.gclass47_0.sbyte_0 != 7 && skill.gclass47_0.sbyte_0 != 18 && skill.gclass47_0.sbyte_0 != 23)
-			{
-				long num = (long)((double)skill.int_1 * 1.2);
-				if (num >= 415L)
-					return num;
-				return 415L;
-			}
+			// Auto Attack dung dung cooldown that cua skill, khong cong them delay nhan tao.
 			return skill.int_1;
 		}
 
@@ -639,7 +632,7 @@ namespace AssemblyCSharp.Functions
 				if (GClass78.smethod_1().bool_62 || GClass78.smethod_1().int_25 <= 0 || GClass78.smethod_1().int_11 == 14 || GClass78.smethod_1().int_11 == 5 || GClass78.smethod_1().gclass63_0.gclass47_0.int_3 == 3 || GClass78.smethod_1().gclass63_0.gclass47_0.sbyte_0 == 10 || GClass78.smethod_1().gclass63_0.gclass47_0.sbyte_0 == 11 || (GClass78.smethod_1().gclass63_0.bool_0 && !GClass73.gclass76_0.bool_0))
 					return;
 				int num = method_13();
-				if (!smethod_4(GClass78.smethod_1().gclass63_0) || (long_10 != -1L && GClass203.smethod_18() - long_10 < 550L))
+				if (!smethod_4(GClass78.smethod_1().gclass63_0))
 					return;
 				sbyte sbyte_ = gClass.gclass63_0.gclass47_0.sbyte_0;
 				if (sbyte_ != 7)
