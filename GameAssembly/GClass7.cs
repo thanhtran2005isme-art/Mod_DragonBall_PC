@@ -239,9 +239,9 @@ public class GClass7
 		CompleteCombatProbe(mobId, false);
 	}
 
-	public static void OnMobCombatTerminalResponse(int mobId)
+	public static bool OnMobCombatTerminalResponse(int mobId)
 	{
-		CompleteCombatProbe(mobId, true);
+		return CompleteCombatProbe(mobId, true);
 	}
 
 	private static void ApplyCombatStallControl(long now)

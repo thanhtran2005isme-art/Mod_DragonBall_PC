@@ -12,6 +12,7 @@ namespace AssemblyCSharp.Functions
 		private static int queryMenuId = -1;
 		private static int queryOptionId = -1;
 		private static int queryKind;
+		private static int queryMapId = -1;
 		private static int queryParentMenuId = -1;
 		private static bool queryHasParent;
 		private static bool hasQuery;
@@ -36,6 +37,9 @@ namespace AssemblyCSharp.Functions
 		private static int debugMenuResponse;
 		private static int debugQuerySent;
 		private static int debugProgressResponse;
+		private static int localKillsSinceServerSync;
+		private static int localKillsAccepted;
+		private static int localKillsRejected;
 		private static string debugLast = "INIT";
 
 		public static bool HasProgress { get; private set; }
@@ -120,6 +124,7 @@ namespace AssemblyCSharp.Functions
 					queryMenuId = menuId;
 					queryOptionId = optionId;
 					queryKind = 22;
+					queryMapId = GClass20.int_37;
 					hasQuery = true;
 					hasCandidate = false;
 					candidateAt = -1L;
@@ -221,6 +226,7 @@ namespace AssemblyCSharp.Functions
 				queryMenuId = candidateMenuId;
 				queryOptionId = candidateOptionId;
 				queryKind = candidateKind;
+				queryMapId = GClass20.int_37;
 				queryParentMenuId = candidateParentMenuId;
 				queryHasParent = candidateHasParent;
 				hasQuery = true;
@@ -283,6 +289,15 @@ namespace AssemblyCSharp.Functions
 				}
 				if (now < nextSyncAt)
 					return;
+
+				// NPC KOL chỉ mở được ở map nơi query thật đã được học.
+				// Ở map khác dùng bộ đếm local, tránh OPEN32 -> TO_MENU vô ích.
+				if (queryMapId >= 0 && GClass20.int_37 != queryMapId)
+				{
+					nextSyncAt = now + SyncIntervalMs;
+					debugLast = "LOCAL_MAP";
+					return;
+				}
 
 				if (queryKind == 32)
 				{
@@ -566,9 +581,45 @@ namespace AssemblyCSharp.Functions
 			Current = bestCurrent;
 			Total = bestTotal;
 			HasProgress = true;
+			localKillsSinceServerSync = 0;
 			LastUpdate = GClass203.smethod_18();
 			nextSyncAt = LastUpdate + SyncIntervalMs;
 			return true;
+		}
+
+		public static void ObserveMobDeath(bool matchedOwnCombatProbe, bool hasOwnDrop, bool hasForeignOwnedDrop)
+		{
+			try
+			{
+				// Local mirror chỉ áp dụng cho nhiệm vụ 100.000 quái.
+				if (!HasProgress || Total != 100000 || Completed)
+					return;
+
+				// Drop có owner người khác là bằng chứng mạnh mob không phải do mình kết liễu.
+				if (hasForeignOwnedDrop && !hasOwnDrop)
+				{
+					localKillsRejected++;
+					debugLast = "LOCAL_REJECT";
+					return;
+				}
+
+				// Chấp nhận nếu có drop của mình, hoặc terminal packet khớp combat probe
+				// vừa gửi cho chính mob đó.
+				if (!hasOwnDrop && !matchedOwnCombatProbe)
+					return;
+
+				if (Current < Total)
+				{
+					Current++;
+					localKillsSinceServerSync++;
+					localKillsAccepted++;
+					LastUpdate = GClass203.smethod_18();
+					debugLast = "LOCAL+1";
+				}
+			}
+			catch
+			{
+			}
 		}
 
 		public static string GetHudText()
@@ -588,8 +639,10 @@ namespace AssemblyCSharp.Functions
 				text += " | Q:" + (hasQuery ? "Y" : "N")
 					+ " K:" + queryKind
 					+ " N:" + queryNpcId + " M:" + (queryHasParent ? (queryParentMenuId + ">") : "") + queryMenuId + "/" + queryOptionId
+					+ " MAP:" + queryMapId
 					+ " S:" + state
 					+ " A:" + debugOpenSent + "/" + debugMenuResponse + "/" + debugQuerySent + "/" + debugProgressResponse
+					+ " L:+" + localKillsSinceServerSync + "(" + localKillsAccepted + "/" + localKillsRejected + ")"
 					+ " " + debugLast;
 				return text;
 			}
