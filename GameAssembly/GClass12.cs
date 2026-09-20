@@ -2767,7 +2767,8 @@ public class GClass12 : GInterface3
 						{
 							array4[num18] = msg.method_1().method_14();
 						}
-						KOLTracker.ObserveNpcDialog(chat, array4);
+						if (KOLTracker.ObserveNpcDialog(num16, chat, array4))
+							return;
 						GClass144.smethod_8().method_18(array4, gClass10);
 						GClass96.smethod_4(chat, 100000, gClass10);
 						return;
@@ -2781,7 +2782,7 @@ public class GClass12 : GInterface3
 				{
 					array5[num19] = msg.method_1().method_14();
 				}
-				KOLTracker.ObserveNpcDialog(chat2, array5);
+				bool suppressKolDialog = KOLTracker.ObserveNpcDialog(num16, chat2, array5);
 				try
 				{
 					int num20 = (gClass11.int_70 = msg.method_1().method_6());
@@ -2789,6 +2790,8 @@ public class GClass12 : GInterface3
 				catch (Exception)
 				{
 				}
+				if (suppressKolDialog)
+					break;
 				GClass50.smethod_8((GClass78.smethod_1().gclass79_0 == null) ? "null" : "!null");
 				GClass144.smethod_8().method_18(array5, gClass11);
 				GClass96.smethod_4(chat2, 100000, gClass11);
@@ -2829,7 +2832,8 @@ public class GClass12 : GInterface3
 				int num165 = msg.method_1().method_6();
 				GClass50.smethod_8("OPEN_UI_SAY ID= " + num165);
 				string chat3 = GClass50.smethod_15(msg.method_1().method_14());
-				KOLTracker.ObserveNpcSay(chat3);
+				if (KOLTracker.ObserveNpcSay(num165, chat3))
+					break;
 				for (int num166 = 0; num166 < GClass144.gclass88_10.method_2(); num166++)
 				{
 					GClass79 gClass51 = (GClass79)GClass144.gclass88_10.method_3(num166);
