@@ -59,6 +59,7 @@ namespace AssemblyCSharp.Functions
 
 		public void method_4()
 		{
+			GClass133.UpdateServer15SlotRetry();
 			GClass7.smethod_0().UpdatePingSchedule();
 			GClass164.smethod_0().method_2();
 			GClass158.smethod_0().method_5();

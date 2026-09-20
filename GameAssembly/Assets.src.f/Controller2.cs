@@ -843,10 +843,19 @@ namespace Assets.src.f
 					{
 						short short_2 = gclass208_0.method_1().method_6();
 						GClass50.smethod_8("second login = " + short_2);
-						// Bỏ qua cooldown server, thử lại sau 2 giây.
-						GClass133.short_0 = 2;
 						GClass133.long_1 = (GClass133.long_0 = GClass203.smethod_18());
 						GClass73.smethod_29();
+						if (GClass133.IsServer15())
+						{
+							// SV15: coi SECOND_LOGIN/VUI LONG DOI la mot lan admission
+							// chua thanh cong va tiep tuc tranh slot co jitter.
+							GClass133.ScheduleServer15SlotRetry("second login " + short_2 + "s");
+						}
+						else
+						{
+							// Server khac giu dung hanh vi goc: cho du so giay server gui.
+							GClass133.short_0 = short_2;
+						}
 						break;
 					}
 					case 123:

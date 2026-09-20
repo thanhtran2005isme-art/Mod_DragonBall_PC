@@ -119,3 +119,25 @@ Adaptive W:3 | Pace 379ms | QD 6880ms
 ```
 
 Khi server/session hồi, RTT giảm và ACK tiếp tục về thì window tự tăng lại; không cần timer resume cố định.
+
+
+## SV15 — Slot contender
+
+SV15 có hai nhánh phản hồi login đã quan sát:
+
+- packet `-26` với text như `quá tải` / `vui lòng đợi`: login bị từ chối ngay;
+- packet `122` (`second login`) kèm số giây.
+
+Riêng SV15, mod chạy slot contender:
+
+```text
+LOGIN
+-> server từ chối / yêu cầu second login
+-> chờ ngẫu nhiên 650–1100 ms
+-> LOGIN lại
+-> chỉ lên lịch lần kế tiếp sau khi server đã phản hồi
+```
+
+Không có vòng spam song song và không tạo nhiều login request đang bay cùng lúc. Khi nhận map-info `-24` (đã vào game), retry pending được hủy ngay.
+
+Các server khác không dùng slot contender; packet `122` giữ đúng thời gian chờ server gửi.

@@ -2364,20 +2364,35 @@ public class GClass12 : GInterface3
 				method_12(msg);
 				break;
 			case -26:
+			{
 				GClass134.int_22 = 2;
 				GClass73.smethod_8("SA2", 2);
-				GClass73.smethod_30(msg.method_1().method_14());
+				string loginMessage = msg.method_1().method_14();
+				bool server15Busy = GClass133.IsServer15BusyMessage(loginMessage);
 				GClass130.smethod_5();
 				GClass133.bool_0 = false;
 				GClass78.bool_35 = false;
-				if (GClass73.gclass131_0 == GClass73.gclass133_0)
-					GClass73.gclass134_0.switchToMe();
+				if (server15Busy)
+				{
+					// SV15: server tu choi admission ngay. Dong dialog va thu lai
+					// sau jitter ngan; chi gui lan moi sau khi da nhan phan hoi lan truoc.
+					GClass73.smethod_29();
+					GClass133.ScheduleServer15SlotRetry(loginMessage);
+				}
+				else
+				{
+					GClass73.smethod_30(loginMessage);
+					if (GClass73.gclass131_0 == GClass73.gclass133_0)
+						GClass73.gclass134_0.switchToMe();
+				}
 				break;
+			}
 			case -25:
 				GClass73.smethod_8("SA3", 2);
 				GClass144.gclass52_0.method_7(msg.method_1().method_14(), 0);
 				break;
 			case -24:
+				GClass133.CancelServer15SlotRetry();
 				if (!(GClass73.gclass131_0 is GClass144))
 					GClass73.long_6 = GClass203.smethod_18() + 30000L;
 				else

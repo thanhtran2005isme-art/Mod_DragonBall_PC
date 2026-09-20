@@ -114,6 +114,16 @@ public class GClass133 : GClass131, GInterface6
 
 	public static long long_1;
 
+	private static readonly Random server15SlotRandom = new Random();
+
+	private static bool server15SlotRetryPending;
+
+	private static long server15SlotRetryAt = -1L;
+
+	public static int server15SlotRetryCount;
+
+	public static string server15SlotLastReason = "";
+
 	private int int_18;
 
 	private GClass87 gclass87_10;
@@ -428,6 +438,91 @@ public class GClass133 : GClass131, GInterface6
 	protected int method_8()
 	{
 		return GClass1.smethod_8("indServer");
+	}
+
+	public static bool IsServer15()
+	{
+		if (string.Equals(GClass187.string_0, "dragon15.teamobi.com", StringComparison.OrdinalIgnoreCase))
+			return true;
+		try
+		{
+			return GClass134.string_0 != null && GClass134.int_14 >= 0 && GClass134.int_14 < GClass134.string_0.Length && string.Equals(GClass134.string_0[GClass134.int_14], "Vũ trụ 15", StringComparison.OrdinalIgnoreCase);
+		}
+		catch
+		{
+			return false;
+		}
+	}
+
+	public static bool IsServer15BusyMessage(string message)
+	{
+		if (!IsServer15() || string.IsNullOrEmpty(message))
+			return false;
+		string text = message.ToLower();
+		return text.Contains("quá tải") || text.Contains("qua tai") || text.Contains("vui lòng đợi") || text.Contains("vui long doi") || text.Contains("vui lòng chờ") || text.Contains("vui long cho");
+	}
+
+	public static void ScheduleServer15SlotRetry(string reason)
+	{
+		if (!IsServer15())
+			return;
+		long now = GClass203.smethod_18();
+		int jitter;
+		lock (server15SlotRandom)
+		{
+			jitter = server15SlotRandom.Next(650, 1101);
+		}
+		server15SlotRetryAt = now + jitter;
+		server15SlotRetryPending = true;
+		server15SlotLastReason = reason ?? "";
+		short_0 = 0;
+		GClass73.long_6 = now + 30000L;
+		GClass50.smethod_8("[SV15 SLOT] retry in " + jitter + "ms | " + server15SlotLastReason);
+	}
+
+	public static void CancelServer15SlotRetry()
+	{
+		server15SlotRetryPending = false;
+		server15SlotRetryAt = -1L;
+		server15SlotLastReason = "";
+		short_0 = 0;
+	}
+
+	public static void UpdateServer15SlotRetry()
+	{
+		if (!server15SlotRetryPending)
+			return;
+		if (!IsServer15())
+		{
+			CancelServer15SlotRetry();
+			return;
+		}
+		if (GClass73.gclass131_0 is GClass144 || GClass78.bool_35)
+		{
+			CancelServer15SlotRetry();
+			return;
+		}
+
+		long now = GClass203.smethod_18();
+		if (now < server15SlotRetryAt)
+			return;
+
+		if (!GClass14.smethod_0().isConnected())
+		{
+			GClass14.smethod_0().connect(GClass187.string_0, GClass187.int_0);
+			server15SlotRetryAt = now + 750L;
+			return;
+		}
+
+		server15SlotRetryPending = false;
+		server15SlotRetryAt = -1L;
+		server15SlotRetryCount++;
+		GClass73.long_6 = now + 30000L;
+		GClass73.smethod_29();
+		if (GClass73.gclass133_0 == null)
+			GClass73.gclass133_0 = new GClass133();
+		GClass50.smethod_8("[SV15 SLOT] login attempt #" + server15SlotRetryCount);
+		GClass73.gclass133_0.method_9();
 	}
 
 	public void method_9()
