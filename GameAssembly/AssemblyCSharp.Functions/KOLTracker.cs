@@ -92,8 +92,25 @@ namespace AssemblyCSharp.Functions
 				if (!regularClaim && !inKolContext)
 					return;
 
-				// Chua tin request nay ngay. Giu lam candidate va chi xac nhan
-				// sau khi response tiep theo thuc su parse duoc progress KOL.
+				if (regularClaim)
+				{
+					// Caption "Nhận quà KOL" đủ đặc hiệu để chốt query ngay.
+					// Không phụ thuộc npcId của response progress vì một số server
+					// trả dialog bằng id khác dù progress vẫn parse đúng.
+					queryNpcId = npcId;
+					queryMenuId = menuId;
+					queryOptionId = optionId;
+					hasQuery = true;
+					hasCandidate = false;
+					candidateAt = -1L;
+					backgroundSyncState = BackgroundIdle;
+					backgroundSyncExpiresAt = -1L;
+					nextSyncAt = now + SyncIntervalMs;
+					return;
+				}
+
+				// Fallback cho server/menu không có caption chuẩn: chỉ giữ candidate
+				// và xác nhận khi response tiếp theo parse được progress KOL.
 				candidateNpcId = npcId;
 				candidateMenuId = menuId;
 				candidateOptionId = optionId;
