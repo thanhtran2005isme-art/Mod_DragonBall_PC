@@ -2393,6 +2393,7 @@ public class GClass12 : GInterface3
 				break;
 			case -24:
 				GClass133.CancelServer15SlotRetry();
+				GClass7.ResetCombatAdaptiveForSceneChange();
 				if (!(GClass73.gclass131_0 is GClass144))
 					GClass73.long_6 = GClass203.smethod_18() + 30000L;
 				else
