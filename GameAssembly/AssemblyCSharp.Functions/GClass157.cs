@@ -324,17 +324,18 @@ namespace AssemblyCSharp.Functions
 		{
 			try
 			{
-				if (int_0 == -1)
-				{
-					if (long_7 != 500L)
-						long_7 = 500L;
-				}
-				else
-					long_7 = ((GClass20.int_37 != int_0) ? 100 : 500);
-				if (GClass203.smethod_18() - long_4 > long_7)
+				// Packet 29 tra ve danh sach khu. Khong polling khi dung farm va
+				// khong co muc tieu doi khu/goback; mo bang khu van request ngay
+				// trong GClass76.method_167().
+				bool needZoneRefresh = (int_0 != -1 && GClass20.int_39 != int_0) || (int_3 != -1 && GClass20.int_39 != int_3);
+				if (!needZoneRefresh)
+					return;
+				long_7 = 1000L;
+				long now = GClass203.smethod_18();
+				if (now - long_4 > long_7)
 				{
 					GClass7.smethod_0().method_58();
-					long_4 = GClass203.smethod_18();
+					long_4 = now;
 				}
 			}
 			catch (Exception ex)
