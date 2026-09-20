@@ -505,6 +505,7 @@ public class GClass73 : GInterface6
 
 	public void method_2()
 	{
+		GClass133.UpdateServer15SlotRetry();
 		if (GClass203.smethod_18() > long_3)
 		{
 			long_3 += 1000L;
