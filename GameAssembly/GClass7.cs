@@ -113,13 +113,44 @@ public class GClass7
 		long_5 = GClass203.smethod_18() + 1000L;
 	}
 
+	private static long GetCombatProbeTimeoutMs()
+	{
+		long networkRtt = Math.Max(long_2, long_3);
+		long baseline = Math.Max(combatRtt, networkRtt);
+		if (baseline <= 0L)
+			baseline = combatMinRtt;
+		if (baseline <= 0L)
+			baseline = 375L;
+
+		long timeout = baseline * 4L;
+		if (timeout < 1500L)
+			timeout = 1500L;
+		if (timeout > 4000L)
+			timeout = 4000L;
+		return timeout;
+	}
+
 	private static void CleanupCombatProbes(long now)
 	{
+		long timeout = GetCombatProbeTimeoutMs();
+		bool removedStale = false;
 		for (int i = combatProbes.Count - 1; i >= 0; i--)
 		{
-			if (now - combatProbes[i].sentAt > 30000L)
+			if (now - combatProbes[i].sentAt > timeout)
+			{
 				combatProbes.RemoveAt(i);
+				removedStale = true;
+			}
 		}
+
+		// Timeout khong phai ACK. Giai phong slot de tranh deadlock,
+		// nhung thu nho window de scheduler giam tai len server.
+		if (removedStale)
+		{
+			adaptiveCombatWindow = Math.Max(2.0, adaptiveCombatWindow * 0.75);
+			adaptiveLastStallAdjustAt = now;
+		}
+
 		while (combatProbes.Count > 128)
 			combatProbes.RemoveAt(0);
 	}
@@ -328,6 +359,11 @@ public class GClass7
 		adaptiveCombatWindow = 3.0;
 		adaptiveLastAttackAt = -1L;
 		adaptiveLastStallAdjustAt = -1L;
+	}
+
+	public static void ResetCombatAdaptiveForSceneChange()
+	{
+		ResetCombatAdaptiveState();
 	}
 
 	public void method_0(int id)
