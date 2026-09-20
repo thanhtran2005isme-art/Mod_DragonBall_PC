@@ -21,6 +21,12 @@ public class GClass7
 
 	public static long long_5 = -1L;
 
+	private static bool pingInitialized;
+
+	private static bool ping120Waiting;
+
+	private static bool ping121Waiting;
+
 	public int int_0;
 
 	public static bool bool_0;
@@ -38,19 +44,44 @@ public class GClass7
 		{
 			long_4 = -1L;
 			long_5 = -1L;
+			pingInitialized = false;
+			ping120Waiting = false;
+			ping121Waiting = false;
 			return;
 		}
+
+		// Gui cap ping dau tien mot lan sau khi ket noi.
+		if (!pingInitialized)
+		{
+			pingInitialized = true;
+			method_36();
+			method_37();
+			return;
+		}
+
 		long now = GClass203.smethod_18();
-		if (long_4 > 0L && now >= long_4)
+		if (!ping120Waiting && long_4 > 0L && now >= long_4)
 		{
 			long_4 = -1L;
 			method_36();
 		}
-		if (long_5 > 0L && now >= long_5)
+		if (!ping121Waiting && long_5 > 0L && now >= long_5)
 		{
 			long_5 = -1L;
 			method_37();
 		}
+	}
+
+	public static void OnPing120Response()
+	{
+		ping120Waiting = false;
+		long_4 = GClass203.smethod_18() + 1000L;
+	}
+
+	public static void OnPing121Response()
+	{
+		ping121Waiting = false;
+		long_5 = GClass203.smethod_18() + 1000L;
 	}
 
 	public void method_0(int id)
@@ -837,6 +868,7 @@ public class GClass7
 	public void method_36()
 	{
 		GClass208 gClass = null;
+		ping120Waiting = true;
 		try
 		{
 			gClass = new GClass208((sbyte)(-120));
@@ -855,6 +887,7 @@ public class GClass7
 	public void method_37()
 	{
 		GClass208 gClass = null;
+		ping121Waiting = true;
 		try
 		{
 			gClass = new GClass208((sbyte)(-121));

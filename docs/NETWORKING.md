@@ -33,3 +33,21 @@ send queue cao                 -> socket/server đang không tiêu thụ kịp
 ```
 
 Giai đoạn 1 **không tự throttle Auto Train**. Adaptive Auto Train là bước sau khi đã có số liệu.
+
+
+### Fix khởi động ping
+
+Bản đầu của Giai đoạn 1 chỉ lên lịch ping tiếp theo sau khi đã nhận response, nên nếu chưa có request đầu tiên HUD có thể đứng ở `Ping 0/0ms`.
+
+Đã sửa để sau khi session chính kết nối:
+
+```text
+connect
+-> gửi -120 và -121 lần đầu
+-> nhận response
+-> đo RTT
+-> chờ ~1000 ms
+-> gửi vòng tiếp theo
+```
+
+Có cờ in-flight riêng để không spam ping mỗi frame trong lúc đang chờ response.

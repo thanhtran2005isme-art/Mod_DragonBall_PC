@@ -268,11 +268,11 @@ namespace Assets.src.f
 					}
 					case -121:
 						GClass7.long_3 = GClass203.smethod_18() - GClass7.long_1;
-						GClass7.long_5 = GClass203.smethod_18() + 1000L;
+						GClass7.OnPing121Response();
 						return;
 					case -120:
 						GClass7.long_2 = GClass203.smethod_18() - GClass7.long_0;
-						GClass7.long_4 = GClass203.smethod_18() + 1000L;
+						GClass7.OnPing120Response();
 						return;
 					case -119:
 						GClass78.smethod_1().int_3 = gclass208_0.method_1().method_8();
