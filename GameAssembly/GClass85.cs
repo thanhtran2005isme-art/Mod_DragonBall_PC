@@ -32,14 +32,6 @@ public class GClass85 : GInterface0
 					{
 						GClass36.smethod_0("LOI NHAN  MESS THU 1");
 					}
-					try
-					{
-						Thread.Sleep(5);
-					}
-					catch (Exception)
-					{
-						GClass36.smethod_0("LOI NHAN  MESS THU 2");
-					}
 				}
 			}
 			catch (Exception ex3)
@@ -316,6 +308,7 @@ public class GClass85 : GInterface0
 		if (GClass172.smethod_0().bool_1 && GClass151.bool_1)
 		{
 			tcpClient_0 = GClass147.smethod_0(host, port, GClass172.string_8, GClass172.smethod_0().int_1, GClass172.string_6, GClass172.string_7);
+			tcpClient_0.NoDelay = true;
 			networkStream_0 = tcpClient_0.GetStream();
 			binaryReader_0 = new BinaryReader(networkStream_0, new UTF8Encoding());
 			binaryWriter_0 = new BinaryWriter(networkStream_0, new UTF8Encoding());
@@ -333,6 +326,7 @@ public class GClass85 : GInterface0
 		{
 			tcpClient_0 = new TcpClient();
 			tcpClient_0.Connect(host, port);
+			tcpClient_0.NoDelay = true;
 			networkStream_0 = tcpClient_0.GetStream();
 			binaryReader_0 = new BinaryReader(networkStream_0, new UTF8Encoding());
 			binaryWriter_0 = new BinaryWriter(networkStream_0, new UTF8Encoding());

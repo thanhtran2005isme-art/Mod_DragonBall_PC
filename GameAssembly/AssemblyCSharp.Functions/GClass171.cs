@@ -59,6 +59,7 @@ namespace AssemblyCSharp.Functions
 
 		public void method_4()
 		{
+			GClass7.smethod_0().UpdatePingSchedule();
 			GClass164.smethod_0().method_2();
 			GClass158.smethod_0().method_5();
 			GClass159.smethod_0().method_5();
@@ -123,6 +124,13 @@ namespace AssemblyCSharp.Functions
 			list.Add("[" + GClass20.int_37 + "] " + GClass20.string_1 + "- K" + GClass20.int_39 + " [" + (GClass157.smethod_0().method_9() + 1) + (GClass153.smethod_0().method_6() ? "/20]" : "/15]"));
 			list.Add("TG: " + DateTime.Now.ToString("HH:mm:ss - d/M/yyyy"));
 			list.Add("X: " + GClass78.smethod_1().int_4 + " Y: " + GClass78.smethod_1().int_5);
+			if (GClass14.smethod_0().isConnected())
+			{
+				string serverName = string.IsNullOrEmpty(GClass133.string_4) ? "?" : GClass133.string_4;
+				bool useProxy = GClass172.smethod_0().bool_1 && GClass151.bool_1;
+				list.Add("NET " + serverName + " | Ping " + GClass7.long_2 + "/" + GClass7.long_3 + "ms | Proxy " + (useProxy ? "ON" : "OFF"));
+				list.Add("Queue S:" + GClass14.GetSendQueueCount() + " R:" + GClass14.GetReceiveQueueCount());
+			}
 			if (GClass164.smethod_0().bool_0)
 				list.Add((GClass151.int_0 != 0) ? ("Auto Attack: " + GClass154.smethod_0().method_7(GClass164.smethod_0().bool_0)) : ("Auto đánh: " + GClass154.smethod_0().method_7(GClass164.smethod_0().bool_0)));
 			if (GClass166.smethod_0().bool_5)

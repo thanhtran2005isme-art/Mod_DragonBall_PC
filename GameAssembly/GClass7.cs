@@ -16,6 +16,11 @@ public class GClass7
 
 	public static long long_3;
 
+	// Thoi diem gui lai ping -120/-121. Khong ping lien tuc ngay sau moi response.
+	public static long long_4 = -1L;
+
+	public static long long_5 = -1L;
+
 	public int int_0;
 
 	public static bool bool_0;
@@ -25,6 +30,27 @@ public class GClass7
 		if (gclass7_0 == null)
 			gclass7_0 = new GClass7();
 		return gclass7_0;
+	}
+
+	public void UpdatePingSchedule()
+	{
+		if (!GClass14.smethod_0().isConnected())
+		{
+			long_4 = -1L;
+			long_5 = -1L;
+			return;
+		}
+		long now = GClass203.smethod_18();
+		if (long_4 > 0L && now >= long_4)
+		{
+			long_4 = -1L;
+			method_36();
+		}
+		if (long_5 > 0L && now >= long_5)
+		{
+			long_5 = -1L;
+			method_37();
+		}
 	}
 
 	public void method_0(int id)
