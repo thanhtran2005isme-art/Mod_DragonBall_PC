@@ -1582,6 +1582,7 @@ public class GClass7
 	public void method_59(short npcID, sbyte select)
 	{
 		GClass50.smethod_8("confirme menu" + select);
+		KOLTracker.ObservePacket32Select(npcID, select);
 		GClass208 gClass = null;
 		try
 		{

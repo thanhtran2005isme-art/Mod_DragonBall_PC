@@ -11,10 +11,12 @@ namespace AssemblyCSharp.Functions
 		private static int queryNpcId = -1;
 		private static int queryMenuId = -1;
 		private static int queryOptionId = -1;
+		private static int queryKind;
 		private static bool hasQuery;
 		private static int candidateNpcId = -1;
 		private static int candidateMenuId = -1;
 		private static int candidateOptionId = -1;
+		private static int candidateKind;
 		private static bool hasCandidate;
 		private static long candidateAt = -1L;
 		private static long nextSyncAt = -1L;
@@ -112,6 +114,7 @@ namespace AssemblyCSharp.Functions
 					queryNpcId = npcId;
 					queryMenuId = menuId;
 					queryOptionId = optionId;
+					queryKind = 22;
 					hasQuery = true;
 					hasCandidate = false;
 					candidateAt = -1L;
@@ -127,6 +130,7 @@ namespace AssemblyCSharp.Functions
 				candidateNpcId = npcId;
 				candidateMenuId = menuId;
 				candidateOptionId = optionId;
+				candidateKind = 22;
 				hasCandidate = true;
 				candidateAt = now;
 			}
@@ -149,9 +153,34 @@ namespace AssemblyCSharp.Functions
 				candidateNpcId = npcId;
 				candidateMenuId = menuId;
 				candidateOptionId = optionId;
+				candidateKind = 22;
 				hasCandidate = true;
 				candidateAt = GClass203.smethod_18();
 				debugLast = "P22:" + npcId + ":" + menuId + "/" + optionId;
+			}
+			catch
+			{
+			}
+		}
+
+		public static void ObservePacket32Select(short npcId, sbyte select)
+		{
+			try
+			{
+				// Auto-sync packet không được ghi đè query đã học.
+				if (backgroundSyncState != BackgroundIdle)
+				{
+					debugLast = "AUTO32";
+					return;
+				}
+
+				candidateNpcId = npcId;
+				candidateMenuId = select;
+				candidateOptionId = 0;
+				candidateKind = 32;
+				hasCandidate = true;
+				candidateAt = GClass203.smethod_18();
+				debugLast = "P32:" + npcId + ":" + select;
 			}
 			catch
 			{
@@ -171,6 +200,7 @@ namespace AssemblyCSharp.Functions
 				queryNpcId = candidateNpcId;
 				queryMenuId = candidateMenuId;
 				queryOptionId = candidateOptionId;
+				queryKind = candidateKind;
 				hasQuery = true;
 				hasCandidate = false;
 				candidateAt = -1L;
@@ -229,13 +259,25 @@ namespace AssemblyCSharp.Functions
 				if (now < nextSyncAt)
 					return;
 
-				// Flow thật của client: flush vị trí -> mở NPC (33) -> đợi response menu
-				// -> ObserveNpcMenu() mới gửi packet 22 Nhận quà KOL.
+				if (queryKind == 32)
+				{
+					// Menu động từ server dùng action 11057 -> packet 32.
+					// Replay đúng lựa chọn đã học và chờ progress trả về.
+					backgroundSyncState = BackgroundWaitProgress;
+					backgroundSyncExpiresAt = now + SyncTimeoutMs;
+					nextSyncAt = now + SyncIntervalMs;
+					debugQuerySent++;
+					debugLast = "Q32";
+					GClass7.smethod_0().method_59((short)queryNpcId, (sbyte)queryMenuId);
+					return;
+				}
+
+				// Packet 22 cần ngữ cảnh mở NPC trước.
 				backgroundSyncState = BackgroundWaitMenu;
 				backgroundSyncExpiresAt = now + SyncTimeoutMs;
 				nextSyncAt = now + SyncIntervalMs;
 				debugOpenSent++;
-				debugLast = "OPEN";
+				debugLast = "OPEN22";
 				GClass7.smethod_0().method_44();
 				GClass7.smethod_0().method_60(queryNpcId);
 			}
@@ -294,13 +336,15 @@ namespace AssemblyCSharp.Functions
 					Arm();
 
 				long now = GClass203.smethod_18();
-				bool sameBackgroundNpc = backgroundSyncState == BackgroundWaitProgress && npcId == queryNpcId;
+				bool backgroundProgress = backgroundSyncState == BackgroundWaitProgress;
 				bool freshCandidate = hasCandidate && candidateAt >= 0L && now - candidateAt <= 5000L;
-				if (kolContext || now <= armedUntil || sameBackgroundNpc || freshCandidate)
+				bool parsedProgress = false;
+				if (kolContext || now <= armedUntil || backgroundProgress || freshCandidate)
 				{
-					if (TryUpdateProgress(chat))
+					parsedProgress = TryUpdateProgress(chat);
+					if (parsedProgress)
 					{
-						if (sameBackgroundNpc)
+						if (backgroundProgress)
 						{
 							debugProgressResponse++;
 							debugLast = "PROG_OK";
@@ -309,7 +353,7 @@ namespace AssemblyCSharp.Functions
 					}
 				}
 
-				if (sameBackgroundNpc)
+				if (backgroundProgress && parsedProgress)
 				{
 					backgroundSyncState = BackgroundIdle;
 					backgroundSyncExpiresAt = -1L;
@@ -333,13 +377,15 @@ namespace AssemblyCSharp.Functions
 					Arm();
 
 				long now = GClass203.smethod_18();
-				bool sameBackgroundNpc = backgroundSyncState == BackgroundWaitProgress && npcId == queryNpcId;
+				bool backgroundProgress = backgroundSyncState == BackgroundWaitProgress;
 				bool freshCandidate = hasCandidate && candidateAt >= 0L && now - candidateAt <= 5000L;
-				if (kolContext || now <= armedUntil || sameBackgroundNpc || freshCandidate)
+				bool parsedProgress = false;
+				if (kolContext || now <= armedUntil || backgroundProgress || freshCandidate)
 				{
-					if (TryUpdateProgress(chat))
+					parsedProgress = TryUpdateProgress(chat);
+					if (parsedProgress)
 					{
-						if (sameBackgroundNpc)
+						if (backgroundProgress)
 						{
 							debugProgressResponse++;
 							debugLast = "PROG_OK";
@@ -348,7 +394,7 @@ namespace AssemblyCSharp.Functions
 					}
 				}
 
-				if (sameBackgroundNpc)
+				if (backgroundProgress && parsedProgress)
 				{
 					backgroundSyncState = BackgroundIdle;
 					backgroundSyncExpiresAt = -1L;
@@ -468,6 +514,7 @@ namespace AssemblyCSharp.Functions
 					text += " - HOAN THANH";
 				string state = (backgroundSyncState == BackgroundWaitMenu) ? "WM" : ((backgroundSyncState == BackgroundWaitProgress) ? "WP" : "I");
 				text += " | Q:" + (hasQuery ? "Y" : "N")
+					+ " K:" + queryKind
 					+ " N:" + queryNpcId + " M:" + queryMenuId + "/" + queryOptionId
 					+ " S:" + state
 					+ " A:" + debugOpenSent + "/" + debugMenuResponse + "/" + debugQuerySent + "/" + debugProgressResponse
