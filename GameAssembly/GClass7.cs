@@ -1,9 +1,23 @@
 using System;
+using System.Collections.Generic;
 using AssemblyCSharp.Functions;
 using Assets.src.g;
 
 public class GClass7
 {
+	private class CombatProbe
+	{
+		public int mobId;
+
+		public long sentAt;
+	}
+
+	private static readonly List<CombatProbe> combatProbes = new List<CombatProbe>();
+
+	public static long combatRtt = -1L;
+
+	public static long combatLastResponseAt = -1L;
+
 	private GInterface0 ginterface0_0 = GClass14.smethod_0();
 
 	protected static GClass7 gclass7_0;
@@ -82,6 +96,49 @@ public class GClass7
 	{
 		ping121Waiting = false;
 		long_5 = GClass203.smethod_18() + 1000L;
+	}
+
+	private static void CleanupCombatProbes(long now)
+	{
+		for (int i = combatProbes.Count - 1; i >= 0; i--)
+		{
+			if (now - combatProbes[i].sentAt > 30000L)
+				combatProbes.RemoveAt(i);
+		}
+		while (combatProbes.Count > 128)
+			combatProbes.RemoveAt(0);
+	}
+
+	private static void RecordCombatAttack(int mobId, long sentAt)
+	{
+		CleanupCombatProbes(sentAt);
+		combatProbes.Add(new CombatProbe
+		{
+			mobId = mobId,
+			sentAt = sentAt
+		});
+	}
+
+	public static void OnMobCombatResponse(int mobId)
+	{
+		long now = GClass203.smethod_18();
+		CleanupCombatProbes(now);
+		for (int i = 0; i < combatProbes.Count; i++)
+		{
+			if (combatProbes[i].mobId == mobId)
+			{
+				combatRtt = now - combatProbes[i].sentAt;
+				combatLastResponseAt = now;
+				combatProbes.RemoveAt(i);
+				return;
+			}
+		}
+	}
+
+	public static int GetCombatPendingCount()
+	{
+		CleanupCombatProbes(GClass203.smethod_18());
+		return combatProbes.Count;
 	}
 
 	public void method_0(int id)
@@ -1652,7 +1709,19 @@ public class GClass7
 			}
 			gClass.method_2().method_0((sbyte)GClass78.smethod_1().int_12);
 			if (gClass != null)
+			{
 				ginterface0_0.sendMessage(gClass);
+				if (vMob.method_2() > 0)
+				{
+					long sentAt = GClass203.smethod_18();
+					for (int m = 0; m < vMob.method_2(); m++)
+					{
+						GClass194 combatMob = (GClass194)vMob.method_3(m);
+						if (combatMob != null)
+							RecordCombatAttack(combatMob.int_25, sentAt);
+					}
+				}
+			}
 		}
 		catch (Exception)
 		{

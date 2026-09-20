@@ -3523,6 +3523,7 @@ public class GClass12 : GInterface3
 						}
 						if (gClass66 == null || gClass66.int_12 == 0 || gClass66.int_12 == 0)
 							break;
+						GClass7.OnMobCombatResponse(gClass66.int_25);
 						gClass66.method_22();
 						try
 						{
@@ -3637,6 +3638,7 @@ public class GClass12 : GInterface3
 						GClass73.smethod_8("SA83v1", 2);
 						if (gClass69 != null)
 						{
+							GClass7.OnMobCombatResponse(gClass69.int_25);
 							gClass69.int_6 = msg.method_3();
 							gClass69.method_20();
 							int num191 = msg.method_3();
@@ -3911,6 +3913,7 @@ public class GClass12 : GInterface3
 						}
 						if (gClass71 != null)
 						{
+							GClass7.OnMobCombatResponse(gClass71.int_25);
 							gClass71.int_6 = msg.method_1().method_8();
 							gClass71.method_20();
 							GClass144.smethod_19(mResources.miss, gClass71.int_8, gClass71.int_9 - gClass71.int_21, 0, -2, GClass4.int_7);

@@ -51,3 +51,36 @@ connect
 ```
 
 Có cờ in-flight riêng để không spam ping mỗi frame trong lúc đang chờ response.
+
+
+## Combat RTT diagnostic
+
+Đo riêng độ trễ gameplay thay vì suy luận chỉ từ packet ping.
+
+Mốc bắt đầu:
+
+```text
+GClass7.method_73()
+-> ATTACK mob được đưa vào send queue
+-> lưu mobId + timestamp
+```
+
+Mốc phản hồi server:
+
+- `case -9`: server cập nhật HP/damage mob;
+- `case -12`: mob chết;
+- packet `45`: attack miss.
+
+Các attack đang chờ được lưu FIFO theo `mobId`. Khi server trả state của mob, diagnostic ghép với attack cũ nhất đang chờ của đúng mob.
+
+HUD:
+
+```text
+Combat 4820ms | Pending 7
+```
+
+- `Combat`: RTT của attack mob gần nhất đã nhận phản hồi.
+- `Pending`: số attack mob đã gửi nhưng chưa ghép được với phản hồi server.
+- probe quá 30 giây được tự xóa; danh sách được chặn tối đa 128 phần tử.
+
+Đây là diagnostic, chưa dùng Combat RTT để throttle Auto Train.
