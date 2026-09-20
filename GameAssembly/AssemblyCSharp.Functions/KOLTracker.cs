@@ -25,6 +25,12 @@ namespace AssemblyCSharp.Functions
 		private static int backgroundSyncState;
 		private static long backgroundSyncExpiresAt = -1L;
 
+		private static int debugOpenSent;
+		private static int debugMenuResponse;
+		private static int debugQuerySent;
+		private static int debugProgressResponse;
+		private static string debugLast = "INIT";
+
 		public static bool HasProgress { get; private set; }
 
 		public static int Current { get; private set; }
@@ -106,6 +112,7 @@ namespace AssemblyCSharp.Functions
 					backgroundSyncState = BackgroundIdle;
 					backgroundSyncExpiresAt = -1L;
 					nextSyncAt = now + SyncIntervalMs;
+					debugLast = "ARM";
 					return;
 				}
 
@@ -165,6 +172,7 @@ namespace AssemblyCSharp.Functions
 				{
 					if (now < backgroundSyncExpiresAt)
 						return;
+					debugLast = (backgroundSyncState == BackgroundWaitMenu) ? "TO_MENU" : "TO_PROG";
 					backgroundSyncState = BackgroundIdle;
 					backgroundSyncExpiresAt = -1L;
 					nextSyncAt = now + SyncIntervalMs;
@@ -173,9 +181,15 @@ namespace AssemblyCSharp.Functions
 
 				// Không chen sync nền khi người chơi đang thao tác menu/dialog.
 				if (GClass73.gclass145_0 != null && GClass73.gclass145_0.bool_0)
+				{
+					debugLast = "B_MENU";
 					return;
+				}
 				if (GClass96.gclass96_0 != null)
+				{
+					debugLast = "B_DLG";
 					return;
+				}
 
 				if (nextSyncAt < 0L)
 				{
@@ -190,6 +204,8 @@ namespace AssemblyCSharp.Functions
 				backgroundSyncState = BackgroundWaitMenu;
 				backgroundSyncExpiresAt = now + SyncTimeoutMs;
 				nextSyncAt = now + SyncIntervalMs;
+				debugOpenSent++;
+				debugLast = "OPEN";
 				GClass7.smethod_0().method_44();
 				GClass7.smethod_0().method_60(queryNpcId);
 			}
@@ -208,10 +224,14 @@ namespace AssemblyCSharp.Functions
 				return false;
 
 			long now = GClass203.smethod_18();
+			debugMenuResponse++;
+			debugLast = "MENU_OK";
 			backgroundSyncState = BackgroundWaitProgress;
 			backgroundSyncExpiresAt = now + SyncTimeoutMs;
 			try
 			{
+				debugQuerySent++;
+				debugLast = "QUERY";
 				GClass7.smethod_0().method_61(queryNpcId, queryMenuId, queryOptionId);
 			}
 			catch
@@ -248,7 +268,14 @@ namespace AssemblyCSharp.Functions
 				if (kolContext || now <= armedUntil || sameBackgroundNpc)
 				{
 					if (TryUpdateProgress(chat))
+					{
+						if (sameBackgroundNpc)
+						{
+							debugProgressResponse++;
+							debugLast = "PROG_OK";
+						}
 						ConfirmCandidate(npcId);
+					}
 				}
 
 				if (sameBackgroundNpc)
@@ -279,7 +306,14 @@ namespace AssemblyCSharp.Functions
 				if (kolContext || now <= armedUntil || sameBackgroundNpc)
 				{
 					if (TryUpdateProgress(chat))
+					{
+						if (sameBackgroundNpc)
+						{
+							debugProgressResponse++;
+							debugLast = "PROG_OK";
+						}
 						ConfirmCandidate(npcId);
+					}
 				}
 
 				if (sameBackgroundNpc)
@@ -400,6 +434,12 @@ namespace AssemblyCSharp.Functions
 				string text = "KOL: " + Current + "/" + Total + " (" + percent.ToString("0.##") + "%)";
 				if (Completed)
 					text += " - HOAN THANH";
+				string state = (backgroundSyncState == BackgroundWaitMenu) ? "WM" : ((backgroundSyncState == BackgroundWaitProgress) ? "WP" : "I");
+				text += " | Q:" + (hasQuery ? "Y" : "N")
+					+ " N:" + queryNpcId + " M:" + queryMenuId + "/" + queryOptionId
+					+ " S:" + state
+					+ " A:" + debugOpenSent + "/" + debugMenuResponse + "/" + debugQuerySent + "/" + debugProgressResponse
+					+ " " + debugLast;
 				return text;
 			}
 			catch
