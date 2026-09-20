@@ -1623,6 +1623,7 @@ public class GClass7
 	public void method_61(int npcId, int menuId, int optionId)
 	{
 		GClass36.smethod_0("menuid: " + menuId);
+		KOLTracker.ObservePacket22(npcId, menuId, optionId);
 		GClass208 gClass = null;
 		try
 		{

@@ -135,11 +135,34 @@ namespace AssemblyCSharp.Functions
 			}
 		}
 
+		public static void ObservePacket22(int npcId, int menuId, int optionId)
+		{
+			try
+			{
+				// Packet 22 do auto-sync gửi không được ghi đè query đã học.
+				if (backgroundSyncState != BackgroundIdle)
+				{
+					debugLast = "AUTO22";
+					return;
+				}
+
+				candidateNpcId = npcId;
+				candidateMenuId = menuId;
+				candidateOptionId = optionId;
+				hasCandidate = true;
+				candidateAt = GClass203.smethod_18();
+				debugLast = "P22:" + npcId + ":" + menuId + "/" + optionId;
+			}
+			catch
+			{
+			}
+		}
+
 		private static void ConfirmCandidate(int npcId)
 		{
 			try
 			{
-				if (!hasCandidate || candidateNpcId != npcId)
+				if (!hasCandidate)
 					return;
 				long now = GClass203.smethod_18();
 				if (candidateAt < 0L || now - candidateAt > 5000L)
@@ -154,6 +177,7 @@ namespace AssemblyCSharp.Functions
 				backgroundSyncState = BackgroundIdle;
 				backgroundSyncExpiresAt = -1L;
 				nextSyncAt = now + SyncIntervalMs;
+				debugLast = "CONFIRM";
 			}
 			catch
 			{
@@ -271,7 +295,8 @@ namespace AssemblyCSharp.Functions
 
 				long now = GClass203.smethod_18();
 				bool sameBackgroundNpc = backgroundSyncState == BackgroundWaitProgress && npcId == queryNpcId;
-				if (kolContext || now <= armedUntil || sameBackgroundNpc)
+				bool freshCandidate = hasCandidate && candidateAt >= 0L && now - candidateAt <= 5000L;
+				if (kolContext || now <= armedUntil || sameBackgroundNpc || freshCandidate)
 				{
 					if (TryUpdateProgress(chat))
 					{
@@ -309,7 +334,8 @@ namespace AssemblyCSharp.Functions
 
 				long now = GClass203.smethod_18();
 				bool sameBackgroundNpc = backgroundSyncState == BackgroundWaitProgress && npcId == queryNpcId;
-				if (kolContext || now <= armedUntil || sameBackgroundNpc)
+				bool freshCandidate = hasCandidate && candidateAt >= 0L && now - candidateAt <= 5000L;
+				if (kolContext || now <= armedUntil || sameBackgroundNpc || freshCandidate)
 				{
 					if (TryUpdateProgress(chat))
 					{
