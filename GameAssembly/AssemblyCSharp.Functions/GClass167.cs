@@ -212,20 +212,35 @@ namespace AssemblyCSharp.Functions
         {
             if (imagename == "logoGameScr")
             {
-                string customLogoPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"Data\kaitokid.txt");
-                bool useCustomLogo = File.Exists(customLogoPath);
-                string s = useCustomLogo ? File.ReadAllText(customLogoPath).Trim() : method_3(imagename, ZoomLevel);
-                Texture2D texture2D = new Texture2D(2, 2);
-                texture2D.LoadImage(Convert.FromBase64String(s));
-
-                if (useCustomLogo)
+                try
                 {
+                    // Unity standalone: Application.dataPath tro vao thu muc *_Data.
+                    // Lay thu muc cha de co duong dan tuyet doi toi Output\Data\kaitokid.txt.
+                    string gameDirectory = Path.GetDirectoryName(Application.dataPath);
+                    if (string.IsNullOrEmpty(gameDirectory))
+                        gameDirectory = Directory.GetCurrentDirectory();
+
+                    string customLogoPath = Path.Combine(gameDirectory, @"Data\kaitokid.txt");
+                    if (!File.Exists(customLogoPath))
+                        return null;
+
+                    string s = File.ReadAllText(customLogoPath).Trim();
+                    if (string.IsNullOrEmpty(s))
+                        return null;
+
+                    Texture2D texture2D = new Texture2D(2, 2);
+                    texture2D.LoadImage(Convert.FromBase64String(s));
+
                     int targetWidth = 100 * ZoomLevel;
                     int targetHeight = 18 * ZoomLevel;
                     return GClass70.smethod_2(method_6(texture2D, targetWidth, targetHeight).EncodeToPNG());
                 }
-
-                return GClass70.smethod_2(texture2D.EncodeToPNG());
+                catch (Exception ex)
+                {
+                    // Khong fallback ve logo Thanh VLC cu; tranh lam vo toan bo Screen.paint().
+                    GClass149.smethod_5("Data/Errors/logo_error.log", "CUSTOM LOGO ERROR: " + ex.ToString());
+                    return null;
+                }
             }
             if (!File.Exists(imagename))
                 return null;
