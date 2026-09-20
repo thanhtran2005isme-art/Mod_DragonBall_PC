@@ -285,6 +285,7 @@ namespace AssemblyCSharp.Functions
                     break;
                 case "/dsq":
                     smethod_0().bool_0 = !smethod_0().bool_0;
+                    GClass7.ResetCombatAdaptiveForSceneChange();
                     GClass149.smethod_1((GClass151.int_0 != 0) ? ("Murdering mob: " + GClass154.smethod_0().method_6(smethod_0().bool_0)) : ("Đồ sát quái: " + GClass154.smethod_0().method_6(smethod_0().bool_0)), 0);
                     break;
                 case "/listmobclr":
