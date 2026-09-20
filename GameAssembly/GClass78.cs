@@ -1794,10 +1794,12 @@ public class GClass78 : GInterface1
 				gclass163_0.int_0 = 0;
 			}
 		}
-		if (smethod_1().bool_38 && int_13 == -smethod_1().int_13 && GClass203.smethod_18() - GClass168.smethod_0().long_3 > 1000L)
+		GClass168 petFunctions = GClass168.smethod_0();
+		long petInfoRefreshInterval = (petFunctions.bool_4 || petFunctions.bool_6 || petFunctions.bool_10 || petFunctions.int_3 != 0 || petFunctions.long_7 != 0L) ? 1000L : 5000L;
+		if (smethod_1().bool_38 && int_13 == -smethod_1().int_13 && GClass203.smethod_18() - petFunctions.long_3 > petInfoRefreshInterval)
 		{
 			GClass7.smethod_0().method_127();
-			GClass168.smethod_0().long_3 = GClass203.smethod_18();
+			petFunctions.long_3 = GClass203.smethod_18();
 		}
 		if (!bool_79)
 		{
