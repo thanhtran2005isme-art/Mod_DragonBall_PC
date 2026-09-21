@@ -7,15 +7,22 @@ public class GClass7
 {
 	private class CombatProbe
 	{
+		public long sequence;
+
 		public int mobId;
 
 		public long sentAt;
 
-		// Chi don gui khi client da nhan HP server cua mob = 1 moi la kill-shot candidate KOL.
+		public int hpAtSend;
+
+		// Giữ nguyên logic KOL hiện tại trong giai đoạn diagnostic:
+		// chỉ đánh dấu candidate nếu HP client nhìn thấy đúng 1 lúc gửi ATTACK.
 		public bool kolKillShotCandidate;
 	}
 
 	private static readonly List<CombatProbe> combatProbes = new List<CombatProbe>();
+
+	private static long nextCombatProbeSequence;
 
 	private static readonly List<long> combatAckTimes = new List<long>();
 
@@ -160,6 +167,13 @@ public class GClass7
 		{
 			if (now - combatProbes[i].sentAt > timeout)
 			{
+				CombatProbe staleProbe = combatProbes[i];
+				KOLTracker.TraceProtocol("PROBE_TIMEOUT",
+					"seq=" + staleProbe.sequence
+					+ " mob=" + staleProbe.mobId
+					+ " age=" + (now - staleProbe.sentAt)
+					+ " hpSend=" + staleProbe.hpAtSend
+					+ " oneHp=" + (staleProbe.kolKillShotCandidate ? 1 : 0));
 				combatProbes.RemoveAt(i);
 				removedStale = true;
 			}
@@ -215,30 +229,65 @@ public class GClass7
 			adaptiveCombatWindow = Math.Min(10.0, adaptiveCombatWindow + 0.25);
 	}
 
-	private static void RecordCombatAttack(int mobId, long sentAt, bool kolKillShotCandidate)
+	private static int CountCombatProbesForMob(int mobId)
+	{
+		int count = 0;
+		for (int i = 0; i < combatProbes.Count; i++)
+		{
+			if (combatProbes[i].mobId == mobId)
+				count++;
+		}
+		return count;
+	}
+
+	private static void RecordCombatAttack(int mobId, long sentAt, int hpAtSend)
 	{
 		CleanupCombatProbes(sentAt);
+		long sequence = ++nextCombatProbeSequence;
+		bool oneHpCandidate = hpAtSend == 1;
 		combatProbes.Add(new CombatProbe
 		{
+			sequence = sequence,
 			mobId = mobId,
 			sentAt = sentAt,
-			kolKillShotCandidate = kolKillShotCandidate
+			hpAtSend = hpAtSend,
+			kolKillShotCandidate = oneHpCandidate
 		});
 		adaptiveLastAttackAt = sentAt;
+
+		KOLTracker.TraceProtocol("ATTACK",
+			"seq=" + sequence
+			+ " mob=" + mobId
+			+ " hpSend=" + hpAtSend
+			+ " oneHp=" + (oneHpCandidate ? 1 : 0)
+			+ " pendingMob=" + CountCombatProbesForMob(mobId)
+			+ " pendingAll=" + combatProbes.Count);
 	}
 
 	private static bool CompleteCombatProbe(int mobId, bool terminal)
 	{
 		long now = GClass203.smethod_18();
 		CleanupCombatProbes(now);
+		int pendingMobBefore = CountCombatProbesForMob(mobId);
 		for (int i = 0; i < combatProbes.Count; i++)
 		{
 			if (combatProbes[i].mobId == mobId)
 			{
-				long responseAge = now - combatProbes[i].sentAt;
+				CombatProbe matchedProbe = combatProbes[i];
+				long responseAge = now - matchedProbe.sentAt;
 				bool kolKillShotMatch = terminal
-					&& combatProbes[i].kolKillShotCandidate
+					&& matchedProbe.kolKillShotCandidate
 					&& responseAge <= GetKolTerminalMatchWindowMs();
+
+				KOLTracker.TraceProtocol(terminal ? "DIE_PROBE" : "ACK_PROBE",
+					"seq=" + matchedProbe.sequence
+					+ " mob=" + mobId
+					+ " age=" + responseAge
+					+ " hpSend=" + matchedProbe.hpAtSend
+					+ " oneHp=" + (matchedProbe.kolKillShotCandidate ? 1 : 0)
+					+ " pendingMobBefore=" + pendingMobBefore
+					+ " kolMatch=" + (kolKillShotMatch ? 1 : 0));
+
 				combatRtt = responseAge;
 				combatLastResponseAt = now;
 				combatAckTimes.Add(now);
@@ -248,15 +297,29 @@ public class GClass7
 
 				if (terminal)
 				{
+					int clearedExtra = 0;
 					for (int j = combatProbes.Count - 1; j >= 0; j--)
 					{
 						if (combatProbes[j].mobId == mobId)
+						{
 							combatProbes.RemoveAt(j);
+							clearedExtra++;
+						}
+					}
+					if (clearedExtra > 0)
+					{
+						KOLTracker.TraceProtocol("DIE_CLEAR_EXTRA",
+							"mob=" + mobId + " cleared=" + clearedExtra);
 					}
 				}
 				return terminal ? kolKillShotMatch : true;
 			}
 		}
+
+		KOLTracker.TraceProtocol(terminal ? "DIE_NO_PROBE" : "ACK_NO_PROBE",
+			"mob=" + mobId
+			+ " pendingMob=" + pendingMobBefore
+			+ " pendingAll=" + combatProbes.Count);
 		RefreshCombatAckRate(now);
 		return false;
 	}
@@ -1973,7 +2036,7 @@ public class GClass7
 					{
 						GClass194 combatMob = (GClass194)vMob.method_3(m);
 						if (combatMob != null)
-							RecordCombatAttack(combatMob.int_25, sentAt, combatMob.int_6 == 1);
+							RecordCombatAttack(combatMob.int_25, sentAt, combatMob.int_6);
 					}
 				}
 			}

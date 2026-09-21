@@ -108,3 +108,12 @@ Lý do: giảm false-positive khi người khác last-hit.
 Không cập nhật README cho mọi commit.
 
 README chỉ nên chứa quick start, build path/output, module mapping ổn định và pointer sang docs.
+
+## D-010 — Không dùng SM/TN đơn lẻ làm bằng chứng last-hit KOL
+
+**Ngày:** 2026-09-22
+
+- Packet tăng Sức mạnh/Tiềm năng có thể đến từ hit gây damage bình thường, không chỉ hit kết liễu.
+- Vì vậy `-3 type=2` chỉ được coi là tín hiệu diagnostic/reward, không phải bằng chứng độc lập rằng client mình last-hit.
+- Trước khi thay công thức local KOL, phải trace sequence own ATTACK -> HP/MISS/DIE -> drop -> SM/TN trong các tình huống có và không có người khác cùng farm.
+- Commit diagnostic phải giữ nguyên cách +1 hiện tại để số liệu so sánh không bị trộn với thay đổi thuật toán.

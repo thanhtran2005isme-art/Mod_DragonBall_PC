@@ -5,6 +5,8 @@ Không dùng file này để giải thích kiến trúc dài; chi tiết nằm t
 
 ## 2026-09-22
 
+- Thêm `KOLProtocol.log` để trace ATTACK/probe, HP/MISS/DIE, drop owner, SM/TN, skip/timeout/overlap và correction khi server sync; chưa thay đổi công thức +1 KOL.
+- Ghi nhận SM/TN là reward theo damage, không phải bằng chứng last-hit độc lập; dùng diagnostic thực tế trước khi sửa thuật toán.
 - Thêm hệ thống bàn giao cho AI/agent: `AGENTS.md`, `docs/AI_HANDOFF.md`, `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, `docs/TROUBLESHOOTING.md`, `docs/history/2026-09.md`; README/PROJECT_CONTEXT được nối vào luồng đọc mới.
 
 ## 2026-09-20

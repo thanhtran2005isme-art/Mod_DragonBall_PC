@@ -3548,6 +3548,7 @@ public class GClass12 : GInterface3
 						}
 						if (gClass66 == null || gClass66.int_12 == 0 || gClass66.int_12 == 0)
 							break;
+						int kolHpBeforeDeath = gClass66.int_6;
 						bool kolMatchedOwnOneHpKillShot = GClass7.OnMobCombatTerminalResponse(gClass66.int_25);
 						bool kolHasOwnDrop = false;
 						bool kolHasForeignOwnedDrop = false;
@@ -3576,6 +3577,12 @@ public class GClass12 : GInterface3
 						catch (Exception)
 						{
 						}
+						KOLTracker.TraceProtocol("MOB_DIE_PACKET",
+							"mob=" + gClass66.int_25
+							+ " hpBefore=" + kolHpBeforeDeath
+							+ " oneHpMatch=" + (kolMatchedOwnOneHpKillShot ? 1 : 0)
+							+ " ownDrop=" + (kolHasOwnDrop ? 1 : 0)
+							+ " foreignDrop=" + (kolHasForeignOwnedDrop ? 1 : 0));
 						KOLTracker.ObserveMobDeath(kolMatchedOwnOneHpKillShot, kolHasOwnDrop, kolHasForeignOwnedDrop, gClass66.int_25);
 						break;
 					}
@@ -3670,10 +3677,16 @@ public class GClass12 : GInterface3
 						GClass73.smethod_8("SA83v1", 2);
 						if (gClass69 != null)
 						{
+							int kolHpBeforeResponse = gClass69.int_6;
 							GClass7.OnMobCombatResponse(gClass69.int_25);
 							gClass69.int_6 = msg.method_3();
 							gClass69.method_20();
 							int num191 = msg.method_3();
+							KOLTracker.TraceProtocol("MOB_HP_PACKET",
+								"mob=" + gClass69.int_25
+								+ " oldHp=" + kolHpBeforeResponse
+								+ " newHp=" + gClass69.int_6
+								+ " value=" + num191);
 							if (num191 == 1)
 								return;
 							if (num191 > 1)
@@ -3856,6 +3869,8 @@ public class GClass12 : GInterface3
 							GClass78.smethod_1().long_2 += num182;
 							GClass78.smethod_1().long_4 += num182;
 						}
+						KOLTracker.TraceProtocol("SMTN_PACKET",
+							"type=" + b61 + " amount=" + num182);
 						KOLTracker.ObserveOwnTnSmGain(b61, num182);
 						GClass78.smethod_1().method_4();
 						if (GClass78.smethod_1().sbyte_19 != 3)
@@ -3946,9 +3961,14 @@ public class GClass12 : GInterface3
 						}
 						if (gClass71 != null)
 						{
+							int kolHpBeforeMiss = gClass71.int_6;
 							GClass7.OnMobCombatResponse(gClass71.int_25);
 							gClass71.int_6 = msg.method_1().method_8();
 							gClass71.method_20();
+							KOLTracker.TraceProtocol("MOB_MISS_PACKET",
+								"mob=" + gClass71.int_25
+								+ " oldHp=" + kolHpBeforeMiss
+								+ " newHp=" + gClass71.int_6);
 							GClass144.smethod_19(mResources.miss, gClass71.int_8, gClass71.int_9 - gClass71.int_21, 0, -2, GClass4.int_7);
 						}
 					}

@@ -1,4 +1,7 @@
 using System;
+using System.IO;
+using System.Text;
+using UnityEngine;
 
 namespace AssemblyCSharp.Functions
 {
@@ -46,6 +49,105 @@ namespace AssemblyCSharp.Functions
 		private static int pendingKillMobId = -1;
 		private static int localKillTnTimeouts;
 		private static string debugLast = "INIT";
+
+		// Diagnostic protocol trace: chỉ quan sát packet/timeline, không đổi công thức +1 KOL hiện tại.
+		private static readonly object protocolTraceLock = new object();
+		private static readonly StringBuilder protocolTraceBuffer = new StringBuilder();
+		private static bool protocolTraceInitialized;
+		private static bool protocolTraceNeedsReset;
+		private static long protocolTraceLastFlushAt = -1L;
+
+		public static bool IsProtocolTraceEnabled()
+		{
+			return HasProgress && Total == 100000;
+		}
+
+		public static void TraceProtocol(string eventName, string details)
+		{
+			if (!IsProtocolTraceEnabled())
+				return;
+
+			try
+			{
+				long now = GClass203.smethod_18();
+				int mapId = -1;
+				int playerId = -1;
+				try
+				{
+					mapId = GClass20.int_37;
+					GClass78 me = GClass78.smethod_1();
+					if (me != null)
+						playerId = me.int_13;
+				}
+				catch
+				{
+				}
+
+				lock (protocolTraceLock)
+				{
+					if (!protocolTraceInitialized)
+					{
+						protocolTraceInitialized = true;
+						protocolTraceNeedsReset = true;
+						protocolTraceLastFlushAt = now;
+						protocolTraceBuffer.Append("# KOL protocol trace - diagnostic only; counting logic unchanged\r\n");
+						protocolTraceBuffer.Append("# ms | map | me | event | details\r\n");
+					}
+
+					protocolTraceBuffer.Append(now)
+						.Append(" | map=").Append(mapId)
+						.Append(" | me=").Append(playerId)
+						.Append(" | ").Append(eventName ?? string.Empty)
+						.Append(" | ").Append(details ?? string.Empty)
+						.Append("\r\n");
+				}
+			}
+			catch
+			{
+			}
+		}
+
+		private static string GetProtocolTracePath()
+		{
+			string outputRoot = Path.GetDirectoryName(Application.dataPath);
+			string dataDir = Path.Combine(outputRoot, "Data");
+			string errorDir = Path.Combine(dataDir, "Errors");
+			Directory.CreateDirectory(errorDir);
+			return Path.Combine(errorDir, "KOLProtocol.log");
+		}
+
+		private static void FlushProtocolTraceIfDue()
+		{
+			if (!protocolTraceInitialized)
+				return;
+
+			try
+			{
+				long now = GClass203.smethod_18();
+				lock (protocolTraceLock)
+				{
+					if (protocolTraceBuffer.Length == 0)
+						return;
+					if (protocolTraceLastFlushAt >= 0L
+						&& now - protocolTraceLastFlushAt < 500L
+						&& protocolTraceBuffer.Length < 4096)
+						return;
+
+					string path = GetProtocolTracePath();
+					using (StreamWriter writer = new StreamWriter(path, !protocolTraceNeedsReset))
+					{
+						writer.Write(protocolTraceBuffer.ToString());
+					}
+					protocolTraceBuffer.Length = 0;
+					protocolTraceNeedsReset = false;
+					protocolTraceLastFlushAt = now;
+				}
+			}
+			catch
+			{
+				// Diagnostic không được phép làm hỏng gameplay/KOL flow.
+			}
+		}
 
 		public static bool HasProgress { get; private set; }
 
@@ -251,6 +353,7 @@ namespace AssemblyCSharp.Functions
 
 		public static void Update()
 		{
+			FlushProtocolTraceIfDue();
 			try
 			{
 				ExpirePendingKill(GClass203.smethod_18());
@@ -584,6 +687,10 @@ namespace AssemblyCSharp.Functions
 			if (bestTotal <= 0)
 				return false;
 
+			int previousCurrent = Current;
+			int previousLocalKills = localKillsSinceServerSync;
+			bool hadProgress = HasProgress;
+
 			Current = bestCurrent;
 			Total = bestTotal;
 			HasProgress = true;
@@ -591,6 +698,13 @@ namespace AssemblyCSharp.Functions
 			ClearPendingKill();
 			LastUpdate = GClass203.smethod_18();
 			nextSyncAt = LastUpdate + SyncIntervalMs;
+
+			TraceProtocol("SERVER_SYNC",
+				"old=" + (hadProgress ? previousCurrent.ToString() : "-")
+				+ " server=" + bestCurrent
+				+ " total=" + bestTotal
+				+ " localSinceSync=" + previousLocalKills
+				+ " correction=" + (hadProgress ? (bestCurrent - previousCurrent).ToString() : "-"));
 			return true;
 		}
 
@@ -611,6 +725,9 @@ namespace AssemblyCSharp.Functions
 			localKillsRejected++;
 			localKillTnTimeouts++;
 			debugLast = "TN_TIMEOUT:" + pendingKillMobId;
+			TraceProtocol("KOL_TN_TIMEOUT",
+				"mob=" + pendingKillMobId
+				+ " age=" + ((pendingKillTnAt >= 0L) ? (now - pendingKillTnAt) : -1L));
 			ClearPendingKill();
 		}
 
@@ -625,6 +742,11 @@ namespace AssemblyCSharp.Functions
 			{
 				long now = GClass203.smethod_18();
 				ExpirePendingKill(now);
+				TraceProtocol("SMTN_EVAL",
+					"type=" + type
+					+ " amount=" + amount
+					+ " pending=" + (pendingKillTn ? 1 : 0)
+					+ " mob=" + pendingKillMobId);
 				if (!pendingKillTn || type != 2 || amount <= 0)
 					return;
 
@@ -640,6 +762,10 @@ namespace AssemblyCSharp.Functions
 					localKillsAccepted++;
 					LastUpdate = now;
 					debugLast = "LOCAL+1_TN:" + confirmedMobId;
+					TraceProtocol("KOL_LOCAL_PLUS",
+						"mob=" + confirmedMobId
+						+ " current=" + Current
+						+ " amount=" + amount);
 				}
 			}
 			catch
@@ -653,6 +779,12 @@ namespace AssemblyCSharp.Functions
 			{
 				long now = GClass203.smethod_18();
 				ExpirePendingKill(now);
+				TraceProtocol("KOL_DEATH_EVAL",
+					"mob=" + mobId
+					+ " oneHpMatch=" + (matchedOwnOneHpKillShot ? 1 : 0)
+					+ " ownDrop=" + (hasOwnDrop ? 1 : 0)
+					+ " foreignDrop=" + (hasForeignOwnedDrop ? 1 : 0)
+					+ " oldPending=" + (pendingKillTn ? pendingKillMobId.ToString() : "-"));
 
 				// Local mirror chi ap dung cho nhiem vu 100.000 quai.
 				if (!HasProgress || Total != 100000 || Completed)
@@ -664,6 +796,8 @@ namespace AssemblyCSharp.Functions
 				{
 					localKillsRejected++;
 					debugLast = "TN_OVERLAP:" + pendingKillMobId;
+					TraceProtocol("KOL_TN_OVERLAP",
+						"oldMob=" + pendingKillMobId + " newMob=" + mobId);
 					ClearPendingKill();
 				}
 
@@ -672,23 +806,30 @@ namespace AssemblyCSharp.Functions
 				{
 					localKillsRejected++;
 					debugLast = "LOCAL_REJECT:" + mobId;
+					TraceProtocol("KOL_FOREIGN_REJECT", "mob=" + mobId);
 					return;
 				}
 
-				// Khong con dung fresh combat probe thong thuong de +1.
-				// Chi stage khi: co drop cua minh, hoac CHINH don gui luc HP server mob = 1
-				// van dang cho terminal -12 cua dung mob.
+				// GIỮ NGUYÊN logic hiện tại để đo sai lệch:
+				// chỉ stage khi có own-drop hoặc own attack đã được đánh dấu lúc HP client = 1.
+				// Diagnostic log sẽ dùng để xác minh packet nào thực sự chứng minh last-hit.
 				if (!hasOwnDrop && !matchedOwnOneHpKillShot)
 				{
 					debugLast = "LOCAL_SKIP:" + mobId;
+					TraceProtocol("KOL_LOCAL_SKIP", "mob=" + mobId);
 					return;
 				}
 
-				// Chua +1 tai -12. Cho packet -3 type=2 (+SM/+TN) gui rieng cho minh ngay sau do.
+				// Chua +1 tai -12. Logic hiện tại vẫn chờ packet -3 type=2.
+				// Lưu ý: +SM/TN có thể xuất hiện với mọi hit gây damage, nên đây chưa phải
+				// bằng chứng last-hit độc lập; đang được giữ nguyên chỉ để diagnostic A/B.
 				pendingKillTn = true;
 				pendingKillTnAt = now;
 				pendingKillMobId = mobId;
 				debugLast = hasOwnDrop ? ("WAIT_TN_DROP:" + mobId) : ("WAIT_TN_1HP:" + mobId);
+				TraceProtocol("KOL_STAGE",
+					"mob=" + mobId
+					+ " source=" + (hasOwnDrop ? "DROP" : "ONE_HP"));
 			}
 			catch
 			{

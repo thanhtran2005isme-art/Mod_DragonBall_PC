@@ -95,17 +95,20 @@ Chi tiết thuật toán: `docs/NETWORKING.md`.
 
 ## 7. KOL local không tăng dù vừa giết quái
 
-Logic hiện tại cố tình chặt.
+Logic hiện tại vẫn đang dùng own-drop / one-HP candidate + SM/TN để local +1, nhưng cách này **chưa được coi là chính xác tuyệt đối**.
 
-Kiểm tra:
+Đã xác nhận về cơ chế game: packet tăng SM/TN có thể xuất hiện khi chỉ gây damage, không riêng last-hit. Vì vậy không dùng SM/TN đơn lẻ để kết luận người kết liễu.
+
+Khi local lệch server, kiểm tra:
 
 1. KOL task đã được nhận diện/sync chưa;
-2. mob death có bằng chứng drop của mình hoặc one-HP kill-shot candidate không;
-3. packet tăng SM/TN của chính client có đến trong khoảng xác nhận không;
-4. HUD KOL có state `P:` pending mob và `T:` timeout tăng không;
-5. server sync sau đó có trả progress mới không.
+2. mở `Output\Data\Errors\KOLProtocol.log`;
+3. đối chiếu `ATTACK` / `ACK_PROBE` / `MOB_HP_PACKET` / `DIE_PROBE` / `MOB_DIE_PACKET`;
+4. xem `KOL_LOCAL_SKIP`, `KOL_TN_TIMEOUT`, `KOL_TN_OVERLAP`;
+5. xem dòng `SERVER_SYNC` để biết local lệch server bao nhiêu;
+6. test riêng ba tình huống: chỉ mình farm, mình đứng yên nhìn người khác farm, và hai người cùng đánh một mob.
 
-Nếu timeout tăng nhiều, đọc commit gần nhất liên quan `KOLTracker.cs`, `GClass7.cs`, `GClass12.cs` trước khi nới lỏng điều kiện.
+Diagnostic hiện tại cố tình **không đổi công thức +1**. Chỉ sau khi biết packet death/HP nào là broadcast và packet nào là response riêng của own attack mới sửa thuật toán last-hit.
 
 ## 8. KOL sync không replay đúng menu
 
@@ -160,6 +163,7 @@ startMurderingMob.txt
 logo_error.log
 frame_render.log
 panel_exit.log
+KOLProtocol.log
 ```
 
 Chọn log theo module thay vì đọc tất cả.

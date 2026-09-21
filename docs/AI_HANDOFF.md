@@ -101,10 +101,18 @@ Các commit gần nhất đã chuyển logic KOL sang xác nhận chặt hơn:
 - hỗ trợ chuỗi menu packet 32 hai bước;
 - theo dõi KOL local khi farm ngoài Đảo Kame;
 - siết last-hit local;
-- chỉ stage kill candidate khi có bằng chứng drop của mình hoặc đòn gửi lúc HP server của mob = 1;
-- chưa +1 ngay ở packet mob chết; chờ gói tăng SM/TN của chính client trong cửa sổ khoảng 750 ms rồi mới xác nhận local +1.
+- logic đang chạy trên `main` vẫn stage candidate khi có own-drop hoặc attack được gửi lúc client thấy mob HP = 1;
+- logic hiện tại vẫn chờ packet tăng SM/TN khoảng 750 ms trước khi local +1.
 
-Điểm này nhạy với packet ordering, vì vậy khi sửa phải đọc commit gần nhất và test bằng phản hồi server thật.
+**Quan trọng:** SM/TN không phải bằng chứng last-hit độc lập; hit gây damage bình thường cũng có thể tăng SM/TN. Vì vậy công thức hiện tại đang được giữ nguyên tạm thời để đo sai lệch, chưa được xem là kết luận protocol cuối.
+
+Đã thêm diagnostic timeline tại:
+
+```text
+Output\Data\Errors\KOLProtocol.log
+```
+
+Log ghi sequence ATTACK/probe, HP response, MISS, MOB DIE, drop owner, SM/TN, stage/skip/timeout và chênh lệch khi server sync. Mục tiêu trước mắt là xác định packet nào thực sự đủ mạnh để chứng minh last-hit trong khu có nhiều người farm, **không đổi công thức +1 KOL cho tới khi có log thực tế**.
 
 ## 5. Commit gần đây đáng chú ý
 
