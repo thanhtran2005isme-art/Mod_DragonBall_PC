@@ -29,6 +29,8 @@ git log -5 --oneline
 Build gameplay / GameAssembly:
 
 ```bat
+taskkill /F /IM "Dragon ball_237b.exe" 2>nul
+
 "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe" GameAssembly\GameAssembly.csproj /t:rebuild /p:Configuration=Release
 ```
 
