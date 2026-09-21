@@ -10,6 +10,9 @@ public class GClass7
 		public int mobId;
 
 		public long sentAt;
+
+		// Chi don gui khi client da nhan HP server cua mob = 1 moi la kill-shot candidate KOL.
+		public bool kolKillShotCandidate;
 	}
 
 	private static readonly List<CombatProbe> combatProbes = new List<CombatProbe>();
@@ -212,13 +215,14 @@ public class GClass7
 			adaptiveCombatWindow = Math.Min(10.0, adaptiveCombatWindow + 0.25);
 	}
 
-	private static void RecordCombatAttack(int mobId, long sentAt)
+	private static void RecordCombatAttack(int mobId, long sentAt, bool kolKillShotCandidate)
 	{
 		CleanupCombatProbes(sentAt);
 		combatProbes.Add(new CombatProbe
 		{
 			mobId = mobId,
-			sentAt = sentAt
+			sentAt = sentAt,
+			kolKillShotCandidate = kolKillShotCandidate
 		});
 		adaptiveLastAttackAt = sentAt;
 	}
@@ -232,7 +236,9 @@ public class GClass7
 			if (combatProbes[i].mobId == mobId)
 			{
 				long responseAge = now - combatProbes[i].sentAt;
-				bool freshTerminalMatch = !terminal || responseAge <= GetKolTerminalMatchWindowMs();
+				bool kolKillShotMatch = terminal
+					&& combatProbes[i].kolKillShotCandidate
+					&& responseAge <= GetKolTerminalMatchWindowMs();
 				combatRtt = responseAge;
 				combatLastResponseAt = now;
 				combatAckTimes.Add(now);
@@ -248,7 +254,7 @@ public class GClass7
 							combatProbes.RemoveAt(j);
 					}
 				}
-				return freshTerminalMatch;
+				return terminal ? kolKillShotMatch : true;
 			}
 		}
 		RefreshCombatAckRate(now);
@@ -372,6 +378,7 @@ public class GClass7
 	{
 		combatProbes.Clear();
 		combatAckTimes.Clear();
+		KOLTracker.ResetKillConfirmation();
 		combatRtt = -1L;
 		combatLastResponseAt = -1L;
 		combatMinRtt = -1L;
@@ -1966,7 +1973,7 @@ public class GClass7
 					{
 						GClass194 combatMob = (GClass194)vMob.method_3(m);
 						if (combatMob != null)
-							RecordCombatAttack(combatMob.int_25, sentAt);
+							RecordCombatAttack(combatMob.int_25, sentAt, combatMob.int_6 == 1);
 					}
 				}
 			}

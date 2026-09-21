@@ -40,6 +40,11 @@ namespace AssemblyCSharp.Functions
 		private static int localKillsSinceServerSync;
 		private static int localKillsAccepted;
 		private static int localKillsRejected;
+		private const long KillTnConfirmWindowMs = 750L;
+		private static bool pendingKillTn;
+		private static long pendingKillTnAt = -1L;
+		private static int pendingKillMobId = -1;
+		private static int localKillTnTimeouts;
 		private static string debugLast = "INIT";
 
 		public static bool HasProgress { get; private set; }
@@ -248,6 +253,7 @@ namespace AssemblyCSharp.Functions
 		{
 			try
 			{
+				ExpirePendingKill(GClass203.smethod_18());
 				if (!hasQuery || !HasProgress || Completed)
 					return;
 				if (!GClass14.smethod_0().isConnected())
@@ -582,44 +588,107 @@ namespace AssemblyCSharp.Functions
 			Total = bestTotal;
 			HasProgress = true;
 			localKillsSinceServerSync = 0;
+			ClearPendingKill();
 			LastUpdate = GClass203.smethod_18();
 			nextSyncAt = LastUpdate + SyncIntervalMs;
 			return true;
 		}
 
-		public static void ObserveMobDeath(bool matchedFreshOwnCombatProbe, bool hasOwnDrop, bool hasForeignOwnedDrop)
+		private static void ClearPendingKill()
+		{
+			pendingKillTn = false;
+			pendingKillTnAt = -1L;
+			pendingKillMobId = -1;
+		}
+
+		private static void ExpirePendingKill(long now)
+		{
+			if (!pendingKillTn)
+				return;
+			if (pendingKillTnAt >= 0L && now - pendingKillTnAt <= KillTnConfirmWindowMs)
+				return;
+
+			localKillsRejected++;
+			localKillTnTimeouts++;
+			debugLast = "TN_TIMEOUT:" + pendingKillMobId;
+			ClearPendingKill();
+		}
+
+		public static void ResetKillConfirmation()
+		{
+			ClearPendingKill();
+		}
+
+		public static void ObserveOwnTnSmGain(sbyte type, int amount)
 		{
 			try
 			{
-				// Local mirror chỉ áp dụng cho nhiệm vụ 100.000 quái.
+				long now = GClass203.smethod_18();
+				ExpirePendingKill(now);
+				if (!pendingKillTn || type != 2 || amount <= 0)
+					return;
+
+				int confirmedMobId = pendingKillMobId;
+				ClearPendingKill();
 				if (!HasProgress || Total != 100000 || Completed)
 					return;
-
-				// Drop có owner người khác là bằng chứng mạnh mob không phải do mình kết liễu.
-				if (hasForeignOwnedDrop && !hasOwnDrop)
-				{
-					localKillsRejected++;
-					debugLast = "LOCAL_REJECT";
-					return;
-				}
-
-				// Last-hit local: drop cua minh la bang chung manh. Neu packet chet khong co
-				// drop, chi chap nhan khi no khop mot combat probe CON MOI cua chinh client.
-				// Probe cu 1.5-4s chi con gia tri cho adaptive combat, khong du de tinh KOL.
-				if (!hasOwnDrop && !matchedFreshOwnCombatProbe)
-				{
-					debugLast = "LOCAL_SKIP";
-					return;
-				}
 
 				if (Current < Total)
 				{
 					Current++;
 					localKillsSinceServerSync++;
 					localKillsAccepted++;
-					LastUpdate = GClass203.smethod_18();
-					debugLast = "LOCAL+1";
+					LastUpdate = now;
+					debugLast = "LOCAL+1_TN:" + confirmedMobId;
 				}
+			}
+			catch
+			{
+			}
+		}
+
+		public static void ObserveMobDeath(bool matchedOwnOneHpKillShot, bool hasOwnDrop, bool hasForeignOwnedDrop, int mobId)
+		{
+			try
+			{
+				long now = GClass203.smethod_18();
+				ExpirePendingKill(now);
+
+				// Local mirror chi ap dung cho nhiem vu 100.000 quai.
+				if (!HasProgress || Total != 100000 || Completed)
+					return;
+
+				// Neu mot death moi den truoc goi -3 cua candidate cu thi bo candidate cu.
+				// Tren flow killer binh thuong -12 va -3 duoc server gui sat nhau.
+				if (pendingKillTn)
+				{
+					localKillsRejected++;
+					debugLast = "TN_OVERLAP:" + pendingKillMobId;
+					ClearPendingKill();
+				}
+
+				// Drop co owner nguoi khac la bang chung manh minh khong phai killer.
+				if (hasForeignOwnedDrop && !hasOwnDrop)
+				{
+					localKillsRejected++;
+					debugLast = "LOCAL_REJECT:" + mobId;
+					return;
+				}
+
+				// Khong con dung fresh combat probe thong thuong de +1.
+				// Chi stage khi: co drop cua minh, hoac CHINH don gui luc HP server mob = 1
+				// van dang cho terminal -12 cua dung mob.
+				if (!hasOwnDrop && !matchedOwnOneHpKillShot)
+				{
+					debugLast = "LOCAL_SKIP:" + mobId;
+					return;
+				}
+
+				// Chua +1 tai -12. Cho packet -3 type=2 (+SM/+TN) gui rieng cho minh ngay sau do.
+				pendingKillTn = true;
+				pendingKillTnAt = now;
+				pendingKillMobId = mobId;
+				debugLast = hasOwnDrop ? ("WAIT_TN_DROP:" + mobId) : ("WAIT_TN_1HP:" + mobId);
 			}
 			catch
 			{
@@ -647,6 +716,8 @@ namespace AssemblyCSharp.Functions
 					+ " S:" + state
 					+ " A:" + debugOpenSent + "/" + debugMenuResponse + "/" + debugQuerySent + "/" + debugProgressResponse
 					+ " L:+" + localKillsSinceServerSync + "(" + localKillsAccepted + "/" + localKillsRejected + ")"
+					+ " P:" + (pendingKillTn ? pendingKillMobId.ToString() : "-")
+					+ " T:" + localKillTnTimeouts
 					+ " " + debugLast;
 				return text;
 			}
