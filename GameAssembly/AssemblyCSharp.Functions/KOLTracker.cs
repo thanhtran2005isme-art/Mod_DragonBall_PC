@@ -587,7 +587,7 @@ namespace AssemblyCSharp.Functions
 			return true;
 		}
 
-		public static void ObserveMobDeath(bool matchedOwnCombatProbe, bool hasOwnDrop, bool hasForeignOwnedDrop)
+		public static void ObserveMobDeath(bool matchedFreshOwnCombatProbe, bool hasOwnDrop, bool hasForeignOwnedDrop)
 		{
 			try
 			{
@@ -603,10 +603,14 @@ namespace AssemblyCSharp.Functions
 					return;
 				}
 
-				// Chấp nhận nếu có drop của mình, hoặc terminal packet khớp combat probe
-				// vừa gửi cho chính mob đó.
-				if (!hasOwnDrop && !matchedOwnCombatProbe)
+				// Last-hit local: drop cua minh la bang chung manh. Neu packet chet khong co
+				// drop, chi chap nhan khi no khop mot combat probe CON MOI cua chinh client.
+				// Probe cu 1.5-4s chi con gia tri cho adaptive combat, khong du de tinh KOL.
+				if (!hasOwnDrop && !matchedFreshOwnCombatProbe)
+				{
+					debugLast = "LOCAL_SKIP";
 					return;
+				}
 
 				if (Current < Total)
 				{

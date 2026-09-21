@@ -130,6 +130,25 @@ public class GClass7
 		return timeout;
 	}
 
+	// Cua so nay chi dung de suy luan last-hit KOL, chat hon timeout combat.
+	// Combat probe co the song 1.5-4s de chong deadlock, nhung probe qua cu
+	// khong du manh de ket luan packet mob die la do don cua minh.
+	private static long GetKolTerminalMatchWindowMs()
+	{
+		long baseline = Math.Max(long_2, long_3);
+		if (combatMinRtt > baseline)
+			baseline = combatMinRtt;
+		if (baseline <= 0L)
+			baseline = 375L;
+
+		long window = baseline * 2L + 250L;
+		if (window < 600L)
+			window = 600L;
+		if (window > 2000L)
+			window = 2000L;
+		return window;
+	}
+
 	private static void CleanupCombatProbes(long now)
 	{
 		long timeout = GetCombatProbeTimeoutMs();
@@ -212,7 +231,9 @@ public class GClass7
 		{
 			if (combatProbes[i].mobId == mobId)
 			{
-				combatRtt = now - combatProbes[i].sentAt;
+				long responseAge = now - combatProbes[i].sentAt;
+				bool freshTerminalMatch = !terminal || responseAge <= GetKolTerminalMatchWindowMs();
+				combatRtt = responseAge;
 				combatLastResponseAt = now;
 				combatAckTimes.Add(now);
 				RefreshCombatAckRate(now);
@@ -227,7 +248,7 @@ public class GClass7
 							combatProbes.RemoveAt(j);
 					}
 				}
-				return true;
+				return freshTerminalMatch;
 			}
 		}
 		RefreshCombatAckRate(now);

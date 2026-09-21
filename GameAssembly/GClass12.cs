@@ -3548,7 +3548,7 @@ public class GClass12 : GInterface3
 						}
 						if (gClass66 == null || gClass66.int_12 == 0 || gClass66.int_12 == 0)
 							break;
-						bool kolMatchedOwnCombatProbe = GClass7.OnMobCombatTerminalResponse(gClass66.int_25);
+						bool kolMatchedFreshOwnCombatProbe = GClass7.OnMobCombatTerminalResponse(gClass66.int_25);
 						bool kolHasOwnDrop = false;
 						bool kolHasForeignOwnedDrop = false;
 						gClass66.method_22();
@@ -3576,7 +3576,7 @@ public class GClass12 : GInterface3
 						catch (Exception)
 						{
 						}
-						KOLTracker.ObserveMobDeath(kolMatchedOwnCombatProbe, kolHasOwnDrop, kolHasForeignOwnedDrop);
+						KOLTracker.ObserveMobDeath(kolMatchedFreshOwnCombatProbe, kolHasOwnDrop, kolHasForeignOwnedDrop);
 						break;
 					}
 					case -11:
