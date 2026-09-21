@@ -4,10 +4,10 @@
 > README ở root là bản ngắn dùng để bắt đầu nhanh.  
 > File này giữ thông tin dài để README không phình ra theo thời gian.
 
-> **Tài liệu bàn giao / Project handoff**
+> **Tài liệu kỹ thuật chi tiết / legacy context**
 >
-> README này là **nguồn thông tin đầu tiên phải đọc** trước khi sửa project.  
-> Mục tiêu: phiên làm việc sau chỉ cần đọc README là biết **repo ở đâu trên máy, build thế nào, output ở đâu, class nào phụ trách chức năng nào, commit/push ra sao và các lỗi/logic quan trọng đã xử lý**.
+> Với AI/agent, điểm vào hiện tại là `AGENTS.md` → `docs/AI_HANDOFF.md` → các tài liệu chuyên trách.  
+> File này vẫn giữ context kỹ thuật sâu đã tích lũy (build, combat, logo, class mapping, quy trình Git) và được đọc khi task cần chi tiết.
 >
 > **Cập nhật gần nhất:** 2026-09-20  
 > **Branch chính:** `main`  

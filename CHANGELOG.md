@@ -3,6 +3,10 @@
 Ghi ngắn gọn các thay đổi quan trọng, mới nhất ở trên.  
 Không dùng file này để giải thích kiến trúc dài; chi tiết nằm trong `docs/`.
 
+## 2026-09-22
+
+- Thêm hệ thống bàn giao cho AI/agent: `AGENTS.md`, `docs/AI_HANDOFF.md`, `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, `docs/TROUBLESHOOTING.md`, `docs/history/2026-09.md`; README/PROJECT_CONTEXT được nối vào luồng đọc mới.
+
 ## 2026-09-20
 
 - SV15 slot contender: tự retry khi server báo `quá tải`/`vui lòng đợi` hoặc packet 122, mỗi lần có jitter 650–1100 ms và chỉ gửi request mới sau phản hồi trước.

@@ -1,8 +1,9 @@
 # Mod Dragon Ball PC — KaitoKid
 
-> **README ngắn / điểm vào của dự án.**  
+> **README ngắn / quick start của dự án.**  
 > Chỉ giữ thông tin ổn định để lần sau đọc nhanh là làm được ngay.  
-> Lịch sử thay đổi xem `CHANGELOG.md`. Chi tiết kỹ thuật xem `docs/PROJECT_CONTEXT.md`.
+> AI/agent phải bắt đầu từ `AGENTS.md` → `docs/AI_HANDOFF.md`.  
+> Lịch sử thay đổi xem `CHANGELOG.md`; kỹ thuật sâu xem `docs/PROJECT_CONTEXT.md` và `docs/NETWORKING.md`.
 
 ## Quick start
 
@@ -127,8 +128,15 @@ frame_render.log
 
 ## Tài liệu chi tiết
 
-- `docs/PROJECT_CONTEXT.md` — kiến trúc, build, combat, logo, lỗi đã biết, ghi chú kỹ thuật.
-- `CHANGELOG.md` — lịch sử thay đổi ngắn gọn theo commit.
+- `AGENTS.md` — quy trình bắt buộc cho AI/agent trước khi sửa code.
+- `docs/AI_HANDOFF.md` — trạng thái hiện tại, việc nóng, commit liên quan.
+- `docs/ARCHITECTURE.md` — cấu trúc repo và luồng chính.
+- `docs/DECISIONS.md` — quyết định kỹ thuật đã chốt.
+- `docs/TROUBLESHOOTING.md` — lỗi đã gặp và cách chẩn đoán.
+- `docs/history/` — lịch sử bàn giao đã archive theo tháng.
+- `docs/PROJECT_CONTEXT.md` — context kỹ thuật chi tiết/legacy.
+- `docs/NETWORKING.md` — network diagnostics/adaptive combat.
+- `CHANGELOG.md` — lịch sử thay đổi ngắn gọn.
 
 ## Quy tắc cập nhật tài liệu
 
