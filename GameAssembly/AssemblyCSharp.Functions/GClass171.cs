@@ -63,6 +63,7 @@ namespace AssemblyCSharp.Functions
 			KOLTracker.Update();
 			GClass164.smethod_0().method_2();
 			GClass158.smethod_0().method_5();
+			BossZoneScanner.Instance.Update();
 			GClass159.smethod_0().method_5();
 			GClass157.smethod_0().method_3();
 			GClass166.smethod_0().method_8();
