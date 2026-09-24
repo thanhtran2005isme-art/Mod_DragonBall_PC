@@ -65,8 +65,8 @@ namespace DragonBoyManager
 
         private void BuildUi()
         {
-            labelBoss.SetBounds(18, 18, 110, 24);
-            comboBoss.SetBounds(125, 15, 220, 26);
+            labelBoss.SetBounds(14, 18, 86, 24);
+            comboBoss.SetBounds(100, 15, 175, 26);
             comboBoss.DropDownStyle = ComboBoxStyle.DropDown;
             comboBoss.Items.AddRange(new object[]
             {
@@ -77,22 +77,22 @@ namespace DragonBoyManager
             });
             comboBoss.Text = "Super Broly";
 
-            labelStartZone.SetBounds(365, 18, 100, 24);
-            numericStartZone.SetBounds(465, 15, 65, 26);
+            labelStartZone.SetBounds(285, 18, 85, 24);
+            numericStartZone.SetBounds(370, 15, 55, 26);
             numericStartZone.Minimum = 0;
             numericStartZone.Maximum = 99;
             numericStartZone.Value = 0;
 
-            buttonStart.SetBounds(550, 13, 130, 30);
+            buttonStart.SetBounds(440, 13, 115, 30);
             buttonStart.Click += buttonStart_Click;
-            buttonStop.SetBounds(690, 13, 90, 30);
+            buttonStop.SetBounds(565, 13, 80, 30);
             buttonStop.Click += delegate { BossHuntCoordinator.Instance.Stop(MainController.language == 0 ? "Người dùng dừng" : "Stopped by user"); };
 
-            labelConnected.SetBounds(18, 52, 330, 24);
-            labelState.SetBounds(365, 52, 600, 24);
+            labelConnected.SetBounds(14, 52, 245, 24);
+            labelState.SetBounds(270, 52, 450, 24);
             labelState.Font = new Font(labelState.Font, FontStyle.Bold);
 
-            grid.SetBounds(18, 82, 700, 380);
+            grid.SetBounds(14, 82, 710, 205);
             grid.AllowUserToAddRows = false;
             grid.AllowUserToDeleteRows = false;
             grid.AllowUserToResizeRows = false;
@@ -109,17 +109,17 @@ namespace DragonBoyManager
             grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(90, 90, 90);
             grid.DefaultCellStyle.SelectionForeColor = Color.White;
             grid.Columns.Add(new DataGridViewTextBoxColumn { Width = 55 });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { Width = 180 });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { Width = 155 });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { Width = 60 });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { Width = 225 });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { Width = 150 });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { Width = 160 });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { Width = 55 });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { Width = 270 });
 
             GroupBox resultBox = new GroupBox();
             resultBox.Text = "Boss";
             resultBox.ForeColor = Color.White;
-            resultBox.SetBounds(735, 82, 245, 380);
+            resultBox.SetBounds(14, 295, 710, 95);
             labelResult.Dock = DockStyle.Fill;
-            labelResult.Padding = new Padding(12);
+            labelResult.Padding = new Padding(10, 6, 10, 6);
             labelResult.AutoEllipsis = true;
             resultBox.Controls.Add(labelResult);
 
