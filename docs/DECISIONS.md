@@ -117,3 +117,18 @@ README chỉ nên chứa quick start, build path/output, module mapping ổn đ�
 - Vì vậy `-3 type=2` chỉ được coi là tín hiệu diagnostic/reward, không phải bằng chứng độc lập rằng client mình last-hit.
 - Trước khi thay công thức local KOL, phải trace sequence own ATTACK -> HP/MISS/DIE -> drop -> SM/TN trong các tình huống có và không có người khác cùng farm.
 - Commit diagnostic phải giữ nguyên cách +1 hiện tại để số liệu so sánh không bị trộn với thay đổi thuật toán.
+
+## D-011 — Manager điều phối phiên săn boss đa tài khoản
+
+**Trạng thái:** active — 2026-09-24
+
+- Manager tạo `sessionId`, chọn các account đang kết nối và chia worker.
+- Client tự quét dãy khu `start + workerIndex + round * workerCount`.
+- Account đầu tiên thấy target gửi `FOUND`; Manager dùng map/khu thật đó để rally tất cả worker.
+- Sau đổi map/khu phải resolve lại boss từ `GClass158.list_3`; không giữ object boss cũ.
+- Focus/di chuyển/đánh tái sử dụng `GClass158` và `GClass159`.
+- Thông báo game xác nhận đúng target chết hoặc HP target <= 0 sẽ dừng toàn bộ session.
+- Boss chỉ biến mất khỏi entity list không đủ để kết luận chết.
+- Event/lệnh cũ khác `sessionId` hiện tại phải bị bỏ qua.
+
+V1 quét trên map hiện tại của từng worker; không tự đoán map spawn chỉ dựa vào tên boss.

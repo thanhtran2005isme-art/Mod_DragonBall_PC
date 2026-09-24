@@ -60,16 +60,89 @@ Output/
 | `AssemblyCSharp.Functions/GClass167.cs` | custom image/Base64/logo |
 | `AssemblyCSharp.Functions/GClass171.cs` | update dispatcher/render module |
 | `AssemblyCSharp.Functions/KOLTracker.cs` | học/sync/hiển thị tiến độ KOL |
+| `AssemblyCSharp.Functions/BossZoneScanner.cs` | worker dò khu boss, detect target/death, rally và pin target |
 | `GClass7.cs` | packet gửi, select skill, attack, combat diagnostics |
 | `GClass12.cs` | xử lý nhiều packet/response từ server |
 | `GClass14.cs` | session TCP chính |
 | `GClass85.cs` | session TCP phụ |
 | `GClass134.cs` | danh sách/chọn server |
 | `GClass73.cs` | startup/render/screen |
-| `GClass144.cs` | game screen/HUD/skill |
+| `GClass144.cs` | game screen/HUD/skill + hàng đợi thông báo VIP |
 | `mResources.cs` | resource/language |
 
-## 3. Luồng combat khái quát
+Manager có thêm:
+
+| File/module | Vai trò |
+|---|---|
+| `DragonBoyManager/TabBossHunt.cs` | tab top-level SĂN BOSS |
+| `DragonBoyManager/BossHuntCoordinator.cs` | session state, chia worker, FOUND/DEAD/RALLY/READY |
+| `DragonBoyManager/SocketServer.cs` | nhận event boss từ từng account và gửi lệnh targeted |
+
+## 3. Luồng săn boss đa tài khoản
+
+```text
+DragonBoyManager / Tab SĂN BOSS
+  -> BossHuntCoordinator tạo sessionId
+  -> lấy N account đang Connected
+  -> START_SCAN(workerIndex, workerCount, bossName, startZone)
+       |
+       v
+Game client / BossZoneScanner
+  -> worker i quét: start+i, start+i+N, start+i+2N, ...
+  -> mỗi khu chờ entity load
+  -> resolve đúng boss từ GClass158.list_3
+       |
+       +-- chưa thấy -> khu được phân tiếp theo
+       |
+       +-- thấy -> FOUND(mapId, zone, accountId)
+                      |
+                      v
+Manager chuyển session sang RALLYING
+  -> broadcast RALLY(mapId, zone, bossName)
+       |
+       v
+Mỗi Game client
+  -> route tới map bằng Class21
+  -> đổi đúng zone bằng GClass7.method_42
+  -> resolve lại boss object theo tên
+  -> pin gclass78_0 + GClass159.method_26
+  -> bật GClass158 auto boss hiện có
+  -> READY
+       |
+       v
+Manager: FIGHTING khi các worker còn kết nối đã sẵn sàng
+```
+
+Boss object **không được giữ xuyên map/zone**. Chỉ giữ identity `bossName + mapId + zone`, rồi resolve lại entity từ `GClass158.list_3`.
+
+Death path:
+
+```text
+target HP <= 0
+        hoặc
+thông báo game mới xác nhận đúng target chết
+        |
+        v
+client -> DEAD(sessionId)
+        |
+        v
+Manager -> STOP toàn bộ account
+```
+
+Boss biến mất khỏi entity list một mình **không** được coi là chết vì có thể do map/zone đang load.
+
+Protocol Manager/Game dành riêng cho Boss Hunt:
+
+```text
+Manager -> Game: 100 START_SCAN, 101 STOP, 102 RALLY
+Game -> Manager: 110 ZONE, 111 FOUND, 112 DEAD, 113 READY
+```
+
+Payload boss được JSON-serialize thành UTF-8 trong `vMessage.data`; outer socket protocol cũ vẫn giữ nguyên. `sessionId` bắt buộc dùng để bỏ event/lệnh cũ tới trễ.
+
+V1 quét trên map hiện tại của từng worker. Map của account FOUND là source of truth cho rally; không suy luận map spawn từ tên boss.
+
+## 4. Luồng combat khái quát
 
 ```text
 Auto module
@@ -84,7 +157,7 @@ Auto module
 
 Điểm quan trọng: packet ATTACK không mang trực tiếp skill ID theo context hiện tại; server phụ thuộc state skill đã select trước đó. Vì vậy timing giữa SELECT SKILL và ATTACK là một phần của protocol thực tế.
 
-## 4. Luồng network khái quát
+## 5. Luồng network khái quát
 
 ```text
 GClass14 / GClass85
@@ -105,7 +178,7 @@ Diagnostic/adaptive logic đã được bổ sung quanh:
 
 Chi tiết: `docs/NETWORKING.md`.
 
-## 5. Luồng KOL hiện tại
+## 6. Luồng KOL hiện tại
 
 ```text
 người dùng tương tác NPC/menu
@@ -124,7 +197,7 @@ KOL tracker liên quan ít nhất:
 
 Khi sửa KOL, bắt buộc đọc commit gần đây vì logic phụ thuộc packet order và các cửa sổ thời gian.
 
-## 6. Build architecture
+## 7. Build architecture
 
 Gameplay-only loop:
 
@@ -144,7 +217,7 @@ CI workflow:
 .github/workflows/build-and-release.yml
 ```
 
-## 7. Documentation architecture
+## 8. Documentation architecture
 
 ```text
 AGENTS.md

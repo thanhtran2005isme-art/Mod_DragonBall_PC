@@ -3,6 +3,14 @@
 Ghi ngắn gọn các thay đổi quan trọng, mới nhất ở trên.  
 Không dùng file này để giải thích kiến trúc dài; chi tiết nằm trong `docs/`.
 
+## 2026-09-24
+
+- Thêm tab top-level `SĂN BOSS` cho DragonBoyManager trên branch `feat-boss-hunt-manager`.
+- Thêm `BossHuntCoordinator` để chia zone round-robin cho các account đang kết nối, quản lý `sessionId`, FOUND/RALLY/FIGHTING/STOP và reassign khi worker mất kết nối.
+- Thêm `BossZoneScanner` phía GameAssembly: tự dò khu, resolve boss theo tên, report FOUND/DEAD/READY, rally tới map+khu thật và tái sử dụng focus/auto boss hiện có.
+- Boss mục tiêu chết từ thông báo game hoặc HP <= 0 sẽ dừng toàn bộ phiên; boss chỉ biến mất khỏi entity list không được coi là chết.
+- GitHub Actions run `36029651400` đã build full solution, upload artifact, nén và phát hành thành công; runtime nhiều account vẫn cần test trước khi merge vào `main`.
+
 ## 2026-09-22
 
 - Thêm `KOLProtocol.log` để trace ATTACK/probe, HP/MISS/DIE, drop owner, SM/TN, skip/timeout/overlap và correction khi server sync; chưa thay đổi công thức +1 KOL.

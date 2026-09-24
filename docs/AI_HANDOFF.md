@@ -2,7 +2,7 @@
 
 > Repo: `thanhtran2005isme-art/Mod_DragonBall_PC`  
 > Branch chính: `main`  
-> Cập nhật handoff: 2026-09-22  
+> Cập nhật handoff: 2026-09-24  
 > Đây là bản tóm tắt hiện tại. Chi tiết cũ chuyển sang `docs/history/`.
 
 ## 1. Mục tiêu của file này
@@ -66,6 +66,53 @@ Khi chỉ sửa gameplay, ưu tiên build riêng `GameAssembly.csproj` thay vì 
 
 ## 4. Các khu vực kỹ thuật đang quan trọng
 
+### Săn Boss đa tài khoản — feature branch
+
+Branch triển khai hiện tại:
+
+```text
+feat-boss-hunt-manager
+```
+
+Commit chức năng đầu tiên:
+
+```text
+f02197f Thêm săn boss đa tài khoản trên Manager
+```
+
+Đã có:
+
+- tab top-level `SĂN BOSS` trong DragonBoyManager;
+- Manager lấy các account đang kết nối và chia khu theo `workerIndex/workerCount`;
+- client tự dò chuỗi khu, báo `ZONE / FOUND / DEAD / READY` về Manager;
+- account đầu tiên thấy đúng boss làm Manager chuyển cả session sang rally;
+- các account còn lại tự tới đúng `mapId + zone`, resolve lại boss theo tên rồi focus/đánh bằng `GClass158` hiện có;
+- thông báo game xác nhận đúng boss mục tiêu chết là terminal event: dừng scan/rally/fight toàn bộ session;
+- HP boss `<= 0` là tín hiệu chết bổ sung;
+- `sessionId` chặn event cũ tới trễ;
+- account disconnect trong lúc scan được loại khỏi worker set và phần còn lại được chia lại.
+
+File mới chính:
+
+```text
+AccountManager/DragonBoyManager/BossHuntCoordinator.cs
+AccountManager/DragonBoyManager/TabBossHunt.cs
+GameAssembly/AssemblyCSharp.Functions/BossZoneScanner.cs
+```
+
+Hook integration:
+
+```text
+MainController.cs
+SocketServer.cs
+GClass150.cs
+GClass171.cs
+```
+
+GitHub Actions run `36029651400` đã build full solution thành công, upload artifact, nén và phát hành thành công. **Chưa có runtime gameplay test nhiều account**, vì vậy chưa nên merge vào `main` chỉ dựa trên compile.
+
+V1 hiện quét các khu trên **map mà từng account đang đứng lúc bắt đầu**. Khi FOUND, map thật của finder mới là source of truth để rally. Không suy đoán map spawn chỉ từ tên boss.
+
 ### Auto Attack / Auto Train
 
 - `GClass164.cs` = Tự động đánh / Auto Attack.
@@ -116,10 +163,10 @@ Log ghi sequence ATTACK/probe, HP response, MISS, MOB DIE, drop owner, SM/TN, st
 
 ## 5. Commit gần đây đáng chú ý
 
-Trước khi thêm hệ thống tài liệu AI này, các commit gần nhất gồm:
-
 ```text
-17cb74f Update README with build instructions
+f02197f Thêm săn boss đa tài khoản trên Manager   [feature branch]
+0f07d48 Ghi chi tiết handoff điều tra KOL last-hit
+ed2639d Thêm diagnostic protocol cho KOL last-hit
 712dc3f Xac nhan KOL bang kill-shot 1 HP va goi tang SM TN
 40785a2 Siết KOL local theo last hit của người chơi
 8544663 Theo doi KOL local khi farm ngoai Dao Kame
@@ -128,10 +175,9 @@ Trước khi thêm hệ thống tài liệu AI này, các commit gần nhất g�
 bfdc638 Bắt KOL trực tiếp từ packet 22 thực tế
 ```
 
-Không có PR gần đây được tìm thấy tại thời điểm tạo handoff; thay đổi đang đi trực tiếp qua `main`.
-
 ## 6. Rủi ro/lỗi đã biết
 
+- Boss Hunt V1 đã compile nhưng chưa test runtime nhiều account; cần xác nhận zone dwell, zone full, route map và chuỗi thông báo boss chết thực tế.
 - Full solution local từng fail ở PostBuild copy của một số project dù source compile được; gameplay thường nên build riêng.
 - DLL `Assembly-CSharp.dll` có thể bị game/manager lock.
 - `GameAssembly` là .NET Framework 3.5, dễ lỗi nếu dùng API mới.
