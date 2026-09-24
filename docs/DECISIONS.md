@@ -130,5 +130,6 @@ README chỉ nên chứa quick start, build path/output, module mapping ổn đ�
 - Thông báo game xác nhận đúng target chết hoặc HP target <= 0 sẽ dừng toàn bộ session.
 - Boss chỉ biến mất khỏi entity list không đủ để kết luận chết.
 - Event/lệnh cũ khác `sessionId` hiện tại phải bị bỏ qua.
+- Callback socket không được trực tiếp thao tác gameplay; START/STOP/RALLY phải được enqueue và drain trong `BossZoneScanner.Update()` trên game loop.
 
 V1 quét trên map hiện tại của từng worker; không tự đoán map spawn chỉ dựa vào tên boss.
