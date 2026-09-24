@@ -129,6 +129,8 @@ namespace AssemblyCSharp.Functions
             if (newSession)
                 _previousAutoBoss = GClass158.smethod_0().bool_0;
 
+            GClass158.smethod_0().bool_0 = false;
+
             _active = true;
             _sessionId = payload.sessionId;
             _bossName = (payload.bossName ?? "").Trim();
