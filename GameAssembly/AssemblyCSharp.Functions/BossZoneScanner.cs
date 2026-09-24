@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 using Newtonsoft.Json;
 
@@ -29,6 +30,12 @@ namespace AssemblyCSharp.Functions
             public string detail;
         }
 
+        private sealed class PendingCommand
+        {
+            public int cmd;
+            public BossHuntPayload payload;
+        }
+
         private const int CmdStartScan = 100;
         private const int CmdStop = 101;
         private const int CmdRally = 102;
@@ -39,6 +46,9 @@ namespace AssemblyCSharp.Functions
         private const int CmdReady = 113;
 
         private static readonly BossZoneScanner _instance = new BossZoneScanner();
+
+        private readonly object _commandLock = new object();
+        private readonly Queue<PendingCommand> _pendingCommands = new Queue<PendingCommand>();
 
         private bool _active;
         private int _sessionId;
@@ -75,36 +85,33 @@ namespace AssemblyCSharp.Functions
 
         public void HandleManagerMessage(int cmd, byte[] data)
         {
+            if (cmd != CmdStartScan && cmd != CmdStop && cmd != CmdRally)
+                return;
+
             BossHuntPayload payload = Deserialize(data);
             if (payload == null)
                 return;
 
-            if (cmd == CmdStartScan)
+            lock (_commandLock)
             {
-                StartScan(payload);
-                return;
+                if (_pendingCommands.Count >= 32)
+                    _pendingCommands.Dequeue();
+                _pendingCommands.Enqueue(new PendingCommand
+                {
+                    cmd = cmd,
+                    payload = payload
+                });
             }
-
-            if (!_active || payload.sessionId != _sessionId)
-                return;
-
-            if (cmd == CmdStop)
-            {
-                StopInternal();
-                return;
-            }
-
-            if (cmd == CmdRally)
-                StartRally(payload);
         }
 
         public void Update()
         {
-            if (!_active)
-                return;
-
             try
             {
+                DrainManagerCommands();
+                if (!_active)
+                    return;
+
                 PollLatestAnnouncement();
                 if (!_active)
                     return;
@@ -120,6 +127,41 @@ namespace AssemblyCSharp.Functions
             catch (Exception ex)
             {
                 GClass149.smethod_0("Data/Errors/BossZoneScanner.txt", ex.ToString());
+            }
+        }
+
+        private void DrainManagerCommands()
+        {
+            while (true)
+            {
+                PendingCommand pending;
+                lock (_commandLock)
+                {
+                    if (_pendingCommands.Count == 0)
+                        return;
+                    pending = _pendingCommands.Dequeue();
+                }
+
+                if (pending == null || pending.payload == null)
+                    continue;
+
+                if (pending.cmd == CmdStartScan)
+                {
+                    StartScan(pending.payload);
+                    continue;
+                }
+
+                if (!_active || pending.payload.sessionId != _sessionId)
+                    continue;
+
+                if (pending.cmd == CmdStop)
+                {
+                    StopInternal();
+                    continue;
+                }
+
+                if (pending.cmd == CmdRally)
+                    StartRally(pending.payload);
             }
         }
 
