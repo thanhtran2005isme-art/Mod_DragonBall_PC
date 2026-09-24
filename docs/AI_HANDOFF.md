@@ -2,7 +2,7 @@
 
 > Repo: `thanhtran2005isme-art/Mod_DragonBall_PC`  
 > Branch chính: `main`  
-> Cập nhật handoff: 2026-09-24  
+> Cập nhật handoff: 2026-09-25  
 > Đây là bản tóm tắt hiện tại. Chi tiết cũ chuyển sang `docs/history/`.
 
 ## 1. Mục tiêu của file này
@@ -90,7 +90,12 @@ f02197f Thêm săn boss đa tài khoản trên Manager
 - thông báo game xác nhận đúng boss mục tiêu chết là terminal event: dừng scan/rally/fight toàn bộ session;
 - HP boss `<= 0` là tín hiệu chết bổ sung;
 - `sessionId` chặn event cũ tới trễ;
-- account disconnect trong lúc scan được loại khỏi worker set và phần còn lại được chia lại.
+- account disconnect trong lúc scan được loại khỏi worker set và phần còn lại được chia lại;
+- lệnh START/STOP/RALLY nhận từ socket chỉ được enqueue; mọi thao tác game thật được apply trong `BossZoneScanner.Update()` trên game loop;
+- Auto Boss cũ bị tắt trong pha scan và được khôi phục khi session dừng;
+- UI Start/boss/start-zone bị khóa khi session đang chạy;
+- layout tab đã thu gọn để không bị cắt khi Manager ép cửa sổ về `765x480`;
+- nếu toàn bộ worker mất kết nối ở scan/rally/fighting, Manager tự chuyển session sang `Stopped`.
 
 File mới chính:
 
