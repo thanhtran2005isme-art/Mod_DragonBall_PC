@@ -3,6 +3,13 @@
 Ghi ngắn gọn các thay đổi quan trọng, mới nhất ở trên.  
 Không dùng file này để giải thích kiến trúc dài; chi tiết nằm trong `docs/`.
 
+## 2026-09-25
+
+- Sửa layout tab `SĂN BOSS` để toàn bộ control nằm trong khung Manager thực tế `765x480`.
+- Chuyển START/STOP/RALLY sang queue thread-safe; callback socket không còn trực tiếp thao tác trạng thái gameplay.
+- Khóa Start ở cả UI và coordinator khi session đang chạy; tự `Stopped` nếu toàn bộ worker mất kết nối.
+- Tắt Auto Boss cũ trong lúc scan để tránh đánh nhầm boss khác, sau đó khôi phục setting khi phiên dừng.
+
 ## 2026-09-24
 
 - Thêm tab top-level `SĂN BOSS` cho DragonBoyManager trên branch `feat-boss-hunt-manager`.
