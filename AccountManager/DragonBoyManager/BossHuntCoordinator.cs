@@ -115,6 +115,14 @@ namespace DragonBoyManager
             int sessionId;
             lock (_sync)
             {
+                if (_state == BossHuntState.Scanning || _state == BossHuntState.Rallying || _state == BossHuntState.Fighting)
+                {
+                    error = MainController.language == 0
+                        ? "Đang có một phiên săn boss hoạt động. Hãy bấm DỪNG trước khi tạo phiên mới."
+                        : "A boss hunt is already running. Stop it before starting another session.";
+                    return false;
+                }
+
                 _sessionSeed++;
                 if (_sessionSeed <= 0)
                     _sessionSeed = 1;
@@ -268,7 +276,19 @@ namespace DragonBoyManager
 
                 worker.Status = MainController.language == 0 ? "Mất kết nối" : "Disconnected";
 
-                if (_state == BossHuntState.Scanning)
+                int connectedCount = 0;
+                for (int i = 0; i < _sessionAccounts.Count; i++)
+                {
+                    if (IsConnected(_sessionAccounts[i]))
+                        connectedCount++;
+                }
+
+                if ((_state == BossHuntState.Scanning || _state == BossHuntState.Rallying || _state == BossHuntState.Fighting) && connectedCount == 0)
+                {
+                    _state = BossHuntState.Stopped;
+                    _stopReason = MainController.language == 0 ? "Tất cả tài khoản đã mất kết nối" : "All accounts disconnected";
+                }
+                else if (_state == BossHuntState.Scanning)
                 {
                     reassign = new List<Account>();
                     for (int i = 0; i < _sessionAccounts.Count; i++)
@@ -277,12 +297,7 @@ namespace DragonBoyManager
                             reassign.Add(_sessionAccounts[i]);
                     }
 
-                    if (reassign.Count == 0)
-                    {
-                        _state = BossHuntState.Stopped;
-                        _stopReason = MainController.language == 0 ? "Tất cả tài khoản đã mất kết nối" : "All accounts disconnected";
-                    }
-                    else
+                    if (reassign.Count > 0)
                     {
                         _sessionAccounts.Clear();
                         _sessionAccounts.AddRange(reassign);
