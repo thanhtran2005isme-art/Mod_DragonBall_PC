@@ -137,6 +137,10 @@ namespace DragonBoyManager
 
         private void buttonStart_Click(object sender, EventArgs e)
         {
+            BossHuntSnapshot snapshot = BossHuntCoordinator.Instance.GetSnapshot();
+            if (snapshot.State == BossHuntState.Scanning || snapshot.State == BossHuntState.Rallying || snapshot.State == BossHuntState.Fighting)
+                return;
+
             string error;
             if (!BossHuntCoordinator.Instance.Start(comboBoss.Text, (int)numericStartZone.Value, out error))
                 MessageBox.Show(error, MainController.language == 0 ? "Săn Boss" : "Boss Hunt", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -164,6 +168,12 @@ namespace DragonBoyManager
         {
             if (snapshot == null || IsDisposed)
                 return;
+
+            bool running = snapshot.State == BossHuntState.Scanning || snapshot.State == BossHuntState.Rallying || snapshot.State == BossHuntState.Fighting;
+            buttonStart.Enabled = !running;
+            buttonStop.Enabled = running;
+            comboBoss.Enabled = !running;
+            numericStartZone.Enabled = !running;
 
             grid.Rows.Clear();
             for (int i = 0; i < snapshot.Workers.Count; i++)
