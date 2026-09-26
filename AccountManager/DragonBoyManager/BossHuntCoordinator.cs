@@ -285,6 +285,13 @@ namespace DragonBoyManager
                         string detail = payload.detail ?? "";
                         if (detail == "WAITING_LOCATION")
                             worker.Status = MainController.language == 0 ? "Chờ vị trí boss" : "Waiting for boss location";
+                        else if (detail == "ZONE_LIST_WAIT")
+                            worker.Status = MainController.language == 0 ? "Đang tải danh sách khu" : "Loading zone list";
+                        else if (detail.StartsWith("STANDBY|", StringComparison.Ordinal))
+                        {
+                            string zoneCount = detail.Substring("STANDBY|".Length);
+                            worker.Status = (MainController.language == 0 ? "Dự phòng - " : "Standby - ") + zoneCount + (MainController.language == 0 ? " khu" : " zones");
+                        }
                         else if (detail.StartsWith("ROUTING_MAP|", StringComparison.Ordinal))
                         {
                             string targetMap = detail.Substring("ROUTING_MAP|".Length);

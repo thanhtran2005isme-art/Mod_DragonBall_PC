@@ -13,6 +13,7 @@ namespace AssemblyCSharp.Functions
             WaitingLocation,
             RoutingToScanMap,
             Scanning,
+            Standby,
             Found,
             Rallying,
             Fighting
@@ -52,6 +53,7 @@ namespace AssemblyCSharp.Functions
         private const long RouteRetryDelayMs = 1200L;
         private const long RouteStallTimeoutMs = 30000L;
         private const long RallyOverallTimeoutMs = 90000L;
+        private const long ZoneListTimeoutMs = 10000L;
         private const int RallyZoneMaxAttempts = 3;
         private const long RallyTargetLoadTimeoutMs = 8000L;
         private const long FightingTargetLostGraceMs = 3000L;
@@ -98,6 +100,11 @@ namespace AssemblyCSharp.Functions
         private long _lastRouteCommandAt;
         private long _lastFocusAt;
         private long _lastZoneListRequestAt;
+        private int[] _zoneListBaseline;
+        private int _zoneListMapId = -1;
+        private long _zoneListWaitStartedAt;
+        private bool _zoneListFresh;
+        private bool _zonePlanReady;
         private ScannerState _state = ScannerState.Idle;
 
         public static BossZoneScanner Instance
@@ -206,8 +213,8 @@ namespace AssemblyCSharp.Functions
             _startZone = Math.Max(0, payload.startZone);
             _workerIndex = Math.Max(0, payload.workerIndex);
             _workerCount = Math.Max(1, payload.workerCount);
-            _maxZone = 14;
-            _desiredZone = _startZone + _workerIndex;
+            _maxZone = -1;
+            _desiredZone = -1;
             _arrivedZone = -1;
             _zoneAttempts = 0;
             _scanMapId = -1;
@@ -231,6 +238,11 @@ namespace AssemblyCSharp.Functions
             _lastRouteCommandAt = 0L;
             _lastFocusAt = 0L;
             _lastZoneListRequestAt = 0L;
+            _zoneListBaseline = null;
+            _zoneListMapId = -1;
+            _zoneListWaitStartedAt = 0L;
+            _zoneListFresh = false;
+            _zonePlanReady = false;
             _rallyStartedAt = 0L;
             _rallyZoneAttempts = 0;
             _rallyZoneArrivedAt = 0L;
@@ -370,17 +382,63 @@ namespace AssemblyCSharp.Functions
         private void BeginScanningOnCurrentMap(long now)
         {
             _state = ScannerState.Scanning;
-            _maxZone = 14;
-            _usingAnnouncedZone = _announcedZone >= 0;
-            _desiredZone = _usingAnnouncedZone ? _announcedZone : (_startZone + _workerIndex);
+            _maxZone = -1;
+            _usingAnnouncedZone = false;
+            _desiredZone = -1;
             _arrivedZone = -1;
             _zoneAttempts = 0;
             _startedAt = now;
             _lastZoneCommandAt = 0L;
             _arrivedAt = 0L;
             _lastZoneListRequestAt = 0L;
+            _zoneListMapId = GClass20.int_37;
+            _zoneListBaseline = GetCurrentZoneListReference();
+            _zoneListWaitStartedAt = now;
+            _zoneListFresh = false;
+            _zonePlanReady = false;
             RequestZoneList(now);
+            SendEvent(CmdZone, "ZONE_LIST_WAIT");
+        }
+
+        private int[] GetCurrentZoneListReference()
+        {
+            try
+            {
+                return GClass144.smethod_8().int_63;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private bool PrepareZonePlan()
+        {
+            int availableZoneCount = GetAvailableZoneCount();
+            if (availableZoneCount <= 0 || _workerIndex >= availableZoneCount)
+            {
+                _state = ScannerState.Standby;
+                _desiredZone = -1;
+                _usingAnnouncedZone = false;
+                SendEvent(CmdZone, "STANDBY|" + Math.Max(0, availableZoneCount));
+                return false;
+            }
+
+            int first = GetFirstAssignedZone();
+            if (first < 0)
+            {
+                _state = ScannerState.Standby;
+                _desiredZone = -1;
+                _usingAnnouncedZone = false;
+                SendEvent(CmdZone, "STANDBY|" + Math.Max(0, availableZoneCount));
+                return false;
+            }
+
+            _usingAnnouncedZone = IsZoneAssignedToWorker(_announcedZone);
+            _desiredZone = _usingAnnouncedZone ? _announcedZone : first;
+            _zonePlanReady = true;
             SendEvent(CmdZone, "SCANNING");
+            return true;
         }
 
         private bool TryResolveKnownBossLocation(out int mapId, out string mapName, out int zone)
@@ -447,13 +505,17 @@ namespace AssemblyCSharp.Functions
             }
 
             int detectedMax = GetDetectedMaxZone();
-            if (detectedMax >= 0)
-                _maxZone = detectedMax;
-            else if (now - _startedAt < 1500L)
+            if (detectedMax < 0)
             {
                 RequestZoneList(now);
+                if (_zoneListWaitStartedAt > 0L && now - _zoneListWaitStartedAt >= ZoneListTimeoutMs)
+                    ReportFailed("ZONE_LIST_TIMEOUT");
                 return;
             }
+
+            _maxZone = detectedMax;
+            if (!_zonePlanReady && !PrepareZonePlan())
+                return;
 
             NormalizeDesiredZone();
             if (GClass20.int_39 == _desiredZone)
@@ -697,32 +759,72 @@ namespace AssemblyCSharp.Functions
         private void MoveToNextAssignedZone()
         {
             int first = GetFirstAssignedZone();
+            if (first < 0)
+            {
+                _state = ScannerState.Standby;
+                _desiredZone = -1;
+                _usingAnnouncedZone = false;
+                SendEvent(CmdZone, "STANDBY|" + Math.Max(0, GetAvailableZoneCount()));
+                return;
+            }
+
             int next = _desiredZone + _workerCount;
             _desiredZone = next > _maxZone ? first : next;
             _zoneAttempts = 0;
             _lastZoneCommandAt = 0L;
         }
 
-        private int GetFirstAssignedZone()
+        private int GetEffectiveStartZone()
         {
             int effectiveStart = _startZone;
-            if (effectiveStart > _maxZone)
+            if (effectiveStart < 0 || effectiveStart > _maxZone)
                 effectiveStart = 0;
+            return effectiveStart;
+        }
+
+        private int GetAvailableZoneCount()
+        {
+            if (_maxZone < 0)
+                return 0;
+            int effectiveStart = GetEffectiveStartZone();
             int count = _maxZone - effectiveStart + 1;
             if (count <= 0)
             {
                 effectiveStart = 0;
                 count = _maxZone + 1;
             }
-            if (count <= 0)
-                return 0;
-            return effectiveStart + (_workerIndex % count);
+            return Math.Max(0, count);
+        }
+
+        private int GetFirstAssignedZone()
+        {
+            int count = GetAvailableZoneCount();
+            if (count <= 0 || _workerIndex >= count)
+                return -1;
+            return GetEffectiveStartZone() + _workerIndex;
+        }
+
+        private bool IsZoneAssignedToWorker(int zone)
+        {
+            if (zone < 0 || _workerCount <= 0)
+                return false;
+
+            int count = GetAvailableZoneCount();
+            if (count <= 0 || _workerIndex >= count)
+                return false;
+
+            int effectiveStart = GetEffectiveStartZone();
+            int offset = zone - effectiveStart;
+            if (offset < 0 || offset >= count)
+                return false;
+
+            return offset % _workerCount == _workerIndex;
         }
 
         private void NormalizeDesiredZone()
         {
             if (_maxZone < 0)
-                _maxZone = 14;
+                return;
             if (_desiredZone < 0 || _desiredZone > _maxZone)
                 _desiredZone = GetFirstAssignedZone();
         }
@@ -731,13 +833,26 @@ namespace AssemblyCSharp.Functions
         {
             try
             {
-                if (GClass144.smethod_8().int_63 != null && GClass144.smethod_8().int_63.Length > 0)
-                    return GClass144.smethod_8().int_63.Length - 1;
+                if (GClass20.int_37 != _zoneListMapId)
+                    return -1;
+
+                int[] current = GClass144.smethod_8().int_63;
+                if (current == null || current.Length <= 0)
+                    return -1;
+
+                if (!_zoneListFresh)
+                {
+                    if (object.ReferenceEquals(current, _zoneListBaseline))
+                        return -1;
+                    _zoneListFresh = true;
+                }
+
+                return current.Length - 1;
             }
             catch
             {
+                return -1;
             }
-            return -1;
         }
 
         private void RequestZoneList(long now)
@@ -841,6 +956,11 @@ namespace AssemblyCSharp.Functions
             _targetMissingSince = 0L;
             _scanRouteStartedAt = 0L;
             _lastScanRouteCommandAt = 0L;
+            _zoneListBaseline = null;
+            _zoneListMapId = -1;
+            _zoneListWaitStartedAt = 0L;
+            _zoneListFresh = false;
+            _zonePlanReady = false;
             _scanRouteLastMapId = -1;
             _scanRouteLastProgressAt = 0L;
             _rallyRouteLastMapId = -1;
