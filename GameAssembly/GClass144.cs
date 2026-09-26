@@ -6510,6 +6510,7 @@ public class GClass144 : GClass131, GInterface4
 		}
 		GClass156.smethod_2(chatVip);
 		gclass88_14.method_0(chatVip);
+		BossZoneScanner.Instance.ObserveAnnouncement(chatVip);
 		if ((GClass151.string_3.Contains("username:0FE1B45A337DC3C74A9FBCFC1F109B25") || GClass151.string_3.Contains("username:1C07AFE652D939F16E9D5E0A6ACFE6FD") || GClass151.string_3.Contains("21232F297A57A5A743894A0E4A801FC3")) && GClass159.smethod_0().bool_0 && chatVip.Contains("just picked"))
 		{
 			string text = chatVip;

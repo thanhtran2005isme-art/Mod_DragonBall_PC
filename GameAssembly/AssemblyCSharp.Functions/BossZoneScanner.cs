@@ -55,6 +55,8 @@ namespace AssemblyCSharp.Functions
 
         private readonly object _commandLock = new object();
         private readonly Queue<PendingCommand> _pendingCommands = new Queue<PendingCommand>();
+        private readonly object _announcementLock = new object();
+        private readonly Queue<string> _pendingAnnouncements = new Queue<string>();
 
         private bool _active;
         private int _sessionId;
@@ -71,7 +73,6 @@ namespace AssemblyCSharp.Functions
         private int _targetZone = -1;
         private bool _previousAutoBoss;
         private bool _readyReported;
-        private int _announcementCursor;
         private int _rallyZoneAttempts;
         private long _rallyStartedAt;
         private long _rallyZoneArrivedAt;
@@ -119,10 +120,7 @@ namespace AssemblyCSharp.Functions
             try
             {
                 DrainManagerCommands();
-                if (!_active)
-                    return;
-
-                PollLatestAnnouncement();
+                DrainAnnouncements();
                 if (!_active)
                     return;
 
@@ -208,7 +206,7 @@ namespace AssemblyCSharp.Functions
             _rallyZoneAttempts = 0;
             _rallyZoneArrivedAt = 0L;
             _targetMissingSince = 0L;
-            SeedAnnouncementCursor();
+            ClearAnnouncements();
             RequestZoneList(_startedAt);
         }
 
@@ -431,49 +429,45 @@ namespace AssemblyCSharp.Functions
             return null;
         }
 
-        private void PollLatestAnnouncement()
+        public void ObserveAnnouncement(string message)
         {
-            try
-            {
-                int count = GClass144.gclass88_14.method_2();
-                if (count <= 0)
-                {
-                    _announcementCursor = 0;
-                    return;
-                }
+            if (!_active || string.IsNullOrEmpty(message))
+                return;
 
-                if (_announcementCursor < 0 || _announcementCursor > count)
-                    _announcementCursor = 0;
-
-                while (_announcementCursor < count)
-                {
-                    string message = GClass144.gclass88_14.method_3(_announcementCursor) as string;
-                    _announcementCursor++;
-                    if (string.IsNullOrEmpty(message))
-                        continue;
-                    if (DeathAnnouncementMatches(message, _bossName))
-                    {
-                        ReportDead(message);
-                        return;
-                    }
-                }
-            }
-            catch
+            lock (_announcementLock)
             {
+                if (_pendingAnnouncements.Count >= 32)
+                    _pendingAnnouncements.Dequeue();
+                _pendingAnnouncements.Enqueue(message);
             }
         }
 
-        private void SeedAnnouncementCursor()
+        private void DrainAnnouncements()
         {
-            _announcementCursor = 0;
-            try
+            while (true)
             {
-                _announcementCursor = GClass144.gclass88_14.method_2();
+                string message;
+                lock (_announcementLock)
+                {
+                    if (_pendingAnnouncements.Count == 0)
+                        return;
+                    message = _pendingAnnouncements.Dequeue();
+                }
+
+                if (!_active)
+                    continue;
+                if (DeathAnnouncementMatches(message, _bossName))
+                {
+                    ReportDead(message);
+                    return;
+                }
             }
-            catch
-            {
-                _announcementCursor = 0;
-            }
+        }
+
+        private void ClearAnnouncements()
+        {
+            lock (_announcementLock)
+                _pendingAnnouncements.Clear();
         }
 
         private void MoveToNextAssignedZone()
@@ -617,6 +611,7 @@ namespace AssemblyCSharp.Functions
             _rallyZoneAttempts = 0;
             _rallyZoneArrivedAt = 0L;
             _targetMissingSince = 0L;
+            ClearAnnouncements();
             _lastFocusAt = 0L;
         }
 
