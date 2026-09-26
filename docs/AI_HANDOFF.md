@@ -2,7 +2,7 @@
 
 > Repo: `thanhtran2005isme-art/Mod_DragonBall_PC`  
 > Branch chính: `main`  
-> Cập nhật handoff: 2026-09-26  
+> Cập nhật handoff: 2026-09-27  
 > Đây là bản tóm tắt hiện tại. Chi tiết cũ chuyển sang `docs/history/`.
 
 ## 1. Mục tiêu của file này
@@ -108,7 +108,10 @@ f02197f Thêm săn boss đa tài khoản trên Manager
 - khi có vị trí, scanner dùng `Class21.method_8(mapId)` để Xmap tới map boss; nếu thông báo có zone thì ưu tiên zone đó trước, không thấy target mới quay về round-robin;
 - Xmap scan/rally không còn bị hủy mỗi 5 giây: khi Xmap đang chạy thì giữ nguyên; chỉ restart sau 30 giây không đổi map hoặc khi Xmap đã dừng, với timeout tổng 90 giây;
 - socket Manager↔Game dùng frame `[4-byte network-order length][UTF-8 JSON]`, có receive accumulator nên chịu được TCP split/coalesced message;
-- mỗi TCP connection mới từ Game luôn handshake lại `accountId`; client tự retry kết nối mỗi giây khi Manager chưa sẵn sàng; callback socket cũ không được phép đánh dấu socket mới là disconnected.
+- mỗi TCP connection mới từ Game luôn handshake lại `accountId`; client tự retry kết nối mỗi giây khi Manager chưa sẵn sàng; callback socket cũ không được phép đánh dấu socket mới là disconnected;
+- sau khi tới map scan, scanner **không dùng lại `int_63` cũ**: ghi baseline reference, request zone-list mới và chỉ lập kế hoạch khu khi server thay bằng mảng mới trên đúng map hiện tại; quá 10 giây không có response mới -> `ZONE_LIST_TIMEOUT`;
+- khi số worker lớn hơn số khu khả dụng, worker dư chuyển sang `Standby` thay vì modulo quay lại khu đã có worker khác; worker Standby vẫn giữ session và vẫn nhận `RALLY` khi có finder;
+- announced zone chỉ được ưu tiên bởi worker sở hữu zone đó theo partition, tránh mọi account cùng scan một khu.
 
 File mới chính:
 
@@ -182,6 +185,8 @@ Log ghi sequence ATTACK/probe, HP response, MISS, MOB DIE, drop owner, SM/TN, st
 ## 5. Commit gần đây đáng chú ý
 
 ```text
+5546cde Chờ zone-list mới và đưa worker dư về dự phòng   [feature branch]
+2250625 Sửa cắt tiền tố thông báo VIP cho cache boss   [feature branch]
 8d108a9 Đóng khung TCP và handshake lại khi reconnect   [feature branch]
 8d6e0f3 Ổn định route và cache vị trí boss   [feature branch]
 d54131d Dọn reset trạng thái scan map boss   [feature branch]
@@ -201,7 +206,7 @@ bfdc638 Bắt KOL trực tiếp từ packet 22 thực tế
 
 ## 6. Rủi ro/lỗi đã biết
 
-- Boss Hunt đã harden toàn bộ P0: route progress-aware, cache location riêng + invalidate death, framed TCP, reconnect handshake. CI full solution PASS nhưng vẫn cần runtime test thật `announcement -> route -> zone -> FOUND -> rally -> READY`, restart Manager giữa phiên và burst event 2–3 account.
+- Boss Hunt đã harden P0 và P1: route/cache/TCP/reconnect + fresh zone-list + Standby worker dư. Commit `5546cde` đã qua bước MSBuild full solution; vẫn cần runtime test thật `announcement -> route -> fresh zone-list -> partition -> FOUND -> rally -> READY`, đặc biệt map có ít khu hơn số account.
 - Full solution local từng fail ở PostBuild copy của một số project dù source compile được; gameplay thường nên build riêng.
 - DLL `Assembly-CSharp.dll` có thể bị game/manager lock.
 - `GameAssembly` là .NET Framework 3.5, dễ lỗi nếu dùng API mới.

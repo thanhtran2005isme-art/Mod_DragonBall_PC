@@ -179,3 +179,16 @@ Không được quét map hiện tại khi chưa biết vị trí boss. Không h
 - Nếu Xmap đã dừng trước khi tới target, cho phép start lại sau cooldown ngắn.
 - Nếu Xmap vẫn active nhưng không đổi map trong 30 giây, coi là stall và restart.
 - Timeout route tổng hiện là 90 giây.
+
+
+## D-016 — Zone-list phải fresh theo map; worker dư vào Standby
+
+**Trạng thái:** active — 2026-09-27
+
+- Sau Xmap, không được dùng ngay `GClass144.int_63` vì có thể là dữ liệu map trước.
+- Scanner ghi baseline reference + `mapId`, request zone-list mới và chỉ chấp nhận mảng mới khi vẫn ở đúng map đó.
+- Không có zone-list mới trong 10 giây -> `FAILED: ZONE_LIST_TIMEOUT`; không fallback về giả định 15 khu.
+- Partition không dùng modulo khi `workerCount > availableZoneCount`.
+- Worker dư chuyển `Standby`, không đổi khu và không scan trùng.
+- Standby không phải FAILED: vẫn giữ session, vẫn nhận RALLY và tham gia đánh khi có finder.
+- Announced zone chỉ được ưu tiên bởi worker mà zone đó thuộc partition của nó.

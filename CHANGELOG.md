@@ -3,6 +3,14 @@
 Ghi ngắn gọn các thay đổi quan trọng, mới nhất ở trên.  
 Không dùng file này để giải thích kiến trúc dài; chi tiết nằm trong `docs/`.
 
+## 2026-09-27
+
+- Hardening P1 Boss Hunt: chờ zone-list mới theo đúng map, timeout nếu không có fresh response, không dùng dữ liệu `int_63` stale.
+- Worker dư so với số khu chuyển `Standby` thay vì modulo scan trùng; Standby vẫn nhận RALLY.
+- Manager hiển thị trạng thái tải zone-list và worker dự phòng.
+- Commit `5546cde` đã qua bước MSBuild full solution.
+
+
 ## 2026-09-26
 
 - Hoàn tất hardening P0 Boss Hunt: Xmap progress-aware, cache vị trí boss riêng + freshness/invalidate death, TCP length-prefix framing, accumulator và reconnect handshake lại account.

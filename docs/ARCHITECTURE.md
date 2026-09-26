@@ -91,7 +91,9 @@ Game client / BossZoneScanner
   -> lấy bossName -> mapId + zone từ cache announcement GClass156
   -> chưa có vị trí: WaitingLocation, không quét map hiện tại
   -> có vị trí: Class21.method_8(mapId) Xmap tới đúng map
-  -> nếu server báo zone: ưu tiên zone đó trước
+  -> tới map: request zone-list mới và chờ response mới, không dùng `int_63` còn sót từ map trước
+  -> nếu workerIndex >= số khu khả dụng: Standby, không scan trùng
+  -> nếu server báo zone: chỉ worker sở hữu zone đó theo partition ưu tiên zone đó
   -> nếu chưa thấy target: worker i quét fallback start+i, start+i+N, start+i+2N, ...
   -> mỗi khu chờ entity load
   -> resolve đúng boss từ GClass158.list_3
@@ -152,7 +154,7 @@ Manager -> Game: 100 START_SCAN, 101 STOP, 102 RALLY
 Game -> Manager: 110 ZONE, 111 FOUND, 112 DEAD, 113 READY, 114 FAILED
 ```
 
-Payload boss được JSON-serialize thành UTF-8 trong `vMessage.data`; outer socket protocol cũ vẫn giữ nguyên. `sessionId` bắt buộc dùng để bỏ event/lệnh cũ tới trễ.
+Payload boss được JSON-serialize thành UTF-8 trong `vMessage.data`; transport ngoài dùng frame `[4-byte network-order length][UTF-8 JSON]`. `sessionId` bắt buộc dùng để bỏ event/lệnh cũ tới trễ.
 
 Thông báo boss chết không còn được poll bằng index từ queue UI `gclass88_14`. `GClass144.method_121()` đưa từng thông báo mới vào queue riêng của `BossZoneScanner`; queue này được drain trong `Update()` trên game loop.
 
@@ -272,3 +274,17 @@ Mỗi connection có receive accumulator riêng:
 - send loop xử lý trường hợp `Socket.Send()` chỉ gửi một phần buffer.
 
 Game handshake lại `cmd=0 + accountId` ở **mọi connection mới**. Manager ưu tiên resolve account từ `TabData`, thay socket cũ bằng socket mới và callback connection cũ chỉ được đánh dấu disconnect nếu nó vẫn là socket hiện hành của account.
+
+
+## 10. Zone-list freshness và worker capacity
+
+Boss Hunt không được dùng trực tiếp một `GClass144.int_63` bất kỳ sau khi vừa Xmap.
+
+Khi bắt đầu scan trên map mới:
+
+1. ghi `mapId` hiện tại và reference của zone-list cũ làm baseline;
+2. gửi `method_58()` để request zone-list;
+3. chỉ chấp nhận khi `int_63` là mảng mới và client vẫn ở đúng map đã request;
+4. quá 10 giây chưa có response mới thì worker báo `ZONE_LIST_TIMEOUT`.
+
+Sau khi biết số khu thật, partition worker dùng số khu khả dụng. Worker có `workerIndex >= availableZoneCount` chuyển sang `Standby`; không modulo về khu đầu. Standby vẫn active để nhận `RALLY` khi worker khác tìm thấy boss.
