@@ -48,9 +48,10 @@ namespace AssemblyCSharp.Functions
         private const int CmdReady = 113;
         private const int CmdFailed = 114;
 
-        private const long ScanRouteTimeoutMs = 45000L;
-        private const long ScanRouteRetryMs = 5000L;
-        private const long RallyOverallTimeoutMs = 45000L;
+        private const long ScanRouteTimeoutMs = 90000L;
+        private const long RouteRetryDelayMs = 1200L;
+        private const long RouteStallTimeoutMs = 30000L;
+        private const long RallyOverallTimeoutMs = 90000L;
         private const int RallyZoneMaxAttempts = 3;
         private const long RallyTargetLoadTimeoutMs = 8000L;
         private const long FightingTargetLostGraceMs = 3000L;
@@ -87,6 +88,10 @@ namespace AssemblyCSharp.Functions
         private long _targetMissingSince;
         private long _scanRouteStartedAt;
         private long _lastScanRouteCommandAt;
+        private int _scanRouteLastMapId = -1;
+        private long _scanRouteLastProgressAt;
+        private int _rallyRouteLastMapId = -1;
+        private long _rallyRouteLastProgressAt;
         private long _startedAt;
         private long _lastZoneCommandAt;
         private long _arrivedAt;
@@ -217,6 +222,10 @@ namespace AssemblyCSharp.Functions
             _startedAt = GClass203.smethod_18();
             _scanRouteStartedAt = 0L;
             _lastScanRouteCommandAt = 0L;
+            _scanRouteLastMapId = GClass20.int_37;
+            _scanRouteLastProgressAt = _startedAt;
+            _rallyRouteLastMapId = GClass20.int_37;
+            _rallyRouteLastProgressAt = _startedAt;
             _lastZoneCommandAt = 0L;
             _arrivedAt = 0L;
             _lastRouteCommandAt = 0L;
@@ -260,6 +269,8 @@ namespace AssemblyCSharp.Functions
             _rallyZoneArrivedAt = 0L;
             _targetMissingSince = 0L;
             _lastRouteCommandAt = 0L;
+            _rallyRouteLastMapId = GClass20.int_37;
+            _rallyRouteLastProgressAt = _rallyStartedAt;
             _lastZoneCommandAt = 0L;
             _lastFocusAt = 0L;
         }
@@ -295,20 +306,43 @@ namespace AssemblyCSharp.Functions
                 return;
             }
 
+            TrackRouteProgress(now, ref _scanRouteLastMapId, ref _scanRouteLastProgressAt);
+
             if (_scanRouteStartedAt > 0L && now - _scanRouteStartedAt >= ScanRouteTimeoutMs)
             {
                 ReportFailed("SCAN_ROUTE_TIMEOUT " + _scanMapName);
                 return;
             }
 
-            if (now - _lastScanRouteCommandAt < ScanRouteRetryMs)
+            bool xmapRunning = GClass148.smethod_0().bool_0;
+            if (xmapRunning && now - _scanRouteLastProgressAt < RouteStallTimeoutMs)
                 return;
 
-            if (GClass148.smethod_0().bool_0)
+            if (xmapRunning)
+            {
                 Class21.smethod_0().method_9();
+                _lastScanRouteCommandAt = 0L;
+                _scanRouteLastProgressAt = now;
+            }
+
+            if (now - _lastScanRouteCommandAt < RouteRetryDelayMs)
+                return;
+
             Class21.smethod_0().method_8(_scanMapId);
             _lastScanRouteCommandAt = now;
             SendEvent(CmdZone, "ROUTING_MAP|" + _scanMapName);
+        }
+
+        private static void TrackRouteProgress(long now, ref int lastMapId, ref long lastProgressAt)
+        {
+            int currentMapId = GClass20.int_37;
+            if (lastMapId != currentMapId)
+            {
+                lastMapId = currentMapId;
+                lastProgressAt = now;
+            }
+            else if (lastProgressAt <= 0L)
+                lastProgressAt = now;
         }
 
         private void SetScanLocation(int mapId, string mapName, int zone, long now)
@@ -321,6 +355,8 @@ namespace AssemblyCSharp.Functions
             _announcedZone = zone;
             _scanRouteStartedAt = now;
             _lastScanRouteCommandAt = 0L;
+            _scanRouteLastMapId = GClass20.int_37;
+            _scanRouteLastProgressAt = now;
 
             if (GClass20.int_37 == _scanMapId)
                 BeginScanningOnCurrentMap(now);
@@ -355,23 +391,19 @@ namespace AssemblyCSharp.Functions
 
             try
             {
-                for (int i = GClass156.list_0.Count - 1; i >= 0; i--)
-                {
-                    GClass156 item = GClass156.list_0[i];
-                    if (item == null || item.int_0 < 0 || !BossNameMatches(item.string_0, _bossName))
-                        continue;
+                GClass156 item;
+                if (!GClass156.TryGetLatestBossLocation(_bossName, out item) || item == null || item.int_0 < 0)
+                    return false;
 
-                    mapId = item.int_0;
-                    mapName = item.string_1 ?? "";
-                    zone = item.int_1;
-                    return true;
-                }
+                mapId = item.int_0;
+                mapName = item.string_1 ?? "";
+                zone = item.int_1;
+                return true;
             }
             catch
             {
+                return false;
             }
-
-            return false;
         }
 
         private void AdvanceScanZone()
@@ -477,10 +509,21 @@ namespace AssemblyCSharp.Functions
             {
                 _rallyZoneArrivedAt = 0L;
                 _rallyZoneAttempts = 0;
-                if (now - _lastRouteCommandAt >= 5000L)
+                TrackRouteProgress(now, ref _rallyRouteLastMapId, ref _rallyRouteLastProgressAt);
+
+                bool xmapRunning = GClass148.smethod_0().bool_0;
+                if (xmapRunning && now - _rallyRouteLastProgressAt < RouteStallTimeoutMs)
+                    return;
+
+                if (xmapRunning)
                 {
-                    if (GClass148.smethod_0().bool_0)
-                        Class21.smethod_0().method_9();
+                    Class21.smethod_0().method_9();
+                    _lastRouteCommandAt = 0L;
+                    _rallyRouteLastProgressAt = now;
+                }
+
+                if (now - _lastRouteCommandAt >= RouteRetryDelayMs)
+                {
                     Class21.smethod_0().method_8(_targetMapId);
                     _lastRouteCommandAt = now;
                 }
@@ -798,6 +841,10 @@ namespace AssemblyCSharp.Functions
             _targetMissingSince = 0L;
             _scanRouteStartedAt = 0L;
             _lastScanRouteCommandAt = 0L;
+            _scanRouteLastMapId = -1;
+            _scanRouteLastProgressAt = 0L;
+            _rallyRouteLastMapId = -1;
+            _rallyRouteLastProgressAt = 0L;
             ClearAnnouncements();
             _lastFocusAt = 0L;
         }

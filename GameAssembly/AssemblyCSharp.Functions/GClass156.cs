@@ -85,6 +85,12 @@ namespace AssemblyCSharp.Functions
 
         public static List<GClass156> list_21 = new List<GClass156>();
 
+        private static readonly object bossLocationLock = new object();
+
+        private static readonly Dictionary<string, GClass156> bossLocationCache = new Dictionary<string, GClass156>(StringComparer.OrdinalIgnoreCase);
+
+        private const double BossLocationFreshnessMinutes = 60.0;
+
         private GClass156(string name, string map)
         {
             string_0 = name;
@@ -305,6 +311,13 @@ namespace AssemblyCSharp.Functions
 
         public static void smethod_2(string chatVip)
         {
+            string deadBossName;
+            if (TryParseBossDeathAnnouncement(chatVip, out deadBossName))
+            {
+                InvalidateBossLocation(deadBossName);
+                return;
+            }
+
             string bossName;
             string mapName;
             int mapId;
@@ -314,10 +327,122 @@ namespace AssemblyCSharp.Functions
 
             GClass156 item = new GClass156(bossName, mapName);
             item.int_1 = zone;
+            CacheBossLocation(item);
             list_0.Add(item);
             smethod_1(bossName, mapName);
             if (list_0.Count > 5)
                 list_0.RemoveAt(0);
+        }
+
+        public static bool TryGetLatestBossLocation(string targetBossName, out GClass156 boss)
+        {
+            boss = null;
+            DateTime now = DateTime.Now;
+            lock (bossLocationLock)
+            {
+                foreach (KeyValuePair<string, GClass156> pair in bossLocationCache)
+                {
+                    GClass156 item = pair.Value;
+                    if (item == null || !BossLocationNameMatches(item.string_0, targetBossName))
+                        continue;
+                    if (now.Subtract(item.dateTime_0).TotalMinutes > BossLocationFreshnessMinutes)
+                        continue;
+                    if (boss == null || item.dateTime_0 > boss.dateTime_0)
+                        boss = item;
+                }
+            }
+            return boss != null;
+        }
+
+        public static void InvalidateBossLocation(string bossName)
+        {
+            string normalized = NormalizeBossLocationName(bossName);
+            if (normalized.Length == 0)
+                return;
+
+            lock (bossLocationLock)
+            {
+                List<string> keys = new List<string>();
+                foreach (KeyValuePair<string, GClass156> pair in bossLocationCache)
+                {
+                    GClass156 item = pair.Value;
+                    if (item == null)
+                        continue;
+                    if (BossLocationNameMatches(item.string_0, normalized) || BossLocationNameMatches(normalized, item.string_0))
+                        keys.Add(pair.Key);
+                }
+                for (int i = 0; i < keys.Count; i++)
+                    bossLocationCache.Remove(keys[i]);
+            }
+        }
+
+        private static void CacheBossLocation(GClass156 item)
+        {
+            if (item == null || item.int_0 < 0)
+                return;
+            string key = NormalizeBossLocationName(item.string_0);
+            if (key.Length == 0)
+                return;
+            lock (bossLocationLock)
+                bossLocationCache[key] = item;
+        }
+
+        private static string NormalizeBossLocationName(string value)
+        {
+            return (value ?? "").Trim().Trim('[', ']', ':', '-', '.', ' ');
+        }
+
+        private static bool BossLocationNameMatches(string actual, string target)
+        {
+            actual = NormalizeBossLocationName(actual);
+            target = NormalizeBossLocationName(target);
+            if (actual.Length == 0 || target.Length == 0)
+                return false;
+            if (actual.Equals(target, StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (!actual.StartsWith(target, StringComparison.OrdinalIgnoreCase))
+                return false;
+            if (actual.Length == target.Length)
+                return true;
+            char next = actual[target.Length];
+            return char.IsWhiteSpace(next) || char.IsDigit(next) || next == '-' || next == '(' || next == '[';
+        }
+
+        public static bool TryParseBossDeathAnnouncement(string chatVip, out string bossName)
+        {
+            bossName = "";
+            if (string.IsNullOrEmpty(chatVip))
+                return false;
+
+            string text = chatVip.Trim();
+            if (text.StartsWith("!", StringComparison.Ordinal))
+                text = text.Substring(1).Trim();
+            if (text.StartsWith("BOSS ", StringComparison.OrdinalIgnoreCase))
+                text = text.Substring(5).Trim();
+
+            string[] markers = new string[]
+            {
+                " vừa bị tiêu diệt", " đã bị tiêu diệt", " bị tiêu diệt",
+                " vừa chết", " đã chết",
+                " vừa bị hạ", " đã bị hạ", " bị hạ",
+                " has been defeated", " was defeated",
+                " has been killed", " was killed",
+                " is dead", " defeated by", " killed by"
+            };
+
+            string lower = text.ToLowerInvariant();
+            int cut = -1;
+            for (int i = 0; i < markers.Length; i++)
+            {
+                int index = lower.IndexOf(markers[i], StringComparison.Ordinal);
+                if (index >= 0 && (cut < 0 || index < cut))
+                    cut = index;
+            }
+            if (cut < 0)
+                return false;
+
+            bossName = NormalizeBossLocationName(text.Substring(0, cut));
+            return bossName.Length > 0;
         }
 
         public static bool TryParseBossAnnouncement(string chatVip, out string bossName, out string mapName, out int mapId, out int zone)
