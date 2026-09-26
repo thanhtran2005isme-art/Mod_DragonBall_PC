@@ -209,10 +209,6 @@ namespace AssemblyCSharp.Functions
             _scanMapName = "";
             _announcedZone = -1;
             _usingAnnouncedZone = false;
-            _scanMapId = -1;
-            _scanMapName = "";
-            _announcedZone = -1;
-            _usingAnnouncedZone = false;
             _targetMapId = -1;
             _targetMapName = "";
             _targetZone = -1;
@@ -788,6 +784,10 @@ namespace AssemblyCSharp.Functions
             {
             }
 
+            _scanMapId = -1;
+            _scanMapName = "";
+            _announcedZone = -1;
+            _usingAnnouncedZone = false;
             _targetMapId = -1;
             _targetMapName = "";
             _targetZone = -1;
