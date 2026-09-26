@@ -6505,7 +6505,7 @@ public class GClass144 : GClass131, GInterface4
 		}
 		if (chatVip.StartsWith("!"))
 		{
-			chatVip = chatVip.Substring(1, chatVip.Length);
+			chatVip = chatVip.Substring(1);
 			bool_79 = true;
 		}
 		GClass156.smethod_2(chatVip);
