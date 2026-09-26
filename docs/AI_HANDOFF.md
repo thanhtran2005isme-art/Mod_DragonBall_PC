@@ -84,7 +84,7 @@ f02197f Thêm săn boss đa tài khoản trên Manager
 
 - tab top-level `SĂN BOSS` trong DragonBoyManager;
 - Manager lấy các account đang kết nối và chia khu theo `workerIndex/workerCount`;
-- client tự dò chuỗi khu, báo `ZONE / FOUND / DEAD / READY / FAILED` về Manager;
+- client lấy vị trí boss từ thông báo `BOSS ... vừa xuất hiện tại ... khu vực ...`; nếu có map hợp lệ thì tự Xmap tới đúng map trước, sau đó mới dò khu và báo `ZONE / FOUND / DEAD / READY / FAILED` về Manager;
 - account đầu tiên thấy đúng boss làm Manager chuyển cả session sang rally;
 - các account còn lại tự tới đúng `mapId + zone`, resolve lại boss theo tên rồi focus/đánh bằng `GClass158` hiện có;
 - thông báo game xác nhận đúng boss mục tiêu chết là terminal event: dừng scan/rally/fight toàn bộ session;
@@ -100,7 +100,10 @@ f02197f Thêm săn boss đa tài khoản trên Manager
 - khi đang Fighting mà target biến mất, client chờ grace 3 giây để resolve lại; vẫn mất target thì báo `FAILED`, không tự suy boss đã chết;
 - worker `FAILED` không chặn các worker đã `READY`; Manager chuyển sang Fighting khi mọi worker còn kết nối đã ở trạng thái READY hoặc FAILED và còn ít nhất một READY;
 - nếu không còn worker nào có thể tới boss, Manager dừng toàn phiên;
-- thông báo VIP mới được hook trực tiếp từ `GClass144.method_121()` vào queue riêng của `BossZoneScanner`, rồi xử lý trên game loop; không còn phụ thuộc index của queue UI bị xóa đầu.
+- thông báo VIP mới được hook trực tiếp từ `GClass144.method_121()` vào queue riêng của `BossZoneScanner`, rồi xử lý trên game loop; không còn phụ thuộc index của queue UI bị xóa đầu;
+- `GClass156` luôn cache thông báo xuất hiện boss dù HUD danh sách boss đang bật hay tắt; scanner dùng cache này làm source of truth cho `bossName -> mapId + zone`;
+- nếu chưa có vị trí boss, scanner ở `WaitingLocation` và **không quét nhầm map hiện tại**;
+- khi có vị trí, scanner dùng `Class21.method_8(mapId)` để Xmap tới map boss; nếu thông báo có zone thì ưu tiên zone đó trước, không thấy target mới quay về round-robin.
 
 File mới chính:
 
@@ -121,7 +124,7 @@ GClass171.cs
 
 GitHub Actions run `36029651400` đã build full solution thành công cho V1. Hardening ngày 2026-09-26 có commit `1786046` và `0ee000c`; run `36254447048` đã qua bước MSBuild full solution. **Chưa có runtime gameplay test nhiều account**, vì vậy chưa nên merge vào `main` chỉ dựa trên compile.
 
-V1 hiện quét các khu trên **map mà từng account đang đứng lúc bắt đầu**. Khi FOUND, map thật của finder mới là source of truth để rally. Không suy đoán map spawn chỉ từ tên boss.
+Boss Hunt hiện **không còn quét map mà account đang đứng một cách mù quáng**. Source of truth vị trí ban đầu là thông báo boss thực tế do `GClass156` parse; scanner Xmap tới đúng `mapId`, ưu tiên `zone` được server báo, rồi mới fallback sang round-robin nếu chưa resolve được target.
 
 ### Auto Attack / Auto Train
 
@@ -174,6 +177,8 @@ Log ghi sequence ATTACK/probe, HP response, MISS, MOB DIE, drop owner, SM/TN, st
 ## 5. Commit gần đây đáng chú ý
 
 ```text
+d54131d Dọn reset trạng thái scan map boss   [feature branch]
+c6c9c79 Tự tới đúng map boss trước khi dò khu   [feature branch]
 0ee000c Bắt thông báo boss chết trực tiếp vào game loop   [feature branch]
 1786046 Chống treo rally và cô lập worker săn boss lỗi   [feature branch]
 f02197f Thêm săn boss đa tài khoản trên Manager   [feature branch]
@@ -189,7 +194,7 @@ bfdc638 Bắt KOL trực tiếp từ packet 22 thực tế
 
 ## 6. Rủi ro/lỗi đã biết
 
-- Boss Hunt đã harden timeout/FAILED/death-event nhưng chưa test runtime nhiều account; vẫn cần xác nhận zone dwell, zone full, route map, target reload và chuỗi thông báo boss chết thực tế.
+- Boss Hunt đã harden route theo thông báo boss, timeout/FAILED/death-event nhưng chưa test runtime nhiều account; cần xác nhận thực tế `boss announcement -> Xmap đúng map -> ưu tiên đúng zone -> FOUND`, zone full, target reload và death event.
 - Full solution local từng fail ở PostBuild copy của một số project dù source compile được; gameplay thường nên build riêng.
 - DLL `Assembly-CSharp.dll` có thể bị game/manager lock.
 - `GameAssembly` là .NET Framework 3.5, dễ lỗi nếu dùng API mới.

@@ -123,7 +123,7 @@ README chỉ nên chứa quick start, build path/output, module mapping ổn đ�
 **Trạng thái:** active — 2026-09-24
 
 - Manager tạo `sessionId`, chọn các account đang kết nối và chia worker.
-- Client tự quét dãy khu `start + workerIndex + round * workerCount`.
+- Client trước hết lấy `mapId + zone` từ thông báo boss thực tế (`GClass156`), Xmap tới đúng map; chỉ sau đó mới scan zone. Nếu server có zone cụ thể thì thử zone đó trước, rồi mới fallback sang dãy `start + workerIndex + round * workerCount`.
 - Account đầu tiên thấy target gửi `FOUND`; Manager dùng map/khu thật đó để rally tất cả worker.
 - Sau đổi map/khu phải resolve lại boss từ `GClass158.list_3`; không giữ object boss cũ.
 - Focus/di chuyển/đánh tái sử dụng `GClass158` và `GClass159`.
@@ -132,7 +132,7 @@ README chỉ nên chứa quick start, build path/output, module mapping ổn đ�
 - Event/lệnh cũ khác `sessionId` hiện tại phải bị bỏ qua.
 - Callback socket không được trực tiếp thao tác gameplay; START/STOP/RALLY phải được enqueue và drain trong `BossZoneScanner.Update()` trên game loop.
 
-V1 quét trên map hiện tại của từng worker; không tự đoán map spawn chỉ dựa vào tên boss.
+Không được quét map hiện tại khi chưa biết vị trí boss. Không hard-code/đoán map từ tên boss; dùng announcement server đã parse làm source of truth. Nếu chưa có announcement phù hợp, worker ở `WaitingLocation`.
 
 
 ## D-012 — Worker săn boss lỗi không được làm treo cả session

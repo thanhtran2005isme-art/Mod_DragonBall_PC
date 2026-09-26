@@ -60,7 +60,7 @@ Output/
 | `AssemblyCSharp.Functions/GClass167.cs` | custom image/Base64/logo |
 | `AssemblyCSharp.Functions/GClass171.cs` | update dispatcher/render module |
 | `AssemblyCSharp.Functions/KOLTracker.cs` | học/sync/hiển thị tiến độ KOL |
-| `AssemblyCSharp.Functions/BossZoneScanner.cs` | worker dò khu boss, detect target/death, rally và pin target |
+| `AssemblyCSharp.Functions/BossZoneScanner.cs` | lấy vị trí boss từ announcement, route đúng map, dò khu, detect target/death, rally và pin target |
 | `GClass7.cs` | packet gửi, select skill, attack, combat diagnostics |
 | `GClass12.cs` | xử lý nhiều packet/response từ server |
 | `GClass14.cs` | session TCP chính |
@@ -88,7 +88,11 @@ DragonBoyManager / Tab SĂN BOSS
        |
        v
 Game client / BossZoneScanner
-  -> worker i quét: start+i, start+i+N, start+i+2N, ...
+  -> lấy bossName -> mapId + zone từ cache announcement GClass156
+  -> chưa có vị trí: WaitingLocation, không quét map hiện tại
+  -> có vị trí: Class21.method_8(mapId) Xmap tới đúng map
+  -> nếu server báo zone: ưu tiên zone đó trước
+  -> nếu chưa thấy target: worker i quét fallback start+i, start+i+N, start+i+2N, ...
   -> mỗi khu chờ entity load
   -> resolve đúng boss từ GClass158.list_3
        |
@@ -152,7 +156,9 @@ Payload boss được JSON-serialize thành UTF-8 trong `vMessage.data`; outer s
 
 Thông báo boss chết không còn được poll bằng index từ queue UI `gclass88_14`. `GClass144.method_121()` đưa từng thông báo mới vào queue riêng của `BossZoneScanner`; queue này được drain trong `Update()` trên game loop.
 
-V1 quét trên map hiện tại của từng worker. Map của account FOUND là source of truth cho rally; không suy luận map spawn từ tên boss.
+Thông báo boss xuất hiện được `GClass156.TryParseBossAnnouncement()` parse thành `bossName + mapName + mapId + zone`. Cache `GClass156.list_0` được duy trì độc lập với việc bật/tắt HUD danh sách boss. Boss Hunt dùng cache này để route tới đúng map trước khi scan.
+
+Scan không suy luận map từ tên boss và cũng không quét map hiện tại một cách mặc định. Source of truth ban đầu là **announcement thực tế của server**; sau khi một worker resolve được entity thật, `FOUND(mapId, zone)` tiếp tục là source of truth cho pha rally.
 
 ## 4. Luồng combat khái quát
 

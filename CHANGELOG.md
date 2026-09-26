@@ -5,6 +5,12 @@ Không dùng file này để giải thích kiến trúc dài; chi tiết nằm t
 
 ## 2026-09-26
 
+- Fix Boss Hunt không còn quét map hiện tại khi boss ở map khác: dùng announcement server để resolve `bossName -> mapId + zone`, Xmap tới đúng map rồi mới scan.
+- Nếu chưa có vị trí boss, worker ở trạng thái chờ; nếu có zone từ announcement thì ưu tiên zone đó trước khi fallback round-robin.
+- Manager hiển thị trạng thái `Chờ vị trí boss` / `Đang tới <map>` trong pha chuẩn bị scan.
+- Commit `c6c9c79` đã build full solution SUCCESS; `d54131d` dọn reset state scan-map.
+
+
 - Thêm event Boss Hunt `114 FAILED`; worker route/khu/target lỗi được cô lập thay vì làm toàn session treo ở Rallying.
 - Giới hạn rally: 45 giây toàn pha, 3 lần đổi khu, 8 giây chờ target; Fighting cho target mất grace 3 giây trước khi báo lỗi.
 - Manager cho phép session tiếp tục Fighting khi một số worker FAILED nhưng vẫn còn worker READY; dừng nếu không còn worker khả dụng.
