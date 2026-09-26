@@ -112,6 +112,7 @@ namespace DragonBoyManager
                     case BossHuntCoordinator.CmdFound:
                     case BossHuntCoordinator.CmdDead:
                     case BossHuntCoordinator.CmdReady:
+                    case BossHuntCoordinator.CmdFailed:
                         BossHuntCoordinator.Instance.HandleClientMessage(state.account, msg.cmd, msg.data);
                         break;
                 }

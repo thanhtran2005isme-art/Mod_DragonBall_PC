@@ -44,6 +44,12 @@ namespace AssemblyCSharp.Functions
         private const int CmdFound = 111;
         private const int CmdDead = 112;
         private const int CmdReady = 113;
+        private const int CmdFailed = 114;
+
+        private const long RallyOverallTimeoutMs = 45000L;
+        private const int RallyZoneMaxAttempts = 3;
+        private const long RallyTargetLoadTimeoutMs = 8000L;
+        private const long FightingTargetLostGraceMs = 3000L;
 
         private static readonly BossZoneScanner _instance = new BossZoneScanner();
 
@@ -65,7 +71,11 @@ namespace AssemblyCSharp.Functions
         private int _targetZone = -1;
         private bool _previousAutoBoss;
         private bool _readyReported;
-        private string _lastAnnouncement = "";
+        private int _announcementCursor;
+        private int _rallyZoneAttempts;
+        private long _rallyStartedAt;
+        private long _rallyZoneArrivedAt;
+        private long _targetMissingSince;
         private long _startedAt;
         private long _lastZoneCommandAt;
         private long _arrivedAt;
@@ -194,6 +204,10 @@ namespace AssemblyCSharp.Functions
             _lastRouteCommandAt = 0L;
             _lastFocusAt = 0L;
             _lastZoneListRequestAt = 0L;
+            _rallyStartedAt = 0L;
+            _rallyZoneAttempts = 0;
+            _rallyZoneArrivedAt = 0L;
+            _targetMissingSince = 0L;
             SeedAnnouncementCursor();
             RequestZoneList(_startedAt);
         }
@@ -206,6 +220,10 @@ namespace AssemblyCSharp.Functions
             _bossName = (payload.bossName ?? _bossName).Trim();
             _state = ScannerState.Rallying;
             _readyReported = false;
+            _rallyStartedAt = GClass203.smethod_18();
+            _rallyZoneAttempts = 0;
+            _rallyZoneArrivedAt = 0L;
+            _targetMissingSince = 0L;
             _lastRouteCommandAt = 0L;
             _lastZoneCommandAt = 0L;
             _lastFocusAt = 0L;
@@ -279,10 +297,21 @@ namespace AssemblyCSharp.Functions
         private void UpdateRally(long now)
         {
             if (_targetMapId < 0 || _targetZone < 0)
+            {
+                ReportFailed("RALLY_INVALID_TARGET");
                 return;
+            }
+
+            if (_rallyStartedAt > 0L && now - _rallyStartedAt >= RallyOverallTimeoutMs)
+            {
+                ReportFailed("RALLY_TIMEOUT");
+                return;
+            }
 
             if (GClass20.int_37 != _targetMapId)
             {
+                _rallyZoneArrivedAt = 0L;
+                _rallyZoneAttempts = 0;
                 if (now - _lastRouteCommandAt >= 5000L)
                 {
                     if (GClass148.smethod_0().bool_0)
@@ -295,23 +324,42 @@ namespace AssemblyCSharp.Functions
 
             if (GClass20.int_39 != _targetZone)
             {
-                if (now - _lastZoneCommandAt >= 1200L)
+                _rallyZoneArrivedAt = 0L;
+                if (now - _lastZoneCommandAt < 1200L)
+                    return;
+
+                if (_rallyZoneAttempts >= RallyZoneMaxAttempts)
                 {
-                    GClass7.smethod_0().method_42(_targetZone, -1);
-                    _lastZoneCommandAt = now;
+                    ReportFailed("ZONE_FAILED K" + _targetZone);
+                    return;
                 }
+
+                GClass7.smethod_0().method_42(_targetZone, -1);
+                _rallyZoneAttempts++;
+                _lastZoneCommandAt = now;
                 return;
+            }
+
+            if (_rallyZoneArrivedAt <= 0L)
+            {
+                _rallyZoneArrivedAt = now;
+                _rallyZoneAttempts = 0;
             }
 
             GClass78 target = FindTargetBoss();
             if (target == null)
+            {
+                if (now - _rallyZoneArrivedAt >= RallyTargetLoadTimeoutMs)
+                    ReportFailed("TARGET_NOT_FOUND");
                 return;
+            }
             if (target.int_25 <= 0)
             {
                 ReportDead("Boss HP <= 0");
                 return;
             }
 
+            _targetMissingSince = 0L;
             _state = ScannerState.Fighting;
             EnableAndFocus(target, now);
             if (!_readyReported)
@@ -325,7 +373,15 @@ namespace AssemblyCSharp.Functions
         {
             GClass78 target = FindTargetBoss();
             if (target == null)
+            {
+                if (_targetMissingSince <= 0L)
+                    _targetMissingSince = now;
+                else if (now - _targetMissingSince >= FightingTargetLostGraceMs)
+                    ReportFailed("TARGET_LOST");
                 return;
+            }
+
+            _targetMissingSince = 0L;
             if (target.int_25 <= 0)
             {
                 ReportDead("Boss HP <= 0");
@@ -381,14 +437,26 @@ namespace AssemblyCSharp.Functions
             {
                 int count = GClass144.gclass88_14.method_2();
                 if (count <= 0)
+                {
+                    _announcementCursor = 0;
                     return;
-                string message = GClass144.gclass88_14.method_3(count - 1) as string;
-                if (string.IsNullOrEmpty(message) || message == _lastAnnouncement)
-                    return;
+                }
 
-                _lastAnnouncement = message;
-                if (DeathAnnouncementMatches(message, _bossName))
-                    ReportDead(message);
+                if (_announcementCursor < 0 || _announcementCursor > count)
+                    _announcementCursor = 0;
+
+                while (_announcementCursor < count)
+                {
+                    string message = GClass144.gclass88_14.method_3(_announcementCursor) as string;
+                    _announcementCursor++;
+                    if (string.IsNullOrEmpty(message))
+                        continue;
+                    if (DeathAnnouncementMatches(message, _bossName))
+                    {
+                        ReportDead(message);
+                        return;
+                    }
+                }
             }
             catch
             {
@@ -397,15 +465,14 @@ namespace AssemblyCSharp.Functions
 
         private void SeedAnnouncementCursor()
         {
-            _lastAnnouncement = "";
+            _announcementCursor = 0;
             try
             {
-                int count = GClass144.gclass88_14.method_2();
-                if (count > 0)
-                    _lastAnnouncement = GClass144.gclass88_14.method_3(count - 1) as string ?? "";
+                _announcementCursor = GClass144.gclass88_14.method_2();
             }
             catch
             {
+                _announcementCursor = 0;
             }
         }
 
@@ -477,6 +544,14 @@ namespace AssemblyCSharp.Functions
             StopInternal();
         }
 
+        private void ReportFailed(string detail)
+        {
+            if (!_active)
+                return;
+            SendEvent(CmdFailed, detail);
+            StopInternal();
+        }
+
         private void SendEvent(int cmd, string detail)
         {
             try
@@ -538,6 +613,10 @@ namespace AssemblyCSharp.Functions
             _targetMapName = "";
             _targetZone = -1;
             _readyReported = false;
+            _rallyStartedAt = 0L;
+            _rallyZoneAttempts = 0;
+            _rallyZoneArrivedAt = 0L;
+            _targetMissingSince = 0L;
             _lastFocusAt = 0L;
         }
 

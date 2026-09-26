@@ -22,6 +22,8 @@ namespace DragonBoyManager
         public int MapId = -1;
         public string MapName = "";
         public string Status = "";
+        public bool Ready;
+        public bool Failed;
     }
 
     public sealed class BossHuntSnapshot
@@ -61,6 +63,7 @@ namespace DragonBoyManager
         public const int CmdFound = 111;
         public const int CmdDead = 112;
         public const int CmdReady = 113;
+        public const int CmdFailed = 114;
 
         private static readonly BossHuntCoordinator _instance = new BossHuntCoordinator();
         private readonly object _sync = new object();
@@ -146,7 +149,9 @@ namespace DragonBoyManager
                     {
                         AccountId = account.ID,
                         Username = account.Username ?? "",
-                        Status = MainController.language == 0 ? "Chuẩn bị dò" : "Preparing"
+                        Status = MainController.language == 0 ? "Chuẩn bị dò" : "Preparing",
+                        Ready = false,
+                        Failed = false
                     };
                 }
             }
@@ -196,6 +201,52 @@ namespace DragonBoyManager
             }
             if (payload == null)
                 return;
+
+            if (cmd == CmdFailed)
+            {
+                bool shouldStop = false;
+                string stopReason = "";
+                lock (_sync)
+                {
+                    if (!IsCurrentLocked(payload))
+                        return;
+
+                    BossHuntWorkerSnapshot worker;
+                    if (_workers.TryGetValue(account.ID, out worker))
+                    {
+                        worker.Zone = payload.zone;
+                        worker.MapId = payload.mapId;
+                        worker.MapName = payload.mapName ?? "";
+                        worker.Ready = false;
+                        worker.Failed = true;
+                        string detail = string.IsNullOrEmpty(payload.detail) ? "UNKNOWN" : payload.detail;
+                        worker.Status = (MainController.language == 0 ? "Lỗi: " : "Failed: ") + detail;
+                    }
+
+                    if (_state == BossHuntState.Rallying || _state == BossHuntState.Fighting)
+                    {
+                        bool anyReady;
+                        if (AllConnectedWorkersSettledLocked(out anyReady))
+                        {
+                            if (anyReady)
+                                _state = BossHuntState.Fighting;
+                            else
+                            {
+                                shouldStop = true;
+                                stopReason = MainController.language == 0
+                                    ? "Không còn tài khoản nào có thể tới boss"
+                                    : "No account can reach the boss";
+                            }
+                        }
+                    }
+                }
+
+                if (shouldStop)
+                    Stop(stopReason);
+                else
+                    Publish();
+                return;
+            }
 
             if (cmd == CmdDead)
             {
@@ -249,9 +300,13 @@ namespace DragonBoyManager
                         worker.Zone = payload.zone;
                         worker.MapId = payload.mapId;
                         worker.MapName = payload.mapName ?? "";
+                        worker.Ready = true;
+                        worker.Failed = false;
                         worker.Status = MainController.language == 0 ? "Đã tới - đang đánh" : "Ready - fighting";
                     }
-                    if (AllConnectedWorkersReadyLocked())
+
+                    bool anyReady;
+                    if (AllConnectedWorkersSettledLocked(out anyReady) && anyReady)
                         _state = BossHuntState.Fighting;
                 }
                 Publish();
@@ -275,6 +330,8 @@ namespace DragonBoyManager
                     return;
 
                 worker.Status = MainController.language == 0 ? "Mất kết nối" : "Disconnected";
+                worker.Ready = false;
+                worker.Failed = true;
 
                 int connectedCount = 0;
                 for (int i = 0; i < _sessionAccounts.Count; i++)
@@ -308,9 +365,19 @@ namespace DragonBoyManager
                         {
                             BossHuntWorkerSnapshot activeWorker;
                             if (_workers.TryGetValue(reassign[i].ID, out activeWorker))
+                            {
+                                activeWorker.Ready = false;
+                                activeWorker.Failed = false;
                                 activeWorker.Status = MainController.language == 0 ? "Phân lại khu" : "Reassigning";
+                            }
                         }
                     }
+                }
+                else if (_state == BossHuntState.Rallying || _state == BossHuntState.Fighting)
+                {
+                    bool anyReady;
+                    if (AllConnectedWorkersSettledLocked(out anyReady) && anyReady)
+                        _state = BossHuntState.Fighting;
                 }
             }
 
@@ -344,7 +411,9 @@ namespace DragonBoyManager
                         Zone = worker.Zone,
                         MapId = worker.MapId,
                         MapName = worker.MapName,
-                        Status = worker.Status
+                        Status = worker.Status,
+                        Ready = worker.Ready,
+                        Failed = worker.Failed
                     });
                 }
                 snapshot.Workers.Sort(delegate(BossHuntWorkerSnapshot a, BossHuntWorkerSnapshot b) { return a.AccountId.CompareTo(b.AccountId); });
@@ -372,6 +441,8 @@ namespace DragonBoyManager
                     finder.Zone = payload.zone;
                     finder.MapId = payload.mapId;
                     finder.MapName = payload.mapName ?? "";
+                    finder.Ready = false;
+                    finder.Failed = false;
                     finder.Status = MainController.language == 0 ? "Đã tìm thấy boss" : "Boss found";
                 }
 
@@ -451,23 +522,27 @@ namespace DragonBoyManager
             return payload.sessionId == _sessionId && _sessionId > 0 && _state != BossHuntState.Idle && _state != BossHuntState.Stopped;
         }
 
-        private bool AllConnectedWorkersReadyLocked()
+        private bool AllConnectedWorkersSettledLocked(out bool anyReady)
         {
-            bool any = false;
+            bool anyConnected = false;
+            anyReady = false;
             for (int i = 0; i < _sessionAccounts.Count; i++)
             {
                 Account account = _sessionAccounts[i];
                 if (!IsConnected(account))
                     continue;
-                any = true;
+
+                anyConnected = true;
                 BossHuntWorkerSnapshot worker;
                 if (!_workers.TryGetValue(account.ID, out worker))
                     return false;
-                if (worker.Status != (MainController.language == 0 ? "Đã tới - đang đánh" : "Ready - fighting") &&
-                    worker.Status != (MainController.language == 0 ? "Đã tìm thấy boss" : "Boss found"))
+                if (worker.Failed)
+                    continue;
+                if (!worker.Ready)
                     return false;
+                anyReady = true;
             }
-            return any;
+            return anyConnected;
         }
 
         private static bool BossMatches(string value, string target)
