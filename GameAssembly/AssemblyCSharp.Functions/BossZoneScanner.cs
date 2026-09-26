@@ -10,6 +10,8 @@ namespace AssemblyCSharp.Functions
         private enum ScannerState
         {
             Idle,
+            WaitingLocation,
+            RoutingToScanMap,
             Scanning,
             Found,
             Rallying,
@@ -46,6 +48,8 @@ namespace AssemblyCSharp.Functions
         private const int CmdReady = 113;
         private const int CmdFailed = 114;
 
+        private const long ScanRouteTimeoutMs = 45000L;
+        private const long ScanRouteRetryMs = 5000L;
         private const long RallyOverallTimeoutMs = 45000L;
         private const int RallyZoneMaxAttempts = 3;
         private const long RallyTargetLoadTimeoutMs = 8000L;
@@ -68,6 +72,10 @@ namespace AssemblyCSharp.Functions
         private int _maxZone = 14;
         private int _arrivedZone = -1;
         private int _zoneAttempts;
+        private int _scanMapId = -1;
+        private string _scanMapName = "";
+        private int _announcedZone = -1;
+        private bool _usingAnnouncedZone;
         private int _targetMapId = -1;
         private string _targetMapName = "";
         private int _targetZone = -1;
@@ -77,6 +85,8 @@ namespace AssemblyCSharp.Functions
         private long _rallyStartedAt;
         private long _rallyZoneArrivedAt;
         private long _targetMissingSince;
+        private long _scanRouteStartedAt;
+        private long _lastScanRouteCommandAt;
         private long _startedAt;
         private long _lastZoneCommandAt;
         private long _arrivedAt;
@@ -125,7 +135,11 @@ namespace AssemblyCSharp.Functions
                     return;
 
                 long now = GClass203.smethod_18();
-                if (_state == ScannerState.Scanning)
+                if (_state == ScannerState.WaitingLocation)
+                    UpdateWaitingLocation(now);
+                else if (_state == ScannerState.RoutingToScanMap)
+                    UpdateScanRoute(now);
+                else if (_state == ScannerState.Scanning)
                     UpdateScanning(now);
                 else if (_state == ScannerState.Found || _state == ScannerState.Fighting)
                     UpdatePinnedFight(now);
@@ -191,12 +205,22 @@ namespace AssemblyCSharp.Functions
             _desiredZone = _startZone + _workerIndex;
             _arrivedZone = -1;
             _zoneAttempts = 0;
+            _scanMapId = -1;
+            _scanMapName = "";
+            _announcedZone = -1;
+            _usingAnnouncedZone = false;
+            _scanMapId = -1;
+            _scanMapName = "";
+            _announcedZone = -1;
+            _usingAnnouncedZone = false;
             _targetMapId = -1;
             _targetMapName = "";
             _targetZone = -1;
             _readyReported = false;
-            _state = ScannerState.Scanning;
+            _state = ScannerState.WaitingLocation;
             _startedAt = GClass203.smethod_18();
+            _scanRouteStartedAt = 0L;
+            _lastScanRouteCommandAt = 0L;
             _lastZoneCommandAt = 0L;
             _arrivedAt = 0L;
             _lastRouteCommandAt = 0L;
@@ -207,7 +231,24 @@ namespace AssemblyCSharp.Functions
             _rallyZoneArrivedAt = 0L;
             _targetMissingSince = 0L;
             ClearAnnouncements();
-            RequestZoneList(_startedAt);
+
+            GClass78 currentTarget = FindTargetBoss();
+            if (currentTarget != null)
+            {
+                SetScanLocation(GClass20.int_37, GClass20.string_1, GClass20.int_39, _startedAt);
+                return;
+            }
+
+            int knownMapId;
+            string knownMapName;
+            int knownZone;
+            if (TryResolveKnownBossLocation(out knownMapId, out knownMapName, out knownZone))
+            {
+                SetScanLocation(knownMapId, knownMapName, knownZone, _startedAt);
+                return;
+            }
+
+            SendEvent(CmdZone, "WAITING_LOCATION");
         }
 
         private void StartRally(BossHuntPayload payload)
@@ -225,6 +266,136 @@ namespace AssemblyCSharp.Functions
             _lastRouteCommandAt = 0L;
             _lastZoneCommandAt = 0L;
             _lastFocusAt = 0L;
+        }
+
+        private void UpdateWaitingLocation(long now)
+        {
+            GClass78 currentTarget = FindTargetBoss();
+            if (currentTarget != null)
+            {
+                SetScanLocation(GClass20.int_37, GClass20.string_1, GClass20.int_39, now);
+                return;
+            }
+
+            int knownMapId;
+            string knownMapName;
+            int knownZone;
+            if (TryResolveKnownBossLocation(out knownMapId, out knownMapName, out knownZone))
+                SetScanLocation(knownMapId, knownMapName, knownZone, now);
+        }
+
+        private void UpdateScanRoute(long now)
+        {
+            if (_scanMapId < 0)
+            {
+                _state = ScannerState.WaitingLocation;
+                SendEvent(CmdZone, "WAITING_LOCATION");
+                return;
+            }
+
+            if (GClass20.int_37 == _scanMapId)
+            {
+                BeginScanningOnCurrentMap(now);
+                return;
+            }
+
+            if (_scanRouteStartedAt > 0L && now - _scanRouteStartedAt >= ScanRouteTimeoutMs)
+            {
+                ReportFailed("SCAN_ROUTE_TIMEOUT " + _scanMapName);
+                return;
+            }
+
+            if (now - _lastScanRouteCommandAt < ScanRouteRetryMs)
+                return;
+
+            if (GClass148.smethod_0().bool_0)
+                Class21.smethod_0().method_9();
+            Class21.smethod_0().method_8(_scanMapId);
+            _lastScanRouteCommandAt = now;
+            SendEvent(CmdZone, "ROUTING_MAP|" + _scanMapName);
+        }
+
+        private void SetScanLocation(int mapId, string mapName, int zone, long now)
+        {
+            if (mapId < 0)
+                return;
+
+            _scanMapId = mapId;
+            _scanMapName = mapName ?? "";
+            _announcedZone = zone;
+            _scanRouteStartedAt = now;
+            _lastScanRouteCommandAt = 0L;
+
+            if (GClass20.int_37 == _scanMapId)
+                BeginScanningOnCurrentMap(now);
+            else
+            {
+                _state = ScannerState.RoutingToScanMap;
+                UpdateScanRoute(now);
+            }
+        }
+
+        private void BeginScanningOnCurrentMap(long now)
+        {
+            _state = ScannerState.Scanning;
+            _maxZone = 14;
+            _usingAnnouncedZone = _announcedZone >= 0;
+            _desiredZone = _usingAnnouncedZone ? _announcedZone : (_startZone + _workerIndex);
+            _arrivedZone = -1;
+            _zoneAttempts = 0;
+            _startedAt = now;
+            _lastZoneCommandAt = 0L;
+            _arrivedAt = 0L;
+            _lastZoneListRequestAt = 0L;
+            RequestZoneList(now);
+            SendEvent(CmdZone, "SCANNING");
+        }
+
+        private bool TryResolveKnownBossLocation(out int mapId, out string mapName, out int zone)
+        {
+            mapId = -1;
+            mapName = "";
+            zone = -1;
+
+            try
+            {
+                for (int i = GClass156.list_0.Count - 1; i >= 0; i--)
+                {
+                    GClass156 item = GClass156.list_0[i];
+                    if (item == null || item.int_0 < 0 || !BossNameMatches(item.string_0, _bossName))
+                        continue;
+
+                    mapId = item.int_0;
+                    mapName = item.string_1 ?? "";
+                    zone = item.int_1;
+                    return true;
+                }
+            }
+            catch
+            {
+            }
+
+            return false;
+        }
+
+        private void AdvanceScanZone()
+        {
+            if (_usingAnnouncedZone)
+            {
+                _usingAnnouncedZone = false;
+                int first = GetFirstAssignedZone();
+                if (first == _desiredZone)
+                    MoveToNextAssignedZone();
+                else
+                {
+                    _desiredZone = first;
+                    _zoneAttempts = 0;
+                    _lastZoneCommandAt = 0L;
+                }
+                return;
+            }
+
+            MoveToNextAssignedZone();
         }
 
         private void UpdateScanning(long now)
@@ -264,12 +435,12 @@ namespace AssemblyCSharp.Functions
                     _arrivedZone = _desiredZone;
                     _arrivedAt = now;
                     _zoneAttempts = 0;
-                    SendEvent(CmdZone, "Đang dò");
+                    SendEvent(CmdZone, "SCANNING");
                 }
 
                 if (now - _arrivedAt >= 900L)
                 {
-                    MoveToNextAssignedZone();
+                    AdvanceScanZone();
                     _arrivedZone = -1;
                     _arrivedAt = 0L;
                 }
@@ -282,7 +453,7 @@ namespace AssemblyCSharp.Functions
 
             if (_zoneAttempts >= 2)
             {
-                MoveToNextAssignedZone();
+                AdvanceScanZone();
                 _zoneAttempts = 0;
                 return;
             }
@@ -456,10 +627,24 @@ namespace AssemblyCSharp.Functions
 
                 if (!_active)
                     continue;
+
                 if (DeathAnnouncementMatches(message, _bossName))
                 {
                     ReportDead(message);
                     return;
+                }
+
+                if (_state == ScannerState.WaitingLocation || _state == ScannerState.RoutingToScanMap || _state == ScannerState.Scanning)
+                {
+                    string announcedBoss;
+                    string announcedMap;
+                    int announcedMapId;
+                    int announcedZone;
+                    if (GClass156.TryParseBossAnnouncement(message, out announcedBoss, out announcedMap, out announcedMapId, out announcedZone) &&
+                        BossNameMatches(announcedBoss, _bossName))
+                    {
+                        SetScanLocation(announcedMapId, announcedMap, announcedZone, GClass203.smethod_18());
+                    }
                 }
             }
         }
@@ -611,6 +796,8 @@ namespace AssemblyCSharp.Functions
             _rallyZoneAttempts = 0;
             _rallyZoneArrivedAt = 0L;
             _targetMissingSince = 0L;
+            _scanRouteStartedAt = 0L;
+            _lastScanRouteCommandAt = 0L;
             ClearAnnouncements();
             _lastFocusAt = 0L;
         }

@@ -281,7 +281,17 @@ namespace DragonBoyManager
                         worker.Zone = payload.zone;
                         worker.MapId = payload.mapId;
                         worker.MapName = payload.mapName ?? "";
-                        worker.Status = (MainController.language == 0 ? "Đang dò K" : "Scanning K") + payload.zone;
+
+                        string detail = payload.detail ?? "";
+                        if (detail == "WAITING_LOCATION")
+                            worker.Status = MainController.language == 0 ? "Chờ vị trí boss" : "Waiting for boss location";
+                        else if (detail.StartsWith("ROUTING_MAP|", StringComparison.Ordinal))
+                        {
+                            string targetMap = detail.Substring("ROUTING_MAP|".Length);
+                            worker.Status = (MainController.language == 0 ? "Đang tới " : "Routing to ") + targetMap;
+                        }
+                        else
+                            worker.Status = (MainController.language == 0 ? "Đang dò K" : "Scanning K") + payload.zone;
                     }
                 }
                 Publish();
