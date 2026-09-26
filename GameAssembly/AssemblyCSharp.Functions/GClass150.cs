@@ -96,7 +96,12 @@ namespace AssemblyCSharp.Functions
 			{
 				vMessage vMessage2 = JsonConvert.DeserializeObject<vMessage>(string_0);
 				if (vMessage2 != null)
-					GClass171.smethod_0().method_23(vMessage2);
+				{
+					if (vMessage2.cmd >= 100 && vMessage2.cmd <= 102)
+						BossZoneScanner.Instance.HandleManagerMessage(vMessage2.cmd, vMessage2.data);
+					else
+						GClass171.smethod_0().method_23(vMessage2);
+				}
 			}
 		}
 

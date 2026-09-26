@@ -41,13 +41,30 @@ namespace DragonBoyManager
 
 		public long TimePlus;
 
+        private TabPage bossHuntTabPage;
+
+        private TabBossHunt bossHuntTab;
+
 		public MainController()
 		{
 			InitializeComponent();
 			instance = this;
+            InitializeBossHuntTab();
 #if DEBUG
             CheckForIllegalCrossThreadCalls = false;
 #endif
+        }
+
+        private void InitializeBossHuntTab()
+        {
+            bossHuntTabPage = new TabPage(language == 0 ? "SĂN BOSS" : "BOSS HUNT");
+            bossHuntTabPage.Padding = new Padding(4);
+            bossHuntTab = new TabBossHunt
+            {
+                Dock = DockStyle.Fill
+            };
+            bossHuntTabPage.Controls.Add(bossHuntTab);
+            mainTab.Controls.Add(bossHuntTabPage);
         }
 
 		private void MainController_Load(object sender, EventArgs e)
@@ -86,6 +103,10 @@ namespace DragonBoyManager
 				tabPage2.Text = "CONTROL";
 				tabPage3.Text = "SETTING";
 				tabPage4.Text = "INFORMATION";
+                if (bossHuntTabPage != null)
+                    bossHuntTabPage.Text = "BOSS HUNT";
+                if (bossHuntTab != null)
+                    bossHuntTab.loadLanguage();
 				đăngNhậpToolStripMenuItem.Text = "LOGIN";
 				sửaKíchThướcToolStripMenuItem.Text = "EDIT SIZE";
 				groupBox2.Text = "Activated Options";

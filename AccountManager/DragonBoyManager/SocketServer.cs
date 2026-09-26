@@ -100,10 +100,20 @@ namespace DragonBoyManager
                     case 3:
                         state.account = waitingAccounts.Find(acc => acc.ID == int.Parse(Encoding.ASCII.GetString(msg.data)));
                         if (state.account != null)
+                        {
                             state.account.Status = MainController.language == 0 ? "Mất kết nối" : "Disconnected";
+                            BossHuntCoordinator.Instance.HandleDisconnected(state.account);
+                        }
                         MainController.instance.REFRESH = true;
                         break;
                     case 2:
+                        break;
+                    case BossHuntCoordinator.CmdZone:
+                    case BossHuntCoordinator.CmdFound:
+                    case BossHuntCoordinator.CmdDead:
+                    case BossHuntCoordinator.CmdReady:
+                    case BossHuntCoordinator.CmdFailed:
+                        BossHuntCoordinator.Instance.HandleClientMessage(state.account, msg.cmd, msg.data);
                         break;
                 }
             }
@@ -179,6 +189,7 @@ namespace DragonBoyManager
 			{
 				waitingAccounts.Remove(stateObject.account);
                 stateObject.account.Status = "";
+                BossHuntCoordinator.Instance.HandleDisconnected(stateObject.account);
             }
         }
 

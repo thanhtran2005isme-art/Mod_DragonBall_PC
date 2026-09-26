@@ -305,19 +305,60 @@ namespace AssemblyCSharp.Functions
 
         public static void smethod_2(string chatVip)
         {
-            if (bool_0 && chatVip.StartsWith("BOSS"))
+            string bossName;
+            string mapName;
+            int mapId;
+            int zone;
+            if (!TryParseBossAnnouncement(chatVip, out bossName, out mapName, out mapId, out zone))
+                return;
+
+            GClass156 item = new GClass156(bossName, mapName);
+            item.int_1 = zone;
+            list_0.Add(item);
+            smethod_1(bossName, mapName);
+            if (list_0.Count > 5)
+                list_0.RemoveAt(0);
+        }
+
+        public static bool TryParseBossAnnouncement(string chatVip, out string bossName, out string mapName, out int mapId, out int zone)
+        {
+            bossName = "";
+            mapName = "";
+            mapId = -1;
+            zone = -1;
+
+            if (string.IsNullOrEmpty(chatVip) || !chatVip.StartsWith("BOSS", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            string text = chatVip.Trim();
+            if (text.StartsWith("BOSS ", StringComparison.OrdinalIgnoreCase))
+                text = text.Substring(5);
+
+            text = text.Replace(" vừa xuất hiện tại ", "|")
+                .Replace(" appear at ", "|")
+                .Replace(" khu vực ", "|")
+                .Replace(" zone ", "|");
+
+            string[] array = text.Split('|');
+            if (array.Length < 2)
+                return false;
+
+            bossName = array[0].Trim();
+            mapName = array[1].Trim();
+            if (bossName.Length == 0 || mapName.Length == 0)
+                return false;
+
+            GClass156 parsed = new GClass156(bossName, mapName);
+            mapId = parsed.int_0;
+
+            if (array.Length >= 3)
             {
-                chatVip = chatVip.Replace("BOSS ", "").Replace(" vừa xuất hiện tại ", "|").Replace(" appear at ", "|")
-                    .Replace(" khu vực ", "|")
-                    .Replace(" zone ", "|");
-                string[] array = chatVip.Split('|');
-                list_0.Add(new GClass156(array[0].Trim(), array[1].Trim()));
-                smethod_1(array[0].Trim(), array[1].Trim());
-                if (array.Length == 3)
-                    list_0.Last().int_1 = int.Parse(array[2].Trim());
-                if (list_0.Count > 5)
-                    list_0.RemoveAt(0);
+                int parsedZone;
+                if (int.TryParse(array[2].Trim(), out parsedZone))
+                    zone = parsedZone;
             }
+
+            return mapId >= 0;
         }
 
         public static string smethod_3(GClass156 boss)

@@ -117,3 +117,33 @@ README chỉ nên chứa quick start, build path/output, module mapping ổn đ�
 - Vì vậy `-3 type=2` chỉ được coi là tín hiệu diagnostic/reward, không phải bằng chứng độc lập rằng client mình last-hit.
 - Trước khi thay công thức local KOL, phải trace sequence own ATTACK -> HP/MISS/DIE -> drop -> SM/TN trong các tình huống có và không có người khác cùng farm.
 - Commit diagnostic phải giữ nguyên cách +1 hiện tại để số liệu so sánh không bị trộn với thay đổi thuật toán.
+
+## D-011 — Manager điều phối phiên săn boss đa tài khoản
+
+**Trạng thái:** active — 2026-09-24
+
+- Manager tạo `sessionId`, chọn các account đang kết nối và chia worker.
+- Client trước hết lấy `mapId + zone` từ thông báo boss thực tế (`GClass156`), Xmap tới đúng map; chỉ sau đó mới scan zone. Nếu server có zone cụ thể thì thử zone đó trước, rồi mới fallback sang dãy `start + workerIndex + round * workerCount`.
+- Account đầu tiên thấy target gửi `FOUND`; Manager dùng map/khu thật đó để rally tất cả worker.
+- Sau đổi map/khu phải resolve lại boss từ `GClass158.list_3`; không giữ object boss cũ.
+- Focus/di chuyển/đánh tái sử dụng `GClass158` và `GClass159`.
+- Thông báo game xác nhận đúng target chết hoặc HP target <= 0 sẽ dừng toàn bộ session.
+- Boss chỉ biến mất khỏi entity list không đủ để kết luận chết.
+- Event/lệnh cũ khác `sessionId` hiện tại phải bị bỏ qua.
+- Callback socket không được trực tiếp thao tác gameplay; START/STOP/RALLY phải được enqueue và drain trong `BossZoneScanner.Update()` trên game loop.
+
+Không được quét map hiện tại khi chưa biết vị trí boss. Không hard-code/đoán map từ tên boss; dùng announcement server đã parse làm source of truth. Nếu chưa có announcement phù hợp, worker ở `WaitingLocation`.
+
+
+## D-012 — Worker săn boss lỗi không được làm treo cả session
+
+**Trạng thái:** active — 2026-09-26
+
+- Game -> Manager có event `114 FAILED` dành riêng cho lỗi route/khu/target; không dùng `READY` hay `DEAD` để biểu diễn lỗi.
+- Rally có giới hạn: 45 giây toàn pha, 3 lần đổi khu, 8 giây chờ target sau khi đã tới đúng map+khu.
+- Trong Fighting, target mất được chờ 3 giây để resolve lại; hết grace mới báo `FAILED`.
+- Worker `FAILED` được xem là terminal cho worker đó và không chặn các worker `READY`.
+- Manager chỉ vào Fighting khi mọi worker còn kết nối đã settle (READY hoặc FAILED) và còn ít nhất một READY.
+- Nếu không còn worker READY khả dụng, toàn session dừng.
+- Boss biến mất không được chuyển thành DEAD; DEAD vẫn chỉ đến từ HP <= 0 hoặc thông báo server xác nhận đúng target.
+- Thông báo server mới được hook tại `GClass144.method_121()`, enqueue vào scanner và drain trên game loop; không dùng cursor index của queue UI vì queue đó xóa phần tử đầu theo thời gian.

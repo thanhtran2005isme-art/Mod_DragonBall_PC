@@ -3,6 +3,35 @@
 Ghi ngắn gọn các thay đổi quan trọng, mới nhất ở trên.  
 Không dùng file này để giải thích kiến trúc dài; chi tiết nằm trong `docs/`.
 
+## 2026-09-26
+
+- Fix Boss Hunt không còn quét map hiện tại khi boss ở map khác: dùng announcement server để resolve `bossName -> mapId + zone`, Xmap tới đúng map rồi mới scan.
+- Nếu chưa có vị trí boss, worker ở trạng thái chờ; nếu có zone từ announcement thì ưu tiên zone đó trước khi fallback round-robin.
+- Manager hiển thị trạng thái `Chờ vị trí boss` / `Đang tới <map>` trong pha chuẩn bị scan.
+- Commit `c6c9c79` đã build full solution SUCCESS; `d54131d` dọn reset state scan-map.
+
+
+- Thêm event Boss Hunt `114 FAILED`; worker route/khu/target lỗi được cô lập thay vì làm toàn session treo ở Rallying.
+- Giới hạn rally: 45 giây toàn pha, 3 lần đổi khu, 8 giây chờ target; Fighting cho target mất grace 3 giây trước khi báo lỗi.
+- Manager cho phép session tiếp tục Fighting khi một số worker FAILED nhưng vẫn còn worker READY; dừng nếu không còn worker khả dụng.
+- Hook thông báo VIP mới trực tiếp từ `GClass144.method_121()` vào queue của `BossZoneScanner`, tránh bỏ lỡ/đọc lại do queue UI xóa phần tử đầu.
+- Commit code `1786046` và `0ee000c`; run `36254447048` đã qua bước MSBuild full solution.
+
+## 2026-09-25
+
+- Sửa layout tab `SĂN BOSS` để toàn bộ control nằm trong khung Manager thực tế `765x480`.
+- Chuyển START/STOP/RALLY sang queue thread-safe; callback socket không còn trực tiếp thao tác trạng thái gameplay.
+- Khóa Start ở cả UI và coordinator khi session đang chạy; tự `Stopped` nếu toàn bộ worker mất kết nối.
+- Tắt Auto Boss cũ trong lúc scan để tránh đánh nhầm boss khác, sau đó khôi phục setting khi phiên dừng.
+
+## 2026-09-24
+
+- Thêm tab top-level `SĂN BOSS` cho DragonBoyManager trên branch `feat-boss-hunt-manager`.
+- Thêm `BossHuntCoordinator` để chia zone round-robin cho các account đang kết nối, quản lý `sessionId`, FOUND/RALLY/FIGHTING/STOP và reassign khi worker mất kết nối.
+- Thêm `BossZoneScanner` phía GameAssembly: tự dò khu, resolve boss theo tên, report FOUND/DEAD/READY, rally tới map+khu thật và tái sử dụng focus/auto boss hiện có.
+- Boss mục tiêu chết từ thông báo game hoặc HP <= 0 sẽ dừng toàn bộ phiên; boss chỉ biến mất khỏi entity list không được coi là chết.
+- GitHub Actions run `36029651400` đã build full solution, upload artifact, nén và phát hành thành công; runtime nhiều account vẫn cần test trước khi merge vào `main`.
+
 ## 2026-09-22
 
 - Thêm `KOLProtocol.log` để trace ATTACK/probe, HP/MISS/DIE, drop owner, SM/TN, skip/timeout/overlap và correction khi server sync; chưa thay đổi công thức +1 KOL.
