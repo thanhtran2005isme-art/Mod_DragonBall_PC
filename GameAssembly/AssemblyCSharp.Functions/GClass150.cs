@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
@@ -19,26 +21,21 @@ namespace AssemblyCSharp.Functions
 
 			internal void method_0()
 			{
-				try
-				{
-					socket_0 = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-					socket_0.Connect(IPAddress.Loopback, int_0);
-					socket_0.BeginReceive(byte_0, 0, byte_0.Length, SocketFlags.None, gclass150_0.method_3, socket_0);
-					if (!gclass150_0.bool_2)
-					{
-						smethod_0().method_2(new vMessage
-						{
-							cmd = 0,
-							data = Encoding.ASCII.GetBytes(GClass150.int_0.ToString())
-						});
-						gclass150_0.bool_2 = true;
-					}
-					Thread.Sleep(400);
-				}
-				catch (Exception ex)
-				{
-					GClass149.smethod_0("Data/Errors/Connect.txt", ex.ToString());
-				}
+				gclass150_0.method_4(int_0);
+			}
+		}
+
+		private sealed class ReceiveState
+		{
+			public readonly Socket socket;
+
+			public readonly byte[] buffer = new byte[4096];
+
+			public readonly List<byte> pendingBytes = new List<byte>();
+
+			public ReceiveState(Socket socket)
+			{
+				this.socket = socket;
 			}
 		}
 
@@ -52,7 +49,13 @@ namespace AssemblyCSharp.Functions
 
 		public bool bool_2 = false;
 
-		private static byte[] byte_0 = new byte[2048];
+		private const int MaxFrameSize = 1048576;
+
+		private readonly object sendLock = new object();
+
+		private readonly object connectLock = new object();
+
+		private bool connecting;
 
 		public static Socket socket_0;
 
@@ -63,31 +66,96 @@ namespace AssemblyCSharp.Functions
 
 		public void method_0(int Port)
 		{
+			lock (connectLock)
+			{
+				if (connecting)
+					return;
+				connecting = true;
+			}
+
 			Thread thread = new Thread((ThreadStart)delegate
 			{
 				try
 				{
-					socket_0 = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-					socket_0.Connect(IPAddress.Loopback, Port);
-					socket_0.BeginReceive(byte_0, 0, byte_0.Length, SocketFlags.None, method_3, socket_0);
-					if (!bool_2)
+					while (bool_0)
 					{
-						smethod_0().method_2(new vMessage
+						try
 						{
-							cmd = 0,
-							data = Encoding.ASCII.GetBytes(int_0.ToString())
-						});
-						bool_2 = true;
+							method_4(Port);
+							return;
+						}
+						catch (Exception ex)
+						{
+							GClass149.smethod_0("Data/Errors/Connect.txt", ex.ToString());
+							Thread.Sleep(1000);
+						}
 					}
-					Thread.Sleep(400);
 				}
-				catch (Exception ex)
+				finally
 				{
-					GClass149.smethod_0("Data/Errors/Connect.txt", ex.ToString());
+					lock (connectLock)
+						connecting = false;
 				}
 			});
 			thread.IsBackground = true;
 			thread.Start();
+		}
+
+		private void method_4(int port)
+		{
+			Socket newSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+			try
+			{
+				newSocket.Connect(IPAddress.Loopback, port);
+
+				Socket oldSocket = socket_0;
+				socket_0 = newSocket;
+				bool_2 = false;
+
+				ReceiveState state = new ReceiveState(newSocket);
+				newSocket.BeginReceive(state.buffer, 0, state.buffer.Length, SocketFlags.None, method_3, state);
+
+				method_5(new vMessage
+				{
+					cmd = 0,
+					data = Encoding.ASCII.GetBytes(int_0.ToString())
+				});
+				bool_2 = true;
+
+				if (oldSocket != null && oldSocket != newSocket)
+				{
+					try
+					{
+						oldSocket.Shutdown(SocketShutdown.Both);
+					}
+					catch
+					{
+					}
+					try
+					{
+						oldSocket.Close();
+					}
+					catch
+					{
+					}
+				}
+
+				Thread.Sleep(400);
+			}
+			catch
+			{
+				if (socket_0 == newSocket)
+					socket_0 = null;
+				bool_2 = false;
+				try
+				{
+					newSocket.Close();
+				}
+				catch
+				{
+				}
+				throw;
+			}
 		}
 
 		private void method_1(string string_0)
@@ -107,50 +175,139 @@ namespace AssemblyCSharp.Functions
 
 		public void method_2(object obj)
 		{
-			string s = JsonConvert.SerializeObject(obj);
-			byte[] bytes = Encoding.ASCII.GetBytes(s);
 			try
 			{
-				socket_0.Send(bytes);
+				method_5(obj);
 			}
 			catch (ObjectDisposedException)
 			{
+			}
+			catch (SocketException)
+			{
+			}
+			catch (IOException)
+			{
+			}
+		}
+
+		private void method_5(object obj)
+		{
+			string json = JsonConvert.SerializeObject(obj);
+			byte[] payload = Encoding.UTF8.GetBytes(json ?? "");
+			if (payload.Length > MaxFrameSize)
+				throw new InvalidDataException("Manager/game frame too large: " + payload.Length);
+
+			byte[] header = BitConverter.GetBytes(IPAddress.HostToNetworkOrder(payload.Length));
+			byte[] frame = new byte[4 + payload.Length];
+			Buffer.BlockCopy(header, 0, frame, 0, 4);
+			Buffer.BlockCopy(payload, 0, frame, 4, payload.Length);
+
+			Socket socket = socket_0;
+			if (socket == null)
+				throw new IOException("Manager socket is not connected.");
+
+			lock (sendLock)
+			{
+				int sent = 0;
+				while (sent < frame.Length)
+				{
+					int count = socket.Send(frame, sent, frame.Length - sent, SocketFlags.None);
+					if (count <= 0)
+						throw new IOException("Socket closed while sending manager/game frame.");
+					sent += count;
+				}
 			}
 		}
 
 		public void method_3(IAsyncResult ar)
 		{
+			ReceiveState state = ar.AsyncState as ReceiveState;
+			if (state == null)
+				return;
+
+			int num;
 			try
 			{
-				Socket socket = (Socket)ar.AsyncState;
-				if (socket.Connected)
+				num = state.socket.EndReceive(ar);
+			}
+			catch
+			{
+				HandleConnectionClosed(state);
+				return;
+			}
+
+			if (num <= 0)
+			{
+				HandleConnectionClosed(state);
+				return;
+			}
+
+			try
+			{
+				for (int i = 0; i < num; i++)
+					state.pendingBytes.Add(state.buffer[i]);
+
+				string json;
+				while (TryTakeFrame(state.pendingBytes, out json))
+					method_1(json);
+
+				if (state.socket == socket_0 && state.socket.Connected)
 				{
-					byte[] array = new byte[2048];
-					int num = 0;
-					try
-					{
-						num = socket.EndReceive(ar);
-					}
-					catch
-					{
-					}
-					if (num > 0)
-					{
-						Array.Copy(byte_0, array, num);
-						method_1(Encoding.UTF8.GetString(array));
-						Array.Clear(byte_0, 0, byte_0.Length);
-						Array.Clear(array, 0, array.Length);
-						socket_0.BeginReceive(byte_0, 0, byte_0.Length, SocketFlags.None, method_3, socket_0);
-						return;
-					}
+					state.socket.BeginReceive(state.buffer, 0, state.buffer.Length, SocketFlags.None, method_3, state);
+					return;
 				}
-				if (bool_0)
-					method_0(GClass172.int_0);
 			}
 			catch (Exception ex)
 			{
 				GClass149.smethod_0("Data/Errors/ReceiveData.txt", ex.ToString());
 			}
+
+			HandleConnectionClosed(state);
+		}
+
+		private static bool TryTakeFrame(List<byte> pendingBytes, out string json)
+		{
+			json = null;
+			if (pendingBytes.Count < 4)
+				return false;
+
+			byte[] header = pendingBytes.GetRange(0, 4).ToArray();
+			int length = IPAddress.NetworkToHostOrder(BitConverter.ToInt32(header, 0));
+			if (length < 0 || length > MaxFrameSize)
+				throw new InvalidDataException("Invalid manager/game frame length: " + length);
+			if (pendingBytes.Count < 4 + length)
+				return false;
+
+			byte[] payload = pendingBytes.GetRange(4, length).ToArray();
+			pendingBytes.RemoveRange(0, 4 + length);
+			json = Encoding.UTF8.GetString(payload);
+			return true;
+		}
+
+		private void HandleConnectionClosed(ReceiveState state)
+		{
+			try
+			{
+				state.socket.Shutdown(SocketShutdown.Both);
+			}
+			catch
+			{
+			}
+			try
+			{
+				state.socket.Close();
+			}
+			catch
+			{
+			}
+
+			if (state.socket != socket_0)
+				return;
+
+			socket_0 = null;
+			bool_2 = false;
+			if (bool_0)
+				method_0(GClass172.int_0);
 		}
 	}
 }

@@ -17,8 +17,8 @@ namespace DragonBoyManager
 			[JsonProperty(nameof(cmd))]
 			public int cmd;
 
-            [JsonProperty(nameof(data))]
-            public byte[] data;
+			[JsonProperty(nameof(data))]
+			public byte[] data;
 		}
 
 		public class vSocket
@@ -41,6 +41,7 @@ namespace DragonBoyManager
 
 		private static List<vSocket> __ClientSockets { get; set; } = new List<vSocket>();
 
+		private const int MaxFrameSize = 1048576;
 
 		public static void StartListening(int port)
 		{
@@ -78,53 +79,112 @@ namespace DragonBoyManager
 		{
 			try
 			{
-                switch (msg.cmd)
-                {
-                    case 0:
-                        state.account = waitingAccounts.Find(acc => acc.ID == int.Parse(Encoding.ASCII.GetString(msg.data)));
-                        if (state.account != null)
-                        {
-                            state.account.workSocket = state.workSocket;
-                            state.account.Status = MainController.language == 0 ? "Đã kết nối" : "Connected";
-                            MainController.instance.REFRESH = true;
-                        }
-                        break;
-                    case 1:
-                    {
-                        Account account = TabData._instance.GetAccounts().Find(acc => acc != null && acc.ID == int.Parse(Encoding.ASCII.GetString(msg.data)) && !string.IsNullOrEmpty(acc.Status));
-                        if (account != null)
-                            account.Status = "";
-                        MainController.instance.REFRESH = true;
-                        break;
-                    }
-                    case 3:
-                        state.account = waitingAccounts.Find(acc => acc.ID == int.Parse(Encoding.ASCII.GetString(msg.data)));
-                        if (state.account != null)
-                        {
-                            state.account.Status = MainController.language == 0 ? "Mất kết nối" : "Disconnected";
-                            BossHuntCoordinator.Instance.HandleDisconnected(state.account);
-                        }
-                        MainController.instance.REFRESH = true;
-                        break;
-                    case 2:
-                        break;
-                    case BossHuntCoordinator.CmdZone:
-                    case BossHuntCoordinator.CmdFound:
-                    case BossHuntCoordinator.CmdDead:
-                    case BossHuntCoordinator.CmdReady:
-                    case BossHuntCoordinator.CmdFailed:
-                        BossHuntCoordinator.Instance.HandleClientMessage(state.account, msg.cmd, msg.data);
-                        break;
-                }
-            }
+				switch (msg.cmd)
+				{
+				case 0:
+				{
+					int accountId = int.Parse(Encoding.ASCII.GetString(msg.data));
+					Account account = null;
+					if (TabData._instance != null)
+						account = TabData._instance.GetAccounts().Find(acc => acc != null && acc.ID == accountId);
+					if (account == null)
+					{
+						lock (waitingAccounts)
+							account = waitingAccounts.Find(acc => acc != null && acc.ID == accountId);
+					}
+
+					state.account = account;
+					if (state.account != null)
+					{
+						Socket oldSocket = state.account.workSocket;
+						state.account.workSocket = state.workSocket;
+						state.account.Status = MainController.language == 0 ? "Đã kết nối" : "Connected";
+
+						lock (waitingAccounts)
+						{
+							waitingAccounts.RemoveAll(acc => acc == null || acc.ID == accountId);
+							waitingAccounts.Add(state.account);
+						}
+
+						if (oldSocket != null && oldSocket != state.workSocket)
+						{
+							try
+							{
+								oldSocket.Shutdown(SocketShutdown.Both);
+							}
+							catch
+							{
+							}
+							try
+							{
+								oldSocket.Close();
+							}
+							catch
+							{
+							}
+						}
+
+						if (MainController.instance != null)
+							MainController.instance.REFRESH = true;
+					}
+					break;
+				}
+				case 1:
+				{
+					Account account = TabData._instance.GetAccounts().Find(acc => acc != null && acc.ID == int.Parse(Encoding.ASCII.GetString(msg.data)) && !string.IsNullOrEmpty(acc.Status));
+					if (account != null)
+						account.Status = "";
+					if (MainController.instance != null)
+						MainController.instance.REFRESH = true;
+					break;
+				}
+				case 3:
+				{
+					int accountId = int.Parse(Encoding.ASCII.GetString(msg.data));
+					Account account = null;
+					if (TabData._instance != null)
+						account = TabData._instance.GetAccounts().Find(acc => acc != null && acc.ID == accountId);
+					if (account == null)
+					{
+						lock (waitingAccounts)
+							account = waitingAccounts.Find(acc => acc != null && acc.ID == accountId);
+					}
+					if (account != null)
+					{
+						account.Status = MainController.language == 0 ? "Mất kết nối" : "Disconnected";
+						BossHuntCoordinator.Instance.HandleDisconnected(account);
+					}
+					if (MainController.instance != null)
+						MainController.instance.REFRESH = true;
+					break;
+				}
+				case 2:
+					break;
+				case BossHuntCoordinator.CmdZone:
+				case BossHuntCoordinator.CmdFound:
+				case BossHuntCoordinator.CmdDead:
+				case BossHuntCoordinator.CmdReady:
+				case BossHuntCoordinator.CmdFailed:
+					BossHuntCoordinator.Instance.HandleClientMessage(state.account, msg.cmd, msg.data);
+					break;
+				}
+			}
 			catch (Exception ex)
 			{
-				File.WriteAllText("Data/Errors/SocketOnMessage.txt", ex.Message);
+				try
+				{
+					File.AppendAllText("Data/Errors/SocketOnMessage.txt", ex + Environment.NewLine);
+				}
+				catch
+				{
+				}
 			}
 		}
 
 		public static void sendMessage(this Account account, vMessage msg)
 		{
+			if (account == null)
+				return;
 			Send(account.workSocket, JsonConvert.SerializeObject(msg));
 		}
 
@@ -136,7 +196,7 @@ namespace DragonBoyManager
 			{
 				workSocket = socket
 			};
-			socket.BeginReceive(stateObject.buffer, 0, 4096, SocketFlags.None, ReadCallback, stateObject);
+			socket.BeginReceive(stateObject.buffer, 0, stateObject.buffer.Length, SocketFlags.None, ReadCallback, stateObject);
 			Send(socket, new vMessage
 			{
 				cmd = 0
@@ -145,70 +205,138 @@ namespace DragonBoyManager
 
 		public static void ReadCallback(IAsyncResult ar)
 		{
-			string empty = "";
 			StateObject stateObject = (StateObject)ar.AsyncState;
 			Socket workSocket = stateObject.workSocket;
-			int num = 0;
+			int num;
 			try
 			{
 				num = workSocket.EndReceive(ar);
 			}
-			catch (Exception)
+			catch
 			{
-				goto IL_00a7;
+				CloseClient(stateObject);
+				return;
 			}
-			if (num > 0)
-			{
-				empty = Encoding.UTF8.GetString(stateObject.buffer, 0, num);
-				vMessage vMessage = null;
-				try
-				{
-					vMessage = JsonConvert.DeserializeObject<vMessage>(empty);
-				}
-				catch (Exception) { }
-				if (vMessage != null)
-				{
-					if (vMessage.cmd == -1)
-						goto IL_00a7;
-					onMessage(vMessage, stateObject);
-				}
-				try
-				{
-					workSocket.BeginReceive(stateObject.buffer, 0, 4096, SocketFlags.None, ReadCallback, stateObject);
-					return;
-				}
-				catch (Exception) { }
-			}
-			IL_00a7:
-			if (stateObject.workSocket != null && stateObject.workSocket.Connected)
-			{
-				workSocket.Shutdown(SocketShutdown.Both);
-				workSocket.Close();
-			}
-			if (stateObject.account != null)
-			{
-				waitingAccounts.Remove(stateObject.account);
-                stateObject.account.Status = "";
-                BossHuntCoordinator.Instance.HandleDisconnected(stateObject.account);
-            }
-        }
 
-		private static void SendCallback(IAsyncResult ar)
-		{
+			if (num <= 0)
+			{
+				CloseClient(stateObject);
+				return;
+			}
+
 			try
 			{
-				((Socket)ar.AsyncState).EndSend(ar);
+				for (int i = 0; i < num; i++)
+					stateObject.pendingBytes.Add(stateObject.buffer[i]);
+
+				string json;
+				while (TryTakeFrame(stateObject.pendingBytes, out json))
+				{
+					vMessage msg = JsonConvert.DeserializeObject<vMessage>(json);
+					if (msg == null)
+						continue;
+					if (msg.cmd == -1)
+					{
+						CloseClient(stateObject);
+						return;
+					}
+					onMessage(msg, stateObject);
+				}
+
+				workSocket.BeginReceive(stateObject.buffer, 0, stateObject.buffer.Length, SocketFlags.None, ReadCallback, stateObject);
 			}
 			catch (Exception ex)
 			{
-				Console.WriteLine(ex.ToString());
+				try
+				{
+					File.AppendAllText("Data/Errors/SocketOnMessage.txt", ex + Environment.NewLine);
+				}
+				catch
+				{
+				}
+				CloseClient(stateObject);
+			}
+		}
+
+		private static bool TryTakeFrame(List<byte> pendingBytes, out string json)
+		{
+			json = null;
+			if (pendingBytes.Count < 4)
+				return false;
+
+			byte[] header = pendingBytes.GetRange(0, 4).ToArray();
+			int length = IPAddress.NetworkToHostOrder(BitConverter.ToInt32(header, 0));
+			if (length < 0 || length > MaxFrameSize)
+				throw new InvalidDataException("Invalid manager/game frame length: " + length);
+			if (pendingBytes.Count < 4 + length)
+				return false;
+
+			byte[] payload = pendingBytes.GetRange(4, length).ToArray();
+			pendingBytes.RemoveRange(0, 4 + length);
+			json = Encoding.UTF8.GetString(payload);
+			return true;
+		}
+
+		private static void CloseClient(StateObject stateObject)
+		{
+			if (stateObject == null)
+				return;
+
+			Socket workSocket = stateObject.workSocket;
+			if (workSocket != null)
+			{
+				try
+				{
+					workSocket.Shutdown(SocketShutdown.Both);
+				}
+				catch
+				{
+				}
+				try
+				{
+					workSocket.Close();
+				}
+				catch
+				{
+				}
+			}
+
+			Account account = stateObject.account;
+			if (account != null && account.workSocket == workSocket)
+			{
+				account.workSocket = null;
+				account.Status = "";
+				BossHuntCoordinator.Instance.HandleDisconnected(account);
+				if (MainController.instance != null)
+					MainController.instance.REFRESH = true;
 			}
 		}
 
 		private static void Send(Socket handler, string data)
 		{
-			byte[] bytes = Encoding.ASCII.GetBytes(data);
-			handler.BeginSend(bytes, 0, bytes.Length, SocketFlags.None, SendCallback, handler);
+			if (handler == null)
+				return;
+
+			byte[] payload = Encoding.UTF8.GetBytes(data ?? "");
+			if (payload.Length > MaxFrameSize)
+				throw new InvalidDataException("Manager/game frame too large: " + payload.Length);
+
+			byte[] header = BitConverter.GetBytes(IPAddress.HostToNetworkOrder(payload.Length));
+			byte[] frame = new byte[4 + payload.Length];
+			Buffer.BlockCopy(header, 0, frame, 0, 4);
+			Buffer.BlockCopy(payload, 0, frame, 4, payload.Length);
+
+			lock (handler)
+			{
+				int sent = 0;
+				while (sent < frame.Length)
+				{
+					int count = handler.Send(frame, sent, frame.Length - sent, SocketFlags.None);
+					if (count <= 0)
+						throw new IOException("Socket closed while sending manager/game frame.");
+					sent += count;
+				}
+			}
 		}
 
 		private static void Send(Socket handler, vMessage msg)
