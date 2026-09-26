@@ -147,3 +147,35 @@ Không được quét map hiện tại khi chưa biết vị trí boss. Không h
 - Nếu không còn worker READY khả dụng, toàn session dừng.
 - Boss biến mất không được chuyển thành DEAD; DEAD vẫn chỉ đến từ HP <= 0 hoặc thông báo server xác nhận đúng target.
 - Thông báo server mới được hook tại `GClass144.method_121()`, enqueue vào scanner và drain trên game loop; không dùng cursor index của queue UI vì queue đó xóa phần tử đầu theo thời gian.
+
+
+## D-013 — Boss location automation tách khỏi HUD và invalidated theo lifecycle
+
+**Trạng thái:** active — 2026-09-26
+
+- `GClass156.list_0` chỉ phục vụ danh sách HUD gần nhất và tiếp tục giới hạn 5 dòng.
+- Boss Hunt không dùng `list_0` làm cache automation.
+- Automation giữ latest location riêng theo tên boss, gồm map/zone/timestamp, và chỉ dùng record còn fresh tối đa 60 phút.
+- Death announcement invalidate record của boss/family tương ứng.
+- Không hard-code map boss theo tên.
+
+## D-014 — TCP Manager/Game bắt buộc có frame và reconnect handshake
+
+**Trạng thái:** active — 2026-09-26
+
+- Wire format localhost là `4-byte network-order length + UTF-8 JSON`.
+- Cả Manager và Game phải có receive accumulator; không được deserialize trực tiếp mỗi `Receive()`.
+- Mọi send phải xử lý partial send.
+- Mỗi socket mới của Game phải gửi lại `cmd=0 + accountId`.
+- Manager ưu tiên account hiện tại từ `TabData`, thay socket cũ bằng socket mới; disconnect callback của socket cũ không được hạ trạng thái socket mới.
+- Game tự retry connect khi Manager tạm thời chưa sẵn sàng.
+
+## D-015 — Xmap Boss Hunt chỉ restart khi dừng hoặc stall
+
+**Trạng thái:** active — 2026-09-26
+
+- Không hủy/restart Xmap theo timer 5 giây nữa.
+- Khi Xmap vẫn chạy và còn trong cửa sổ progress, scanner/rally để router tiếp tục.
+- Nếu Xmap đã dừng trước khi tới target, cho phép start lại sau cooldown ngắn.
+- Nếu Xmap vẫn active nhưng không đổi map trong 30 giây, coi là stall và restart.
+- Timeout route tổng hiện là 90 giây.

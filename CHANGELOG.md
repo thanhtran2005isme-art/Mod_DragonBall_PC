@@ -5,6 +5,10 @@ Không dùng file này để giải thích kiến trúc dài; chi tiết nằm t
 
 ## 2026-09-26
 
+- Hoàn tất hardening P0 Boss Hunt: Xmap progress-aware, cache vị trí boss riêng + freshness/invalidate death, TCP length-prefix framing, accumulator và reconnect handshake lại account.
+- `8d6e0f3` và `8d108a9` đều CI SUCCESS full solution.
+
+
 - Fix Boss Hunt không còn quét map hiện tại khi boss ở map khác: dùng announcement server để resolve `bossName -> mapId + zone`, Xmap tới đúng map rồi mới scan.
 - Nếu chưa có vị trí boss, worker ở trạng thái chờ; nếu có zone từ announcement thì ưu tiên zone đó trước khi fallback round-robin.
 - Manager hiển thị trạng thái `Chờ vị trí boss` / `Đang tới <map>` trong pha chuẩn bị scan.

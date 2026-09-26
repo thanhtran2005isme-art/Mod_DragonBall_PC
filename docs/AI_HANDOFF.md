@@ -103,7 +103,12 @@ f02197f Thêm săn boss đa tài khoản trên Manager
 - thông báo VIP mới được hook trực tiếp từ `GClass144.method_121()` vào queue riêng của `BossZoneScanner`, rồi xử lý trên game loop; không còn phụ thuộc index của queue UI bị xóa đầu;
 - `GClass156` luôn cache thông báo xuất hiện boss dù HUD danh sách boss đang bật hay tắt; scanner dùng cache này làm source of truth cho `bossName -> mapId + zone`;
 - nếu chưa có vị trí boss, scanner ở `WaitingLocation` và **không quét nhầm map hiện tại**;
-- khi có vị trí, scanner dùng `Class21.method_8(mapId)` để Xmap tới map boss; nếu thông báo có zone thì ưu tiên zone đó trước, không thấy target mới quay về round-robin.
+- vị trí automation không còn phụ thuộc `GClass156.list_0` 5 dòng HUD: có cache riêng theo boss, giữ bản ghi mới nhất và chỉ dùng location còn fresh trong 60 phút;
+- death announcement invalidate location cache của đúng boss/family ngay trước khi scanner xử lý terminal death;
+- khi có vị trí, scanner dùng `Class21.method_8(mapId)` để Xmap tới map boss; nếu thông báo có zone thì ưu tiên zone đó trước, không thấy target mới quay về round-robin;
+- Xmap scan/rally không còn bị hủy mỗi 5 giây: khi Xmap đang chạy thì giữ nguyên; chỉ restart sau 30 giây không đổi map hoặc khi Xmap đã dừng, với timeout tổng 90 giây;
+- socket Manager↔Game dùng frame `[4-byte network-order length][UTF-8 JSON]`, có receive accumulator nên chịu được TCP split/coalesced message;
+- mỗi TCP connection mới từ Game luôn handshake lại `accountId`; client tự retry kết nối mỗi giây khi Manager chưa sẵn sàng; callback socket cũ không được phép đánh dấu socket mới là disconnected.
 
 File mới chính:
 
@@ -177,6 +182,8 @@ Log ghi sequence ATTACK/probe, HP response, MISS, MOB DIE, drop owner, SM/TN, st
 ## 5. Commit gần đây đáng chú ý
 
 ```text
+8d108a9 Đóng khung TCP và handshake lại khi reconnect   [feature branch]
+8d6e0f3 Ổn định route và cache vị trí boss   [feature branch]
 d54131d Dọn reset trạng thái scan map boss   [feature branch]
 c6c9c79 Tự tới đúng map boss trước khi dò khu   [feature branch]
 0ee000c Bắt thông báo boss chết trực tiếp vào game loop   [feature branch]
@@ -194,7 +201,7 @@ bfdc638 Bắt KOL trực tiếp từ packet 22 thực tế
 
 ## 6. Rủi ro/lỗi đã biết
 
-- Boss Hunt đã harden route theo thông báo boss, timeout/FAILED/death-event nhưng chưa test runtime nhiều account; cần xác nhận thực tế `boss announcement -> Xmap đúng map -> ưu tiên đúng zone -> FOUND`, zone full, target reload và death event.
+- Boss Hunt đã harden toàn bộ P0: route progress-aware, cache location riêng + invalidate death, framed TCP, reconnect handshake. CI full solution PASS nhưng vẫn cần runtime test thật `announcement -> route -> zone -> FOUND -> rally -> READY`, restart Manager giữa phiên và burst event 2–3 account.
 - Full solution local từng fail ở PostBuild copy của một số project dù source compile được; gameplay thường nên build riêng.
 - DLL `Assembly-CSharp.dll` có thể bị game/manager lock.
 - `GameAssembly` là .NET Framework 3.5, dễ lỗi nếu dùng API mới.

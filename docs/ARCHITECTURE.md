@@ -156,7 +156,7 @@ Payload boss được JSON-serialize thành UTF-8 trong `vMessage.data`; outer s
 
 Thông báo boss chết không còn được poll bằng index từ queue UI `gclass88_14`. `GClass144.method_121()` đưa từng thông báo mới vào queue riêng của `BossZoneScanner`; queue này được drain trong `Update()` trên game loop.
 
-Thông báo boss xuất hiện được `GClass156.TryParseBossAnnouncement()` parse thành `bossName + mapName + mapId + zone`. Cache `GClass156.list_0` được duy trì độc lập với việc bật/tắt HUD danh sách boss. Boss Hunt dùng cache này để route tới đúng map trước khi scan.
+Thông báo boss xuất hiện được `GClass156.TryParseBossAnnouncement()` parse thành `bossName + mapName + mapId + zone`. `GClass156.list_0` vẫn chỉ là HUD 5 dòng; automation dùng cache riêng theo boss, chọn record mới nhất còn fresh tối đa 60 phút. Death announcement invalidate cache của boss/family tương ứng. Boss Hunt dùng cache automation này để route tới đúng map trước khi scan.
 
 Scan không suy luận map từ tên boss và cũng không quét map hiện tại một cách mặc định. Source of truth ban đầu là **announcement thực tế của server**; sau khi một worker resolve được entity thật, `FOUND(mapId, zone)` tiếp tục là source of truth cho pha rally.
 
@@ -252,3 +252,23 @@ README.md                 stable quick start
 ```
 
 Không dùng AI_HANDOFF làm nơi chứa toàn bộ lịch sử.
+
+
+## 9. Manager/Game socket framing cho Boss Hunt và command cũ
+
+Kênh localhost `SocketServer <-> GClass150` không còn giả định một lần TCP receive tương ứng đúng một JSON.
+
+Wire format hiện tại:
+
+```text
+[4-byte big-endian payload length][UTF-8 JSON vMessage]
+```
+
+Mỗi connection có receive accumulator riêng:
+
+- frame bị chia qua nhiều TCP receive sẽ được giữ cho tới khi đủ payload;
+- nhiều frame dính trong một receive được tách và dispatch lần lượt;
+- frame length âm hoặc lớn hơn 1 MiB bị coi là invalid;
+- send loop xử lý trường hợp `Socket.Send()` chỉ gửi một phần buffer.
+
+Game handshake lại `cmd=0 + accountId` ở **mọi connection mới**. Manager ưu tiên resolve account từ `TabData`, thay socket cũ bằng socket mới và callback connection cũ chỉ được đánh dấu disconnect nếu nó vẫn là socket hiện hành của account.
