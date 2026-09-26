@@ -3,6 +3,14 @@
 Ghi ngắn gọn các thay đổi quan trọng, mới nhất ở trên.  
 Không dùng file này để giải thích kiến trúc dài; chi tiết nằm trong `docs/`.
 
+## 2026-09-26
+
+- Thêm event Boss Hunt `114 FAILED`; worker route/khu/target lỗi được cô lập thay vì làm toàn session treo ở Rallying.
+- Giới hạn rally: 45 giây toàn pha, 3 lần đổi khu, 8 giây chờ target; Fighting cho target mất grace 3 giây trước khi báo lỗi.
+- Manager cho phép session tiếp tục Fighting khi một số worker FAILED nhưng vẫn còn worker READY; dừng nếu không còn worker khả dụng.
+- Hook thông báo VIP mới trực tiếp từ `GClass144.method_121()` vào queue của `BossZoneScanner`, tránh bỏ lỡ/đọc lại do queue UI xóa phần tử đầu.
+- Commit code `1786046` và `0ee000c`; run `36254447048` đã qua bước MSBuild full solution.
+
 ## 2026-09-25
 
 - Sửa layout tab `SĂN BOSS` để toàn bộ control nằm trong khung Manager thực tế `765x480`.

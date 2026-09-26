@@ -2,7 +2,7 @@
 
 > Repo: `thanhtran2005isme-art/Mod_DragonBall_PC`  
 > Branch chính: `main`  
-> Cập nhật handoff: 2026-09-25  
+> Cập nhật handoff: 2026-09-26  
 > Đây là bản tóm tắt hiện tại. Chi tiết cũ chuyển sang `docs/history/`.
 
 ## 1. Mục tiêu của file này
@@ -84,7 +84,7 @@ f02197f Thêm săn boss đa tài khoản trên Manager
 
 - tab top-level `SĂN BOSS` trong DragonBoyManager;
 - Manager lấy các account đang kết nối và chia khu theo `workerIndex/workerCount`;
-- client tự dò chuỗi khu, báo `ZONE / FOUND / DEAD / READY` về Manager;
+- client tự dò chuỗi khu, báo `ZONE / FOUND / DEAD / READY / FAILED` về Manager;
 - account đầu tiên thấy đúng boss làm Manager chuyển cả session sang rally;
 - các account còn lại tự tới đúng `mapId + zone`, resolve lại boss theo tên rồi focus/đánh bằng `GClass158` hiện có;
 - thông báo game xác nhận đúng boss mục tiêu chết là terminal event: dừng scan/rally/fight toàn bộ session;
@@ -95,7 +95,12 @@ f02197f Thêm săn boss đa tài khoản trên Manager
 - Auto Boss cũ bị tắt trong pha scan và được khôi phục khi session dừng;
 - UI Start/boss/start-zone bị khóa khi session đang chạy;
 - layout tab đã thu gọn để không bị cắt khi Manager ép cửa sổ về `765x480`;
-- nếu toàn bộ worker mất kết nối ở scan/rally/fighting, Manager tự chuyển session sang `Stopped`.
+- nếu toàn bộ worker mất kết nối ở scan/rally/fighting, Manager tự chuyển session sang `Stopped`;
+- rally không còn retry vô hạn: toàn pha rally timeout 45 giây; đổi khu thử tối đa 3 lần; vào đúng map/khu nhưng không resolve được target trong 8 giây thì worker báo `FAILED`;
+- khi đang Fighting mà target biến mất, client chờ grace 3 giây để resolve lại; vẫn mất target thì báo `FAILED`, không tự suy boss đã chết;
+- worker `FAILED` không chặn các worker đã `READY`; Manager chuyển sang Fighting khi mọi worker còn kết nối đã ở trạng thái READY hoặc FAILED và còn ít nhất một READY;
+- nếu không còn worker nào có thể tới boss, Manager dừng toàn phiên;
+- thông báo VIP mới được hook trực tiếp từ `GClass144.method_121()` vào queue riêng của `BossZoneScanner`, rồi xử lý trên game loop; không còn phụ thuộc index của queue UI bị xóa đầu.
 
 File mới chính:
 
@@ -114,7 +119,7 @@ GClass150.cs
 GClass171.cs
 ```
 
-GitHub Actions run `36029651400` đã build full solution thành công, upload artifact, nén và phát hành thành công. **Chưa có runtime gameplay test nhiều account**, vì vậy chưa nên merge vào `main` chỉ dựa trên compile.
+GitHub Actions run `36029651400` đã build full solution thành công cho V1. Hardening ngày 2026-09-26 có commit `1786046` và `0ee000c`; run `36254447048` đã qua bước MSBuild full solution. **Chưa có runtime gameplay test nhiều account**, vì vậy chưa nên merge vào `main` chỉ dựa trên compile.
 
 V1 hiện quét các khu trên **map mà từng account đang đứng lúc bắt đầu**. Khi FOUND, map thật của finder mới là source of truth để rally. Không suy đoán map spawn chỉ từ tên boss.
 
@@ -169,6 +174,8 @@ Log ghi sequence ATTACK/probe, HP response, MISS, MOB DIE, drop owner, SM/TN, st
 ## 5. Commit gần đây đáng chú ý
 
 ```text
+0ee000c Bắt thông báo boss chết trực tiếp vào game loop   [feature branch]
+1786046 Chống treo rally và cô lập worker săn boss lỗi   [feature branch]
 f02197f Thêm săn boss đa tài khoản trên Manager   [feature branch]
 0f07d48 Ghi chi tiết handoff điều tra KOL last-hit
 ed2639d Thêm diagnostic protocol cho KOL last-hit
@@ -182,7 +189,7 @@ bfdc638 Bắt KOL trực tiếp từ packet 22 thực tế
 
 ## 6. Rủi ro/lỗi đã biết
 
-- Boss Hunt V1 đã compile nhưng chưa test runtime nhiều account; cần xác nhận zone dwell, zone full, route map và chuỗi thông báo boss chết thực tế.
+- Boss Hunt đã harden timeout/FAILED/death-event nhưng chưa test runtime nhiều account; vẫn cần xác nhận zone dwell, zone full, route map, target reload và chuỗi thông báo boss chết thực tế.
 - Full solution local từng fail ở PostBuild copy của một số project dù source compile được; gameplay thường nên build riêng.
 - DLL `Assembly-CSharp.dll` có thể bị game/manager lock.
 - `GameAssembly` là .NET Framework 3.5, dễ lỗi nếu dùng API mới.

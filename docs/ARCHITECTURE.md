@@ -67,7 +67,7 @@ Output/
 | `GClass85.cs` | session TCP phụ |
 | `GClass134.cs` | danh sách/chọn server |
 | `GClass73.cs` | startup/render/screen |
-| `GClass144.cs` | game screen/HUD/skill + hàng đợi thông báo VIP |
+| `GClass144.cs` | game screen/HUD/skill + hook thông báo VIP mới sang BossZoneScanner |
 | `mResources.cs` | resource/language |
 
 Manager có thêm:
@@ -75,7 +75,7 @@ Manager có thêm:
 | File/module | Vai trò |
 |---|---|
 | `DragonBoyManager/TabBossHunt.cs` | tab top-level SĂN BOSS |
-| `DragonBoyManager/BossHuntCoordinator.cs` | session state, chia worker, FOUND/DEAD/RALLY/READY |
+| `DragonBoyManager/BossHuntCoordinator.cs` | session state, chia worker, FOUND/DEAD/RALLY/READY/FAILED |
 | `DragonBoyManager/SocketServer.cs` | nhận event boss từ từng account và gửi lệnh targeted |
 
 ## 3. Luồng săn boss đa tài khoản
@@ -109,8 +109,11 @@ Mỗi Game client
   -> bật GClass158 auto boss hiện có
   -> READY
        |
+       +-- route/zone/target timeout -> FAILED
+       |
        v
-Manager: FIGHTING khi các worker còn kết nối đã sẵn sàng
+Manager: FIGHTING khi mọi worker còn kết nối đã READY hoặc FAILED
+         và vẫn còn ít nhất một READY
 ```
 
 Boss object **không được giữ xuyên map/zone**. Chỉ giữ identity `bossName + mapId + zone`, rồi resolve lại entity từ `GClass158.list_3`.
@@ -129,16 +132,25 @@ client -> DEAD(sessionId)
 Manager -> STOP toàn bộ account
 ```
 
-Boss biến mất khỏi entity list một mình **không** được coi là chết vì có thể do map/zone đang load.
+Boss biến mất khỏi entity list một mình **không** được coi là chết vì có thể do map/zone đang load. Khi đang Fighting, scanner cho phép 3 giây để resolve lại target; nếu vẫn không thấy thì worker báo `FAILED`, không báo `DEAD`.
+
+Rally hiện có guard để không treo vô hạn:
+
+- toàn pha rally: 45 giây;
+- đổi khu: tối đa 3 lần;
+- đã vào đúng map+khu nhưng target chưa load: 8 giây;
+- worker fail được cô lập, không chặn worker khác tiếp tục đánh.
 
 Protocol Manager/Game dành riêng cho Boss Hunt:
 
 ```text
 Manager -> Game: 100 START_SCAN, 101 STOP, 102 RALLY
-Game -> Manager: 110 ZONE, 111 FOUND, 112 DEAD, 113 READY
+Game -> Manager: 110 ZONE, 111 FOUND, 112 DEAD, 113 READY, 114 FAILED
 ```
 
 Payload boss được JSON-serialize thành UTF-8 trong `vMessage.data`; outer socket protocol cũ vẫn giữ nguyên. `sessionId` bắt buộc dùng để bỏ event/lệnh cũ tới trễ.
+
+Thông báo boss chết không còn được poll bằng index từ queue UI `gclass88_14`. `GClass144.method_121()` đưa từng thông báo mới vào queue riêng của `BossZoneScanner`; queue này được drain trong `Update()` trên game loop.
 
 V1 quét trên map hiện tại của từng worker. Map của account FOUND là source of truth cho rally; không suy luận map spawn từ tên boss.
 

@@ -133,3 +133,17 @@ README chỉ nên chứa quick start, build path/output, module mapping ổn đ�
 - Callback socket không được trực tiếp thao tác gameplay; START/STOP/RALLY phải được enqueue và drain trong `BossZoneScanner.Update()` trên game loop.
 
 V1 quét trên map hiện tại của từng worker; không tự đoán map spawn chỉ dựa vào tên boss.
+
+
+## D-012 — Worker săn boss lỗi không được làm treo cả session
+
+**Trạng thái:** active — 2026-09-26
+
+- Game -> Manager có event `114 FAILED` dành riêng cho lỗi route/khu/target; không dùng `READY` hay `DEAD` để biểu diễn lỗi.
+- Rally có giới hạn: 45 giây toàn pha, 3 lần đổi khu, 8 giây chờ target sau khi đã tới đúng map+khu.
+- Trong Fighting, target mất được chờ 3 giây để resolve lại; hết grace mới báo `FAILED`.
+- Worker `FAILED` được xem là terminal cho worker đó và không chặn các worker `READY`.
+- Manager chỉ vào Fighting khi mọi worker còn kết nối đã settle (READY hoặc FAILED) và còn ít nhất một READY.
+- Nếu không còn worker READY khả dụng, toàn session dừng.
+- Boss biến mất không được chuyển thành DEAD; DEAD vẫn chỉ đến từ HP <= 0 hoặc thông báo server xác nhận đúng target.
+- Thông báo server mới được hook tại `GClass144.method_121()`, enqueue vào scanner và drain trên game loop; không dùng cursor index của queue UI vì queue đó xóa phần tử đầu theo thời gian.
