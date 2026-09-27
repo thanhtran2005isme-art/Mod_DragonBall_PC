@@ -308,7 +308,7 @@ namespace DragonBoyManager
                     ? "-"
                     : "W" + (worker.WorkerIndex + 1) + "/" + Math.Max(1, worker.WorkerCount);
                 string status = worker.Status ?? "";
-                string heartbeat = GetHeartbeatStatus(worker);
+                string heartbeat = running ? GetHeartbeatStatus(worker) : "";
                 if (!string.IsNullOrEmpty(heartbeat))
                     status = heartbeat + (string.IsNullOrEmpty(status) ? "" : " | " + status);
                 if (!string.IsNullOrEmpty(worker.DuplicateWarning))
@@ -406,13 +406,19 @@ namespace DragonBoyManager
             string evidence = FormatEvidence(boss.DeathEvidence, vi);
             string targetLock = boss.BossName + " @ " + map + (boss.Zone >= 0 ? " / K" + boss.Zone : "");
 
+            string lifetimeLabel;
+            if (boss.Presence == BossPresenceState.Stale)
+                lifetimeLabel = vi ? "Từ lúc spawn: " : "Since spawn: ";
+            else
+                lifetimeLabel = vi ? "Sống: " : "Lifetime: ";
+
             labelResult.Text =
                 "Boss: " + boss.BossName + " | " + presence + " | " + (vi ? "Tuổi cache: " : "Cache age: ") + age +
                 " | Coverage " + snapshot.UniqueCoverageCount + "/" +
                 (snapshot.CoverageTotalZones > 0 ? snapshot.CoverageTotalZones.ToString() : "?") + Environment.NewLine +
                 (vi ? "Target lock: " : "Target lock: ") + targetLock +
                 " | " + (vi ? "Xuất hiện: " : "Spawn: ") + spawn + Environment.NewLine +
-                (vi ? "Chết: " : "Death: ") + death + " | " + (vi ? "Sống: " : "Lifetime: ") + life +
+                (vi ? "Chết: " : "Death: ") + death + " | " + lifetimeLabel + life +
                 " | " + (vi ? "Người hạ: " : "Killer: ") + killer +
                 " | " + (vi ? "Xác nhận: " : "Evidence: ") + evidence + Environment.NewLine +
                 (vi ? "Nguồn: " : "Sources: ") + sources + " | Finder: " + finder + Environment.NewLine +
