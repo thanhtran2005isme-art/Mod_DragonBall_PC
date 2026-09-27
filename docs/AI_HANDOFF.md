@@ -317,3 +317,12 @@ Nếu nội dung cũ dài ra, chuyển nó sang `docs/history/YYYY-MM.md` thay v
 - Bổ sung targeted parser cho format `X diệt được <Boss> mọi người đều ngưỡng mộ`; chỉ nhận nếu victim khớp active target.
 - Cần rebuild full solution + runtime retest case 50/51 để xác nhận.
 
+### Global admiration death parser — 2026-09-27
+
+- Runtime mới xác nhận near-complete fallback đã hoạt động: session dừng ở coverage 50/51 và target chuyển STALE.
+- Phần còn thiếu là death evidence: format `X diệt được <Boss> mọi người đều ngưỡng mộ` trước đó chỉ có targeted fallback khi session active.
+- `GClass156.TryParseBossDeathAnnouncement` giờ nhận format này ở tầng global, nên announcement tới sau khi session đã STOP vẫn tạo `CmdBossDeath` qua BossZoneScanner và Manager có thể nâng record `STALE -> DEAD`.
+- Panel không còn prefix `HB LOST` khi session đã dừng; STALE dùng nhãn `Từ lúc spawn` thay vì `Sống` để tránh hiểu nhầm.
+- Commits: `a135b90`, `9dfeffa`.
+- Cần rebuild và runtime test bằng một death announcement thực tế.
+
