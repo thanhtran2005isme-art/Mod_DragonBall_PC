@@ -430,3 +430,20 @@ Boss catalog không còn nằm cứng trong `TabBossHunt.cs`. Runtime đọc:
 Tên boss mới có thể được thêm bằng file, target người dùng nhập hoặc announcement đã quan sát; không cần sửa source UI.
 
 Boss Hunt log mỗi process rotate khi file đạt 5 MB, giữ 3 archive và dọn file cùng loại cũ hơn 14 ngày. Manager có viewer log trực tiếp, merge các `BossHuntProtocol.*.log*` gần nhất để debug nhiều process.
+
+## 15. Manager/Game handshake ACK
+
+Handshake transport hiện có semantics một chiều rõ ràng:
+
+```text
+Game -> Manager: cmd=0 + accountId   (HELLO)
+Manager -> Game: cmd=99 + accountId (HANDSHAKE_ACK)
+```
+
+Manager không gửi `cmd=0` ngay sau `Accept()` nữa. Sau khi nhận HELLO, Manager map `accountId` vào account, gắn `workSocket`, gửi ACK rồi mới gọi `HandleConnected()`.
+
+Game retry HELLO tối đa 10 lần trên cùng socket với khoảng 400 ms giữa các lần. Chỉ sau ACK đúng accountId mới đặt connection ready và sync boss cache. Nếu hết retry không có ACK, Game đóng socket và reconnect theo vòng hiện có.
+
+Diagnostic quan trọng:
+- Manager: `HANDSHAKE_RX`, `HANDSHAKE_ACK_TX`, `SOCKET_PREHANDSHAKE_CLOSE`.
+- Game: `HANDSHAKE_TX`, `HANDSHAKE_ACK`, `HANDSHAKE_ACK_MISMATCH`, `HANDSHAKE_ACK_TIMEOUT`, `CONNECT_STAGE_FAIL`, `REMOTE_CLOSED`.

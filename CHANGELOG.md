@@ -5,6 +5,8 @@ Không dùng file này để giải thích kiến trúc dài; chi tiết nằm t
 
 ## 2026-09-27
 
+- Fix vòng Manager `ACCEPT` nhưng Boss Hunt vẫn 0 account: tách HELLO `cmd=0` và ACK `cmd=99`, retry handshake trên cùng socket, sync boss cache sau ACK và thêm diagnostic pre-handshake close. Commit `7771a15` full workflow SUCCESS.
+
 - Chặn Manager văng khi mở game: harden `OpenAccount`, socket accept/read/disconnect callbacks, bỏ `Application.Exit()` khỏi lỗi listener runtime và thêm `ManagerRuntime.log`. Commit `2694b4c` full workflow SUCCESS.
 
 - Medium Boss Hunt hardening: central zone partition do Manager quyết định qua `105 ZONE_ASSIGNMENT`, loại bỏ client-side partition cuối cùng.

@@ -335,3 +335,13 @@ Dữ liệu này đến từ `117 TELEMETRY` + `118 HEARTBEAT`, không suy ngư�
 - `FailureCount` tăng ở zone failure, FAILED hoặc watchdog.
 - `TimeoutCount` tăng cho FAILED chứa TIMEOUT và watchdog timeout.
 - Không suy performance từ label UI.
+
+## D-030 — Tách HELLO và ACK của Manager/Game handshake
+
+**Trạng thái:** active — 2026-09-27
+
+- `cmd=0` chỉ dùng Game -> Manager để gửi `accountId`.
+- `cmd=99` chỉ dùng Manager -> Game để ACK đúng `accountId`.
+- Manager không chủ động gửi `cmd=0` khi vừa accept socket.
+- Game không sync boss cache trước khi nhận ACK.
+- HELLO được retry trên cùng socket trước khi reconnect để tránh vòng connect/close mù.
