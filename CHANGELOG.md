@@ -5,6 +5,8 @@ Không dùng file này để giải thích kiến trúc dài; chi tiết nằm t
 
 ## 2026-09-27
 
+- Boss Hunt: chặn scan vô hạn khi coverage kẹt 50/51 bằng per-zone failure + near-complete stalled fallback; panel hiện missing zone/min cycle; lọc `DEATH_UNPARSED` theo active target và bắt thêm format `X diệt được <Boss> mọi người đều ngưỡng mộ`. Chưa đánh dấu build/runtime PASS cho HEAD mới.
+
 - Boss Hunt operational panel: xử lý death trước target lock theo đúng session/generation, lưu `DeathEvidence`, forward `DEATH_UNPARSED`, hỗ trợ chọn account scope + reconnect/rejoin, thêm summary heartbeat/StopReason/target lock, tab SỰ KIỆN, double-click focus game, âm báo, autocomplete và Log Viewer filter. Chưa đánh dấu PASS cho tới khi có build/runtime mới.
 
 - Boss Hunt bắt death+killer trực tiếp từ combat packet `-60` (`attackerId + targetId + isDie`), validate theo locked boss instance/map/zone và hiển thị killer ID/name trên Manager. HEAD `09ee59f` full workflow SUCCESS.
