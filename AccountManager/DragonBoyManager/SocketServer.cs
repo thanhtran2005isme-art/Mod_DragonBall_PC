@@ -49,29 +49,43 @@ namespace DragonBoyManager
 			IPAddress any = IPAddress.Any;
 			IPEndPoint localEP = new IPEndPoint(any, port);
 			Socket socket = new Socket(any.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+
 			try
 			{
 				socket.Bind(localEP);
 				socket.Listen(100);
-				while (true)
+				ManagerRuntimeDiagnostics.Log("SOCKET_LISTENING", "port=" + port);
+			}
+			catch (Exception ex)
+			{
+				ManagerRuntimeDiagnostics.Log("SOCKET_BIND_FAILED port=" + port, ex);
+				try
+				{
+					socket.Close();
+				}
+				catch
+				{
+				}
+				return;
+			}
+
+			while (true)
+			{
+				try
 				{
 					allDone.Reset();
 					socket.BeginAccept(AcceptCallback, socket);
 					allDone.WaitOne();
 				}
-			}
-			catch
-			{
-				Random random = new Random();
-				int num = random.Next(1000, 10000);
-				if (num == port)
+				catch (ObjectDisposedException)
 				{
-					num = random.Next(1000, 10000);
 					return;
 				}
-				File.WriteAllText(TabData._instance.PortPath, num.ToString());
-				MessageBox.Show((MainController.language == 0) ? "Vui lòng mở lại QLTK!" : "Please reopen this application!");
-				Application.Exit();
+				catch (Exception ex)
+				{
+					ManagerRuntimeDiagnostics.Log("SOCKET_ACCEPT_LOOP", ex);
+					Thread.Sleep(300);
+				}
 			}
 		}
 
@@ -177,13 +191,7 @@ namespace DragonBoyManager
 			}
 			catch (Exception ex)
 			{
-				try
-				{
-					File.AppendAllText("Data/Errors/SocketOnMessage.txt", ex + Environment.NewLine);
-				}
-				catch
-				{
-				}
+				ManagerRuntimeDiagnostics.Log("SOCKET_ON_MESSAGE", ex);
 			}
 		}
 
@@ -197,17 +205,32 @@ namespace DragonBoyManager
 		public static void AcceptCallback(IAsyncResult ar)
 		{
 			allDone.Set();
-			Socket socket = ((Socket)ar.AsyncState).EndAccept(ar);
-			StateObject stateObject = new StateObject
+			try
 			{
-				workSocket = socket
-			};
-			BossHuntDiagnostics.Log("MANAGER_SOCKET", "ACCEPT", 0, -1, "", "SOCKET", "");
-			socket.BeginReceive(stateObject.buffer, 0, stateObject.buffer.Length, SocketFlags.None, ReadCallback, stateObject);
-			Send(socket, new vMessage
+				Socket listener = ar.AsyncState as Socket;
+				if (listener == null)
+					return;
+
+				Socket socket = listener.EndAccept(ar);
+				StateObject stateObject = new StateObject
+				{
+					workSocket = socket
+				};
+
+				BossHuntDiagnostics.Log("MANAGER_SOCKET", "ACCEPT", 0, -1, "", "SOCKET", "");
+				socket.BeginReceive(stateObject.buffer, 0, stateObject.buffer.Length, SocketFlags.None, ReadCallback, stateObject);
+				Send(socket, new vMessage
+				{
+					cmd = 0
+				});
+			}
+			catch (ObjectDisposedException)
 			{
-				cmd = 0
-			});
+			}
+			catch (Exception ex)
+			{
+				ManagerRuntimeDiagnostics.Log("SOCKET_ACCEPT_CALLBACK", ex);
+			}
 		}
 
 		public static void ReadCallback(IAsyncResult ar)
@@ -254,14 +277,15 @@ namespace DragonBoyManager
 			}
 			catch (Exception ex)
 			{
+				ManagerRuntimeDiagnostics.Log("SOCKET_READ_CALLBACK", ex);
 				try
 				{
-					File.AppendAllText("Data/Errors/SocketOnMessage.txt", ex + Environment.NewLine);
+					CloseClient(stateObject);
 				}
-				catch
+				catch (Exception closeEx)
 				{
+					ManagerRuntimeDiagnostics.Log("SOCKET_CLOSE_AFTER_READ_ERROR", closeEx);
 				}
-				CloseClient(stateObject);
 			}
 		}
 
@@ -314,7 +338,14 @@ namespace DragonBoyManager
 				BossHuntDiagnostics.Log("MANAGER_SOCKET", "CLOSE", 0, account.ID, "", "SOCKET", "");
 				account.workSocket = null;
 				account.Status = "";
-				BossHuntCoordinator.Instance.HandleDisconnected(account);
+				try
+				{
+					BossHuntCoordinator.Instance.HandleDisconnected(account);
+				}
+				catch (Exception ex)
+				{
+					ManagerRuntimeDiagnostics.Log("SOCKET_HANDLE_DISCONNECTED", ex);
+				}
 				if (MainController.instance != null)
 					MainController.instance.REFRESH = true;
 			}

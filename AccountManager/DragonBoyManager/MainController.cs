@@ -199,19 +199,105 @@ namespace DragonBoyManager
 
         public async Task OpenAccount(Account account)
         {
-            if (account.process != null && !account.process.HasExited)
+            if (account == null)
                 return;
-            account.process = new Process();
-            account.process.StartInfo.FileName = "Dragon ball_237b.exe";
-            if (account.isUseProxy && Options[1] == "T")
-                account.process.StartInfo.Arguments = $"--ID {account.ID} --username {account.Username.Trim()} --password {account.Password.Trim()} --server {account.Server.ToString().ToLower().Replace(" ", "")} --options {Options[0] + "|" + Options[1] + "|" + Options[2] + "|" + Options[3]} --isUseProxy {account.isUseProxy} --proxy {account.ProxyInfo.Trim()} --size {account.SizeScreen.Trim()} --uuid {"username:" + CheckInfo.t1 + "," + CheckInfo.t.Trim()}";
-            else
-                account.process.StartInfo.Arguments = $"--ID {account.ID} --username {account.Username} --password {account.Password} --server {account.Server.ToString().ToLower().Replace(" ", "")} --options {Options[0] + "|" + Options[1] + "|" + Options[2] + "|" + Options[3]} --isUseProxy {account.isUseProxy} --size {account.SizeScreen} --uuid {"username:" + CheckInfo.t1 + "," + CheckInfo.t.Trim()}";
-            account.process.Start();
-            SocketServer.waitingAccounts.Add(account);
-            while (account.process.MainWindowHandle == IntPtr.Zero)
-                await Task.Delay(1500);
-            SetWindowText(account.process.MainWindowHandle, $"LCT [{account.ID}]");
+
+            try
+            {
+                if (account.process != null && !account.process.HasExited)
+                    return;
+
+                lock (SocketServer.waitingAccounts)
+                {
+                    SocketServer.waitingAccounts.RemoveAll(item => item == null || item.ID == account.ID);
+                    SocketServer.waitingAccounts.Add(account);
+                }
+
+                string baseDirectory = AppDomain.CurrentDomain.BaseDirectory ?? "";
+                string gamePath = Path.Combine(baseDirectory, "Dragon ball_237b.exe");
+
+                account.process = new Process();
+                account.process.StartInfo.FileName = gamePath;
+                account.process.StartInfo.WorkingDirectory = baseDirectory;
+
+                string username = account.Username ?? "";
+                string password = account.Password ?? "";
+                string server = (account.Server ?? "").ToLower().Replace(" ", "");
+                string size = string.IsNullOrEmpty(account.SizeScreen) ? "1024x600" : account.SizeScreen;
+                string options = (Options[0] ?? "") + "|" + (Options[1] ?? "") + "|" + (Options[2] ?? "") + "|" + (Options[3] ?? "");
+                string uuid = "username:" + (CheckInfo.t1 ?? "") + "," + (CheckInfo.t ?? "");
+
+                if (account.isUseProxy && Options[1] == "T")
+                {
+                    string proxy = account.ProxyInfo ?? "";
+                    account.process.StartInfo.Arguments =
+                        "--ID " + account.ID +
+                        " --username " + username.Trim() +
+                        " --password " + password.Trim() +
+                        " --server " + server +
+                        " --options " + options +
+                        " --isUseProxy " + account.isUseProxy +
+                        " --proxy " + proxy.Trim() +
+                        " --size " + size.Trim() +
+                        " --uuid " + uuid;
+                }
+                else
+                {
+                    account.process.StartInfo.Arguments =
+                        "--ID " + account.ID +
+                        " --username " + username +
+                        " --password " + password +
+                        " --server " + server +
+                        " --options " + options +
+                        " --isUseProxy " + account.isUseProxy +
+                        " --size " + size +
+                        " --uuid " + uuid;
+                }
+
+                ManagerRuntimeDiagnostics.Log("OPEN_ACCOUNT_START", "account=" + account.ID + ";game=" + gamePath);
+                account.process.Start();
+
+                DateTime deadline = DateTime.UtcNow.AddSeconds(30.0);
+                while (DateTime.UtcNow < deadline)
+                {
+                    if (account.process == null || account.process.HasExited)
+                    {
+                        ManagerRuntimeDiagnostics.Log("OPEN_ACCOUNT_EXITED", "account=" + account.ID);
+                        return;
+                    }
+
+                    IntPtr handle = account.process.MainWindowHandle;
+                    if (handle != IntPtr.Zero)
+                    {
+                        SetWindowText(handle, "LCT [" + account.ID + "]");
+                        ManagerRuntimeDiagnostics.Log("OPEN_ACCOUNT_READY", "account=" + account.ID);
+                        return;
+                    }
+
+                    await Task.Delay(300);
+                    account.process.Refresh();
+                }
+
+                ManagerRuntimeDiagnostics.Log("OPEN_ACCOUNT_WINDOW_TIMEOUT", "account=" + account.ID);
+            }
+            catch (Exception ex)
+            {
+                ManagerRuntimeDiagnostics.Log("OPEN_ACCOUNT_EXCEPTION account=" + account.ID, ex);
+                account.Status = MainController.language == 0 ? "Lỗi mở game" : "Open game error";
+                REFRESH = true;
+
+                try
+                {
+                    if (account.process == null || account.process.HasExited)
+                    {
+                        lock (SocketServer.waitingAccounts)
+                            SocketServer.waitingAccounts.RemoveAll(item => item == null || item.ID == account.ID);
+                    }
+                }
+                catch
+                {
+                }
+            }
         }
 
         public long CurrentTimeMillis()
