@@ -303,3 +303,16 @@ Nếu nội dung cũ dài ra, chuyển nó sang `docs/history/YYYY-MM.md` thay v
 - Fix ở commit `b71a29d`: field `detailTabs` dùng explicit `System.Windows.Forms.TabControl`.
 - Cần rebuild lại full solution để xác nhận không còn compile error mới.
 
+### Coverage 50/51 infinite-scan fix — 2026-09-27
+
+- Runtime screenshot: 1 worker heartbeat khỏe, scan cycle 6, Boss Super Broly 29 vẫn ALIVE >12 phút, coverage kẹt 50/51.
+- Root cause: stale fallback cũ bắt buộc coverage đủ tuyệt đối.
+- Manager giờ track failure từng zone và có near-complete stalled fallback:
+  - full coverage: cycle >=3 như cũ;
+  - thiếu <=1 zone: cycle >=5 + missing-zone failures >=3, hoặc hard stop ở cycle >=6;
+  - chỉ chuyển STALE + STOP, không tự ghi DEAD/killer.
+- Snapshot/panel thêm `MissingZones` và `MinimumHealthyScanCycle`.
+- Game chỉ forward `DEATH_UNPARSED` nếu death-like announcement có nhắc đúng active target; boss khác chỉ log ignored.
+- Code commits: `a18ac89`, `fe834a7`, `091be43`.
+- Cần rebuild full solution + runtime retest case 50/51 để xác nhận.
+
