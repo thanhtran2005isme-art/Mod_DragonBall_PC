@@ -1215,8 +1215,9 @@ namespace DragonBoyManager
                     worker.ZoneFailureCount++;
                     worker.FailureCount++;
                     worker.LastZoneFailure = "K" + payload.zone + " " + (payload.detail ?? "");
-                    AppendZoneHistory(worker, "G" + payload.assignmentGeneration + " K" + payload.zone + " FAIL");
-                    AddTimelineLocked("ZONE_FAILED", account.ID, worker.LastZoneFailure);
+                    AddTimelineLocked("ZONE_FAILED", account.ID,
+                        worker.LastZoneFailure + ";zoneFailures=" + GetZoneFailureCountLocked(payload.totalZones, payload.zone));
+                    
                     changed = true;
                 }
                 else if (eventName == "ENTITY_SNAPSHOT")
@@ -2393,16 +2394,48 @@ namespace DragonBoyManager
             }
 
             StringBuilder builder = new StringBuilder();
+            int shown = 0;
+            int missing = 0;
             for (int zone = 0; zone < totalZones; zone++)
             {
                 if (cleared[zone])
                     continue;
+
+                missing++;
+                if (shown >= 8)
+                    continue;
+
                 if (builder.Length > 0)
                     builder.Append(",");
                 builder.Append("K");
                 builder.Append(zone);
+                shown++;
             }
+
+            if (missing > shown)
+            {
+                builder.Append(",...(＋");
+                builder.Append(missing - shown);
+                builder.Append(")");
+            }
+
             return builder.ToString();
+        }
+
+        private int GetZoneFailureCountLocked(int totalZones, int zone)
+        {
+            if (zone < 0)
+                return 0;
+
+            int failures = 0;
+            foreach (BossHuntZoneLedgerEntry entry in _zoneLedger.Values)
+            {
+                if (entry.Generation != _assignmentGeneration || entry.Zone != zone)
+                    continue;
+                if (entry.FailureCount > failures)
+                    failures = entry.FailureCount;
+            }
+            return failures;
         }
 
         private int GetMissingZoneFailureCountLocked(int totalZones)
