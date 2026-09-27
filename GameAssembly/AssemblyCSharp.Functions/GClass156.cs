@@ -520,6 +520,32 @@ namespace AssemblyCSharp.Functions
                 return bossName.Length > 0;
             }
 
+            // Một số server có thể phát thông báo theo chiều killer -> boss, ví dụ:
+            // "NgườiChơi vừa tiêu diệt BOSS Super Broly 28".
+            string[] killerFirstMarkers = new string[]
+            {
+                " vừa tiêu diệt ", " đã tiêu diệt ",
+                " vừa hạ gục ", " đã hạ gục ",
+                " vừa đánh bại ", " đã đánh bại ",
+                " has defeated ", " defeated ",
+                " has killed ", " killed "
+            };
+            for (int i = 0; i < killerFirstMarkers.Length; i++)
+            {
+                int index = lower.IndexOf(killerFirstMarkers[i], StringComparison.Ordinal);
+                if (index <= 0)
+                    continue;
+
+                string victim = text.Substring(index + killerFirstMarkers[i].Length).Trim();
+                if (!victim.StartsWith("BOSS ", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                killer = CleanKiller(text.Substring(0, index));
+                bossName = NormalizeBossLocationName(victim.Substring(5));
+                if (bossName.Length > 0 && killer.Length > 0)
+                    return true;
+            }
+
             string[] directDeathMarkers = new string[]
             {
                 " vừa chết", " đã chết", " chết",
