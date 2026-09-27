@@ -325,6 +325,8 @@ namespace DragonBoyManager
                 : (string.IsNullOrEmpty(boss.MapName) ? "#" + boss.MapId : boss.MapName + " (#" + boss.MapId + ")");
             string sources = GetSourcesText(snapshot, boss.SourceAccounts);
             string killer = string.IsNullOrEmpty(boss.Killer) ? (vi ? "Không rõ" : "Unknown") : boss.Killer;
+            if (!string.IsNullOrEmpty(boss.Killer) && boss.KillerId >= 0)
+                killer += " (#" + boss.KillerId + ")";
             string age = GetBossAgeText(boss);
             string life = GetBossLifetimeText(boss);
             string finder = GetFinderText(snapshot);
