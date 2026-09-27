@@ -1510,9 +1510,10 @@ namespace DragonBoyManager
                 }
                 else
                 {
-                    _sessionTargetBoss = new BossHuntBossSnapshot
+                    string normalizedTarget = NormalizeBossName(concreteTargetName);
+                    BossHuntBossSnapshot created = new BossHuntBossSnapshot
                     {
-                        BossName = NormalizeBossName(concreteTargetName),
+                        BossName = normalizedTarget,
                         MapId = payload.mapId,
                         MapName = payload.mapName ?? "",
                         Zone = payload.zone,
@@ -1523,17 +1524,21 @@ namespace DragonBoyManager
                             : DateTime.UtcNow,
                         LastSourceAccountId = account.ID
                     };
-                    AddSourceAccount(_sessionTargetBoss, account.ID);
-                    confirmedBoss = CloneBoss(_sessionTargetBoss);
-                    confirmedSync = CreateBossSyncPayload(_sessionTargetBoss);
+                    AddSourceAccount(created, account.ID);
+                    if (!string.IsNullOrEmpty(normalizedTarget))
+                        _bossRecords[normalizedTarget.ToLowerInvariant()] = created;
+
+                    _sessionTargetBoss = CloneBoss(created);
+                    confirmedBoss = CloneBoss(created);
+                    confirmedSync = CreateBossSyncPayload(created);
                     confirmedSync.eventName = "FOUND_SYNC";
-                    confirmedSync.targetBossName = _sessionTargetBoss.BossName;
+                    confirmedSync.targetBossName = created.BossName;
 
                     string foundDetail =
-                        _sessionTargetBoss.BossName + " @ " +
-                        (_sessionTargetBoss.MapName ?? "") + " (#" + _sessionTargetBoss.MapId + ") / K" + _sessionTargetBoss.Zone +
+                        created.BossName + " @ " +
+                        (created.MapName ?? "") + " (#" + created.MapId + ") / K" + created.Zone +
                         ";hp=" + payload.targetHp;
-                    AddBossEventLocked("LOCATION_CONFIRMED", _sessionTargetBoss, DateTime.UtcNow, account.ID, "", foundDetail);
+                    AddBossEventLocked("LOCATION_CONFIRMED", created, DateTime.UtcNow, account.ID, "", foundDetail);
                     AddTimelineLocked("TARGET_LOCATION_CONFIRMED", account.ID, foundDetail);
                 }
 
