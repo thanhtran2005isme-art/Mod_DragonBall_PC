@@ -546,7 +546,7 @@ namespace AssemblyCSharp.Functions
             _zoneAttempts = 0;
             _lastZoneCommandAt = 0L;
             Trace("CENTRAL_ZONE_PLAN", "assigned=" + BuildAssignedZonesText() + ";desired=" + _desiredZone + ";announcedOwned=" + _usingAnnouncedZone);
-            SendTelemetry("ZONE_PLAN", "assigned=" + BuildAssignedZonesText() + ";total=" + payload.totalZones);
+            SendZonePlanAppliedTelemetry(payload.totalZones);
             SendEvent(CmdZone, "SCANNING");
         }
 
@@ -844,20 +844,33 @@ namespace AssemblyCSharp.Functions
             if (string.IsNullOrEmpty(message))
                 return;
 
+            BossHuntDiagnostics.Log("GAME_ANNOUNCEMENT", "RAW", _active ? _sessionId : 0,
+                _active ? _bossName : "", _state.ToString(), message);
+
             string deadBoss;
             string killer;
             if (GClass156.TryParseBossDeathAnnouncement(message, out deadBoss, out killer))
             {
+                BossHuntDiagnostics.Log("GAME_ANNOUNCEMENT", "DEATH_PARSED", _active ? _sessionId : 0,
+                    deadBoss, _state.ToString(), "killer=" + killer + ";raw=" + message);
                 SendBossObservation(CmdBossDeath, deadBoss, -1, "", -1, killer, message, DateTime.UtcNow.Ticks);
             }
             else
             {
+                if (GClass156.LooksLikeBossDeathAnnouncement(message))
+                    BossHuntDiagnostics.Log("GAME_ANNOUNCEMENT", "DEATH_UNPARSED", _active ? _sessionId : 0,
+                        _active ? _bossName : "", _state.ToString(), message);
+
                 string spawnBoss;
                 string mapName;
                 int mapId;
                 int zone;
                 if (GClass156.TryParseBossAnnouncement(message, out spawnBoss, out mapName, out mapId, out zone))
+                {
+                    BossHuntDiagnostics.Log("GAME_ANNOUNCEMENT", "SPAWN_PARSED", _active ? _sessionId : 0,
+                        spawnBoss, _state.ToString(), "map=" + mapId + ";zone=" + zone + ";raw=" + message);
                     SendBossObservation(CmdBossSpawn, spawnBoss, mapId, mapName, zone, "", message, DateTime.UtcNow.Ticks);
+                }
             }
 
             if (!_active)
@@ -1184,6 +1197,27 @@ namespace AssemblyCSharp.Functions
                 builder.Append(_assignedZones[i]);
             }
             return builder.ToString();
+        }
+
+        private void SendZonePlanAppliedTelemetry(int totalZones)
+        {
+            try
+            {
+                BossHuntPayload payload = CreateClientPayload();
+                payload.eventName = "ZONE_PLAN";
+                payload.totalZones = totalZones;
+                payload.maxZone = _maxZone;
+                payload.assignedZones = BuildAssignedZonesText();
+                payload.detail = "assigned=" + payload.assignedZones + ";total=" + totalZones;
+                GClass150.smethod_0().method_2(new vMessage
+                {
+                    cmd = CmdTelemetry,
+                    data = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(payload))
+                });
+            }
+            catch
+            {
+            }
         }
 
         private void SendZoneCapacityTelemetry(int totalZones, int maxZone)

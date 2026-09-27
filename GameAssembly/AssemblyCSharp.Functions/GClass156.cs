@@ -468,47 +468,69 @@ namespace AssemblyCSharp.Functions
             if (text.StartsWith("BOSS ", StringComparison.OrdinalIgnoreCase))
                 text = text.Substring(5).Trim();
 
-            string[] killerMarkers = new string[]
+            string lower = text.ToLowerInvariant();
+
+            string[] directByMarkers = new string[]
             {
                 " vừa bị tiêu diệt bởi ", " đã bị tiêu diệt bởi ", " bị tiêu diệt bởi ",
+                " vừa bị hạ gục bởi ", " đã bị hạ gục bởi ", " bị hạ gục bởi ",
+                " vừa bị đánh bại bởi ", " đã bị đánh bại bởi ", " bị đánh bại bởi ",
                 " vừa bị hạ bởi ", " đã bị hạ bởi ", " bị hạ bởi ",
+                " has been defeated by ", " was defeated by ",
+                " has been killed by ", " was killed by ",
                 " defeated by ", " killed by "
             };
 
-            string lower = text.ToLowerInvariant();
-            int killerCut = -1;
-            string killerMarker = "";
-            for (int i = 0; i < killerMarkers.Length; i++)
+            int directCut = -1;
+            string directMarker = "";
+            for (int i = 0; i < directByMarkers.Length; i++)
             {
-                int index = lower.IndexOf(killerMarkers[i], StringComparison.Ordinal);
-                if (index >= 0 && (killerCut < 0 || index < killerCut))
+                int index = lower.IndexOf(directByMarkers[i], StringComparison.Ordinal);
+                if (index >= 0 && (directCut < 0 || index < directCut))
                 {
-                    killerCut = index;
-                    killerMarker = killerMarkers[i];
+                    directCut = index;
+                    directMarker = directByMarkers[i];
                 }
             }
 
-            if (killerCut >= 0)
+            if (directCut >= 0)
             {
-                bossName = NormalizeBossLocationName(text.Substring(0, killerCut));
-                killer = text.Substring(killerCut + killerMarker.Length).Trim().Trim('.', '!', ':', '-', ' ');
+                bossName = NormalizeBossLocationName(text.Substring(0, directCut));
+                killer = CleanKiller(text.Substring(directCut + directMarker.Length));
                 return bossName.Length > 0;
             }
 
-            string[] markers = new string[]
+            string[] passiveMarkers = new string[]
             {
-                " vừa bị tiêu diệt", " đã bị tiêu diệt", " bị tiêu diệt",
-                " vừa chết", " đã chết",
-                " vừa bị hạ", " đã bị hạ", " bị hạ",
+                " vừa bị ", " đã bị ", " bị "
+            };
+            for (int i = 0; i < passiveMarkers.Length; i++)
+            {
+                int index = lower.IndexOf(passiveMarkers[i], StringComparison.Ordinal);
+                if (index <= 0)
+                    continue;
+
+                string remainder = text.Substring(index + passiveMarkers[i].Length).Trim();
+                string parsedKiller;
+                if (!TryParseDeathRemainder(remainder, out parsedKiller))
+                    continue;
+
+                bossName = NormalizeBossLocationName(text.Substring(0, index));
+                killer = parsedKiller;
+                return bossName.Length > 0;
+            }
+
+            string[] directDeathMarkers = new string[]
+            {
+                " vừa chết", " đã chết", " chết",
                 " has been defeated", " was defeated",
                 " has been killed", " was killed",
                 " is dead"
             };
-
             int cut = -1;
-            for (int i = 0; i < markers.Length; i++)
+            for (int i = 0; i < directDeathMarkers.Length; i++)
             {
-                int index = lower.IndexOf(markers[i], StringComparison.Ordinal);
+                int index = lower.IndexOf(directDeathMarkers[i], StringComparison.Ordinal);
                 if (index >= 0 && (cut < 0 || index < cut))
                     cut = index;
             }
@@ -518,6 +540,75 @@ namespace AssemblyCSharp.Functions
             bossName = NormalizeBossLocationName(text.Substring(0, cut));
             return bossName.Length > 0;
         }
+
+        public static bool LooksLikeBossDeathAnnouncement(string chatVip)
+        {
+            if (string.IsNullOrEmpty(chatVip))
+                return false;
+
+            string lower = chatVip.ToLowerInvariant();
+            return lower.IndexOf("tiêu diệt", StringComparison.Ordinal) >= 0 ||
+                   lower.IndexOf("hạ gục", StringComparison.Ordinal) >= 0 ||
+                   lower.IndexOf("đánh bại", StringComparison.Ordinal) >= 0 ||
+                   lower.IndexOf(" bị hạ", StringComparison.Ordinal) >= 0 ||
+                   lower.IndexOf(" đã chết", StringComparison.Ordinal) >= 0 ||
+                   lower.IndexOf(" vừa chết", StringComparison.Ordinal) >= 0 ||
+                   lower.IndexOf(" killed", StringComparison.Ordinal) >= 0 ||
+                   lower.IndexOf(" defeated", StringComparison.Ordinal) >= 0 ||
+                   lower.IndexOf(" is dead", StringComparison.Ordinal) >= 0;
+        }
+
+        private static bool TryParseDeathRemainder(string remainder, out string killer)
+        {
+            killer = "";
+            if (string.IsNullOrEmpty(remainder))
+                return false;
+
+            string lower = remainder.ToLowerInvariant();
+            string[] actions = new string[]
+            {
+                "tiêu diệt", "hạ gục", "đánh bại", "hạ", "giết",
+                "killed", "defeated", "slain"
+            };
+
+            int actionIndex = -1;
+            string action = "";
+            for (int i = 0; i < actions.Length; i++)
+            {
+                int index = lower.IndexOf(actions[i], StringComparison.Ordinal);
+                if (index >= 0 && (actionIndex < 0 || index < actionIndex))
+                {
+                    actionIndex = index;
+                    action = actions[i];
+                }
+            }
+            if (actionIndex < 0)
+                return false;
+
+            if (actionIndex > 0)
+            {
+                killer = CleanKiller(remainder.Substring(0, actionIndex));
+                return true;
+            }
+
+            string afterAction = remainder.Substring(action.Length).Trim();
+            string lowerAfter = afterAction.ToLowerInvariant();
+            if (lowerAfter.StartsWith("bởi ", StringComparison.Ordinal))
+                killer = CleanKiller(afterAction.Substring(4));
+            else if (lowerAfter.StartsWith("by ", StringComparison.Ordinal))
+                killer = CleanKiller(afterAction.Substring(3));
+            return true;
+        }
+
+        private static string CleanKiller(string value)
+        {
+            string result = (value ?? "").Trim().Trim('.', '!', ':', '-', '[', ']', ' ');
+            string lower = result.ToLowerInvariant();
+            if (lower.StartsWith("người chơi ", StringComparison.Ordinal))
+                result = result.Substring("người chơi ".Length).Trim();
+            return result;
+        }
+
 
         public static bool TryParseBossAnnouncement(string chatVip, out string bossName, out string mapName, out int mapId, out int zone)
         {

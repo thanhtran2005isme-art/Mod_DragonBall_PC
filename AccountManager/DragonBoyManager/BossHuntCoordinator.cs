@@ -685,6 +685,7 @@ namespace DragonBoyManager
                     record.MapName = payload.mapName ?? "";
                     record.Zone = payload.zone;
                     record.Alive = true;
+                    record.Presence = BossPresenceState.Alive;
                     record.SpawnedAtUtc = observedUtc;
                     record.DiedAtUtc = DateTime.MinValue;
                     record.Killer = "";
@@ -729,6 +730,7 @@ namespace DragonBoyManager
 
                     bool newEvent = record.Alive || record.DiedAtUtc == DateTime.MinValue;
                     record.Alive = false;
+                    record.Presence = BossPresenceState.Dead;
                     if (record.DiedAtUtc == DateTime.MinValue || observedUtc < record.DiedAtUtc)
                         record.DiedAtUtc = observedUtc;
                     if (string.IsNullOrEmpty(record.Killer) && !string.IsNullOrEmpty(killer))
@@ -753,6 +755,7 @@ namespace DragonBoyManager
                     {
                         BossName = NormalizeBossName(payload.bossName),
                         Alive = false,
+                        Presence = BossPresenceState.Dead,
                         DiedAtUtc = observedUtc,
                         Killer = killer,
                         RawDeath = payload.rawMessage ?? "",
@@ -822,6 +825,9 @@ namespace DragonBoyManager
         private void HandleTelemetry(Account account, BossHuntPayload payload)
         {
             bool changed = false;
+            bool stopForScanExhausted = false;
+            string scanExhaustedReason = "";
+            string staleBossName = "";
             List<PendingZoneAssignment> centralAssignments = null;
             lock (_sync)
             {
@@ -857,8 +863,10 @@ namespace DragonBoyManager
                 }
                 else if (eventName == "ZONE_PLAN")
                 {
-                    worker.AssignedZones = payload.assignedZones ?? "";
-                    worker.TotalZones = payload.totalZones;
+                    if (!string.IsNullOrEmpty(payload.assignedZones))
+                        worker.AssignedZones = payload.assignedZones;
+                    if (payload.totalZones > 0)
+                        worker.TotalZones = payload.totalZones;
                     AddTimelineLocked("ZONE_PLAN", account.ID, "assigned=" + worker.AssignedZones + ";total=" + worker.TotalZones);
                     changed = true;
                 }
@@ -922,6 +930,42 @@ namespace DragonBoyManager
                     AddTimelineLocked("FIGHTING", account.ID, "hp=" + payload.targetHp);
                     changed = true;
                 }
+
+                if (_state == BossHuntState.Scanning &&
+                    (eventName == "ZONE_CLEAR" || eventName == "ZONE_FAILED") &&
+                    AllHealthyWorkersReachedScanCycleLocked(3))
+                {
+                    BossHuntBossSnapshot latest = FindLatestBossLocked(_bossName, true);
+                    if (latest != null &&
+                        latest.SpawnedAtUtc != DateTime.MinValue &&
+                        DateTime.UtcNow.Subtract(latest.SpawnedAtUtc).TotalSeconds >= 45.0)
+                    {
+                        latest.Presence = BossPresenceState.Stale;
+                        staleBossName = latest.BossName;
+                        AddTimelineLocked("SCAN_EXHAUSTED", account.ID,
+                            "boss=" + latest.BossName + ";cycle>=3;coverage=" +
+                            GetUniqueCoverageCountLocked() + "/" + GetCoverageTotalZonesLocked());
+                        stopForScanExhausted = true;
+                        scanExhaustedReason = MainController.language == 0
+                            ? "Không còn tìm thấy boss sau 3 vòng quét; chưa xác nhận được death/killer"
+                            : "Boss not found after 3 scan cycles; death/killer not confirmed";
+                    }
+                }
+            }
+
+            if (stopForScanExhausted)
+            {
+                if (!string.IsNullOrEmpty(staleBossName))
+                {
+                    BossHuntPayload invalidate = new BossHuntPayload
+                    {
+                        bossName = staleBossName,
+                        eventName = "SCAN_EXHAUSTED"
+                    };
+                    Broadcast(GetConnectedAccounts(), CmdBossInvalidate, invalidate);
+                }
+                Stop(scanExhaustedReason);
+                return;
             }
 
             if (centralAssignments != null)
@@ -1427,7 +1471,7 @@ namespace DragonBoyManager
                     continue;
                 if (aliveOnly)
                 {
-                    if (!boss.Alive || boss.SpawnedAtUtc == DateTime.MinValue)
+                    if (!boss.Alive || boss.SpawnedAtUtc == DateTime.MinValue || boss.Presence == BossPresenceState.Stale)
                         continue;
                     if (now.Subtract(boss.SpawnedAtUtc).TotalMinutes > BossLocationFreshMinutes)
                         continue;
@@ -1604,10 +1648,30 @@ namespace DragonBoyManager
             return builder.ToString();
         }
 
+        private bool AllHealthyWorkersReachedScanCycleLocked(int minimumCycle)
+        {
+            bool any = false;
+            for (int i = 0; i < _sessionAccounts.Count; i++)
+            {
+                Account account = _sessionAccounts[i];
+                BossHuntWorkerSnapshot worker;
+                if (!IsConnected(account) || !_workers.TryGetValue(account.ID, out worker) ||
+                    worker.Failed || worker.Unresponsive || worker.AssignmentGeneration != _assignmentGeneration)
+                    continue;
+
+                any = true;
+                if (worker.ScanCycle < minimumCycle)
+                    return false;
+            }
+            return any;
+        }
+
         private static BossPresenceState GetPresence(BossHuntBossSnapshot boss)
         {
             if (boss == null)
                 return BossPresenceState.Unknown;
+            if (boss.Presence == BossPresenceState.Stale)
+                return BossPresenceState.Stale;
             if (!boss.Alive)
                 return BossPresenceState.Dead;
             if (boss.SpawnedAtUtc == DateTime.MinValue)
