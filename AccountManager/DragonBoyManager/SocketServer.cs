@@ -43,6 +43,8 @@ namespace DragonBoyManager
 
 		private const int MaxFrameSize = 1048576;
 
+		private const int CmdHandshakeAck = 99;
+
 		private static readonly object ListenerSync = new object();
 
 		private static bool listenerStartingOrRunning;
@@ -189,6 +191,19 @@ namespace DragonBoyManager
 
 						BossHuntDiagnostics.Log("MANAGER_SOCKET", "HANDSHAKE", 0, state.account.ID, "", "SOCKET", "");
 						BossHuntCoordinator.Instance.HandleConnected(state.account);
+						try
+						{
+							Send(state.workSocket, new vMessage
+							{
+								cmd = CmdHandshakeAck,
+								data = Encoding.ASCII.GetBytes(accountId.ToString())
+							});
+							ManagerRuntimeDiagnostics.Log("HANDSHAKE_ACK_TX", "account=" + accountId);
+						}
+						catch (Exception ackEx)
+						{
+							ManagerRuntimeDiagnostics.Log("HANDSHAKE_ACK_TX_FAILED account=" + accountId, ackEx);
+						}
 						if (MainController.instance != null)
 							MainController.instance.REFRESH = true;
 					}
@@ -267,11 +282,8 @@ namespace DragonBoyManager
 				};
 
 				BossHuntDiagnostics.Log("MANAGER_SOCKET", "ACCEPT", 0, -1, "", "SOCKET", "");
+				ManagerRuntimeDiagnostics.Log("SOCKET_ACCEPT_WAIT_HANDSHAKE", "remote=" + Convert.ToString(socket.RemoteEndPoint));
 				socket.BeginReceive(stateObject.buffer, 0, stateObject.buffer.Length, SocketFlags.None, ReadCallback, stateObject);
-				Send(socket, new vMessage
-				{
-					cmd = 0
-				});
 			}
 			catch (ObjectDisposedException)
 			{
