@@ -480,6 +480,26 @@ namespace DragonBoyManager
                     };
                 }
                 _sessionAccounts.AddRange(accounts);
+
+                for (int i = 0; i < requested.Count; i++)
+                {
+                    Account requestedAccount = requested[i];
+                    if (_workers.ContainsKey(requestedAccount.ID))
+                        continue;
+                    _workers[requestedAccount.ID] = new BossHuntWorkerSnapshot
+                    {
+                        AccountId = requestedAccount.ID,
+                        Username = requestedAccount.Username ?? "",
+                        WorkerIndex = -1,
+                        WorkerCount = accounts.Count,
+                        AssignmentGeneration = generation,
+                        Status = MainController.language == 0 ? "Chờ kết nối để tham gia" : "Waiting to reconnect",
+                        LastHeartbeatUtc = DateTime.MinValue,
+                        LastEventUtc = now,
+                        ScanStartedAtUtc = now
+                    };
+                }
+
                 AddTimelineLocked("SESSION_START", -1,
                     "boss=" + bossName + ";workers=" + accounts.Count + ";requested=" + _requestedAccountIds.Count +
                     ";generation=" + generation);
