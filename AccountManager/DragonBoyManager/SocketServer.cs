@@ -394,6 +394,8 @@ namespace DragonBoyManager
 			}
 
 			Account account = stateObject.account;
+			if (account == null)
+				ManagerRuntimeDiagnostics.Log("SOCKET_PREHANDSHAKE_CLOSE", "remote=" + SafeRemoteEndPoint(workSocket));
 			if (account != null && account.workSocket == workSocket)
 			{
 				BossHuntDiagnostics.Log("MANAGER_SOCKET", "CLOSE", 0, account.ID, "", "SOCKET", "");
@@ -409,6 +411,18 @@ namespace DragonBoyManager
 				}
 				if (MainController.instance != null)
 					MainController.instance.REFRESH = true;
+			}
+		}
+
+		private static string SafeRemoteEndPoint(Socket socket)
+		{
+			try
+			{
+				return socket == null ? "" : Convert.ToString(socket.RemoteEndPoint);
+			}
+			catch
+			{
+				return "";
 			}
 		}
 
