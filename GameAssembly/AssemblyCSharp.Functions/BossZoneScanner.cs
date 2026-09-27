@@ -44,6 +44,7 @@ namespace AssemblyCSharp.Functions
             public int totalZones;
             public int maxZone = -1;
             public string assignedZones;
+            public string[] bossNames;
         }
 
         private sealed class PendingCommand
@@ -68,6 +69,9 @@ namespace AssemblyCSharp.Functions
         private const int CmdBossDeath = 116;
         private const int CmdTelemetry = 117;
         private const int CmdHeartbeat = 118;
+        private const int CmdBossCatalog = 119;
+
+        private const long BossCatalogSyncIntervalMs = 15000L;
 
         private const long HeartbeatIntervalMs = 2000L;
         private const long ScanRouteTimeoutMs = 90000L;
@@ -143,6 +147,7 @@ namespace AssemblyCSharp.Functions
         private int _lastBossCount = -1;
         private long _lastEntityChangeAt;
         private long _lastHeartbeatAt;
+        private long _lastCatalogSyncAt;
         private int _scanCycle;
         private ScannerState _state = ScannerState.Idle;
 
@@ -182,10 +187,12 @@ namespace AssemblyCSharp.Functions
             {
                 DrainManagerCommands();
                 DrainAnnouncements();
+
+                long now = GClass203.smethod_18();
+                SendBossCatalogSnapshotIfDue(now);
                 if (!_active)
                     return;
 
-                long now = GClass203.smethod_18();
                 SendHeartbeatIfDue(now);
                 if (_state == ScannerState.WaitingLocation)
                     UpdateWaitingLocation(now);
@@ -1205,6 +1212,99 @@ namespace AssemblyCSharp.Functions
             Trace("FAILED", detail);
             SendEvent(CmdFailed, detail);
             StopInternal();
+        }
+
+        public void SendBossCatalogSnapshot()
+        {
+            try
+            {
+                List<string> names = new List<string>();
+
+                try
+                {
+                    List<GClass156> cached = GClass156.GetBossLocationSnapshot();
+                    for (int i = 0; i < cached.Count; i++)
+                    {
+                        GClass156 item = cached[i];
+                        if (item != null)
+                            AddUniqueBossName(names, item.string_0);
+                    }
+                }
+                catch
+                {
+                }
+
+                try
+                {
+                    for (int i = 0; i < GClass158.list_3.Count; i++)
+                    {
+                        GClass78 boss = GClass158.list_3[i];
+                        if (boss == null)
+                            continue;
+
+                        string name;
+                        try
+                        {
+                            name = GClass158.smethod_0().method_0(boss, false);
+                        }
+                        catch
+                        {
+                            name = boss.string_3 ?? "";
+                        }
+                        AddUniqueBossName(names, name);
+                    }
+                }
+                catch
+                {
+                }
+
+                if (!string.IsNullOrEmpty(_bossName))
+                    AddUniqueBossName(names, _bossName);
+                if (!string.IsNullOrEmpty(_sessionTargetBossName))
+                    AddUniqueBossName(names, _sessionTargetBossName);
+
+                if (names.Count == 0)
+                    return;
+
+                BossHuntPayload payload = new BossHuntPayload
+                {
+                    eventName = "BOSS_CATALOG_SYNC",
+                    bossNames = names.ToArray()
+                };
+                GClass150.smethod_0().method_2(new vMessage
+                {
+                    cmd = CmdBossCatalog,
+                    data = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(payload))
+                });
+
+                BossHuntDiagnostics.Log("GAME", "BOSS_CATALOG_SYNC", _active ? _sessionId : 0,
+                    _active ? _bossName : "", _state.ToString(), "count=" + names.Count);
+            }
+            catch
+            {
+            }
+        }
+
+        private void SendBossCatalogSnapshotIfDue(long now)
+        {
+            if (now - _lastCatalogSyncAt < BossCatalogSyncIntervalMs)
+                return;
+            _lastCatalogSyncAt = now;
+            SendBossCatalogSnapshot();
+        }
+
+        private static void AddUniqueBossName(List<string> names, string value)
+        {
+            string normalized = (value ?? "").Trim().Trim('[', ']', ':', '-', '.', ' ');
+            if (normalized.Length == 0)
+                return;
+
+            for (int i = 0; i < names.Count; i++)
+            {
+                if (names[i].Equals(normalized, StringComparison.OrdinalIgnoreCase))
+                    return;
+            }
+            names.Add(normalized);
         }
 
         public void SendKnownBossLocations()
