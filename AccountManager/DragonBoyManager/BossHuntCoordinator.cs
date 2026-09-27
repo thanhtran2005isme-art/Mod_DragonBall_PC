@@ -145,6 +145,7 @@ namespace DragonBoyManager
         public int totalZones;
         public int maxZone = -1;
         public string assignedZones;
+        public string[] bossNames;
     }
 
     internal sealed class PendingZoneAssignment
@@ -182,6 +183,7 @@ namespace DragonBoyManager
         public const int CmdBossDeath = 116;
         public const int CmdTelemetry = 117;
         public const int CmdHeartbeat = 118;
+        public const int CmdBossCatalog = 119;
 
         private const int HeartbeatTimeoutSeconds = 8;
         private const int BossLocationFreshMinutes = 60;
@@ -423,6 +425,11 @@ namespace DragonBoyManager
             if (cmd == CmdHeartbeat)
             {
                 HandleHeartbeat(account, payload);
+                return;
+            }
+            if (cmd == CmdBossCatalog)
+            {
+                HandleBossCatalog(account, payload);
                 return;
             }
             if (cmd == CmdTelemetry)
@@ -832,6 +839,16 @@ namespace DragonBoyManager
             }
             else
                 Publish();
+        }
+
+        private void HandleBossCatalog(Account account, BossHuntPayload payload)
+        {
+            if (payload == null || payload.bossNames == null || payload.bossNames.Length == 0)
+                return;
+
+            BossHuntCatalog.RememberBosses(payload.bossNames);
+            BossHuntDiagnostics.Log("MANAGER", "BOSS_CATALOG_SYNC", 0, account == null ? -1 : account.ID, "", "GLOBAL",
+                "count=" + payload.bossNames.Length);
         }
 
         private void HandleHeartbeat(Account account, BossHuntPayload payload)
