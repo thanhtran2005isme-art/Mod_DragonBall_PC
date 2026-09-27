@@ -275,3 +275,13 @@ Xem thêm: `docs/TROUBLESHOOTING.md`.
 Cập nhật file này chỉ với trạng thái **còn cần cho phiên sau**.
 
 Nếu nội dung cũ dài ra, chuyển nó sang `docs/history/YYYY-MM.md` thay vì để AI_HANDOFF phình vô hạn.
+
+### Boss Hunt death evidence merge — 2026-09-27
+
+- Announcement không còn vừa parse trên callback vừa có một parser death riêng ở game loop. `ObserveAnnouncement()` chỉ enqueue; `DrainAnnouncements()` là đường parse duy nhất.
+- Announcement death gửi `CmdBossDeath=116` trước khi dừng local target.
+- Manager merge death evidence vào cả record Alive lẫn Dead để trường hợp announcement trước / combat `-60` sau vẫn giữ map/spawn/raw và bổ sung `killerId`.
+- `CmdDead=112` (ví dụ HP <= 0) được chuyển thành death fallback với killer unknown thay vì chỉ Stop.
+- Raw announcement và killer name thật được ưu tiên hiển thị; combat `-60` vẫn là nguồn xác nhận có `killerId`.
+- Code commits: `80cd904`, `1a13b43`, `7689c1c`. Chưa có GitHub Actions run/status trên HEAD tại thời điểm handoff; vẫn cần runtime test thật.
+
