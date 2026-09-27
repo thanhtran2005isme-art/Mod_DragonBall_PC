@@ -296,3 +296,10 @@ Nếu nội dung cũ dài ra, chuyển nó sang `docs/history/YYYY-MM.md` thay v
 - Log Viewer có filter session/account/event/boss + copy.
 - Các commit triển khai sau baseline `b22a4d0`; chưa có GitHub Actions run cho HEAD tại thời điểm cập nhật, nên vẫn cần build + runtime test thật trước merge.
 
+### TabControl name collision fix — 2026-09-27
+
+- Sau khi nâng panel Boss Hunt, full solution local báo CS1061 tại `TabBossHunt.cs`: `TabControl` không có `TabPages`.
+- Root cause: namespace `DragonBoyManager` đã có class riêng `TabControl : UserControl`, che khuất `System.Windows.Forms.TabControl`.
+- Fix ở commit `b71a29d`: field `detailTabs` dùng explicit `System.Windows.Forms.TabControl`.
+- Cần rebuild lại full solution để xác nhận không còn compile error mới.
+
