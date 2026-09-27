@@ -57,6 +57,10 @@ namespace AssemblyCSharp.Functions
         private const int RallyZoneMaxAttempts = 3;
         private const long RallyTargetLoadTimeoutMs = 8000L;
         private const long FightingTargetLostGraceMs = 3000L;
+        private const long EntityMinDwellMs = 2000L;
+        private const long EntityStableWindowMs = 800L;
+        private const long EntityMaxDwellMs = 5000L;
+        private const long AnnouncedZoneMaxDwellMs = 7000L;
 
         private static readonly BossZoneScanner _instance = new BossZoneScanner();
 
@@ -105,6 +109,9 @@ namespace AssemblyCSharp.Functions
         private long _zoneListWaitStartedAt;
         private bool _zoneListFresh;
         private bool _zonePlanReady;
+        private int _lastEntityCount = -1;
+        private int _lastBossCount = -1;
+        private long _lastEntityChangeAt;
         private ScannerState _state = ScannerState.Idle;
 
         public static BossZoneScanner Instance
@@ -243,11 +250,15 @@ namespace AssemblyCSharp.Functions
             _zoneListWaitStartedAt = 0L;
             _zoneListFresh = false;
             _zonePlanReady = false;
+            _lastEntityCount = -1;
+            _lastBossCount = -1;
+            _lastEntityChangeAt = 0L;
             _rallyStartedAt = 0L;
             _rallyZoneAttempts = 0;
             _rallyZoneArrivedAt = 0L;
             _targetMissingSince = 0L;
             ClearAnnouncements();
+            Trace("START_SCAN", "worker=" + _workerIndex + "/" + _workerCount + ";startZone=" + _startZone);
 
             GClass78 currentTarget = FindTargetBoss();
             if (currentTarget != null)
@@ -285,6 +296,7 @@ namespace AssemblyCSharp.Functions
             _rallyRouteLastProgressAt = _rallyStartedAt;
             _lastZoneCommandAt = 0L;
             _lastFocusAt = 0L;
+            Trace("START_RALLY", "targetMap=" + _targetMapId + ";targetZone=" + _targetZone);
         }
 
         private void UpdateWaitingLocation(long now)
@@ -314,11 +326,13 @@ namespace AssemblyCSharp.Functions
 
             if (GClass20.int_37 == _scanMapId)
             {
+                Trace("MAP_ARRIVED", "targetMap=" + _scanMapId);
                 BeginScanningOnCurrentMap(now);
                 return;
             }
 
-            TrackRouteProgress(now, ref _scanRouteLastMapId, ref _scanRouteLastProgressAt);
+            if (TrackRouteProgress(now, ref _scanRouteLastMapId, ref _scanRouteLastProgressAt))
+                Trace("XMAP_PROGRESS", "targetMap=" + _scanMapId);
 
             if (_scanRouteStartedAt > 0L && now - _scanRouteStartedAt >= ScanRouteTimeoutMs)
             {
@@ -332,6 +346,7 @@ namespace AssemblyCSharp.Functions
 
             if (xmapRunning)
             {
+                Trace("XMAP_STALL_RESTART", "targetMap=" + _scanMapId);
                 Class21.smethod_0().method_9();
                 _lastScanRouteCommandAt = 0L;
                 _scanRouteLastProgressAt = now;
@@ -340,21 +355,24 @@ namespace AssemblyCSharp.Functions
             if (now - _lastScanRouteCommandAt < RouteRetryDelayMs)
                 return;
 
+            Trace("XMAP_START", "targetMap=" + _scanMapId + ";targetName=" + _scanMapName);
             Class21.smethod_0().method_8(_scanMapId);
             _lastScanRouteCommandAt = now;
             SendEvent(CmdZone, "ROUTING_MAP|" + _scanMapName);
         }
 
-        private static void TrackRouteProgress(long now, ref int lastMapId, ref long lastProgressAt)
+        private static bool TrackRouteProgress(long now, ref int lastMapId, ref long lastProgressAt)
         {
             int currentMapId = GClass20.int_37;
             if (lastMapId != currentMapId)
             {
                 lastMapId = currentMapId;
                 lastProgressAt = now;
+                return true;
             }
-            else if (lastProgressAt <= 0L)
+            if (lastProgressAt <= 0L)
                 lastProgressAt = now;
+            return false;
         }
 
         private void SetScanLocation(int mapId, string mapName, int zone, long now)
@@ -396,6 +414,10 @@ namespace AssemblyCSharp.Functions
             _zoneListWaitStartedAt = now;
             _zoneListFresh = false;
             _zonePlanReady = false;
+            _lastEntityCount = -1;
+            _lastBossCount = -1;
+            _lastEntityChangeAt = 0L;
+            Trace("ZONE_LIST_WAIT", "mapId=" + _zoneListMapId);
             RequestZoneList(now);
             SendEvent(CmdZone, "ZONE_LIST_WAIT");
         }
@@ -420,6 +442,7 @@ namespace AssemblyCSharp.Functions
                 _state = ScannerState.Standby;
                 _desiredZone = -1;
                 _usingAnnouncedZone = false;
+                Trace("STANDBY", "availableZones=" + Math.Max(0, availableZoneCount));
                 SendEvent(CmdZone, "STANDBY|" + Math.Max(0, availableZoneCount));
                 return false;
             }
@@ -430,6 +453,7 @@ namespace AssemblyCSharp.Functions
                 _state = ScannerState.Standby;
                 _desiredZone = -1;
                 _usingAnnouncedZone = false;
+                Trace("STANDBY", "availableZones=" + Math.Max(0, availableZoneCount));
                 SendEvent(CmdZone, "STANDBY|" + Math.Max(0, availableZoneCount));
                 return false;
             }
@@ -437,6 +461,7 @@ namespace AssemblyCSharp.Functions
             _usingAnnouncedZone = IsZoneAssignedToWorker(_announcedZone);
             _desiredZone = _usingAnnouncedZone ? _announcedZone : first;
             _zonePlanReady = true;
+            Trace("ZONE_PLAN", "maxZone=" + _maxZone + ";first=" + first + ";desired=" + _desiredZone + ";announced=" + _announcedZone + ";announcedOwned=" + _usingAnnouncedZone);
             SendEvent(CmdZone, "SCANNING");
             return true;
         }
@@ -499,6 +524,7 @@ namespace AssemblyCSharp.Functions
                 _targetMapName = GClass20.string_1;
                 _targetZone = GClass20.int_39;
                 _state = ScannerState.Found;
+                Trace("TARGET_FOUND", "hp=" + target.int_25);
                 EnableAndFocus(target, now);
                 SendEvent(CmdFound, "Tìm thấy boss");
                 return;
@@ -525,14 +551,21 @@ namespace AssemblyCSharp.Functions
                     _arrivedZone = _desiredZone;
                     _arrivedAt = now;
                     _zoneAttempts = 0;
+                    BeginEntityObservation(now);
                     SendEvent(CmdZone, "SCANNING");
                 }
+                else
+                    UpdateEntityObservation(now);
 
-                if (now - _arrivedAt >= 900L)
+                if (ShouldAdvanceFromCurrentZone(now))
                 {
+                    Trace("ZONE_DWELL_DONE", "elapsedMs=" + (now - _arrivedAt) + ";entities=" + _lastEntityCount + ";bosses=" + _lastBossCount);
                     AdvanceScanZone();
                     _arrivedZone = -1;
                     _arrivedAt = 0L;
+                    _lastEntityCount = -1;
+                    _lastBossCount = -1;
+                    _lastEntityChangeAt = 0L;
                 }
                 return;
             }
@@ -543,11 +576,13 @@ namespace AssemblyCSharp.Functions
 
             if (_zoneAttempts >= 2)
             {
+                Trace("ZONE_CHANGE_FAILED", "targetZone=" + _desiredZone + ";attempts=" + _zoneAttempts);
                 AdvanceScanZone();
                 _zoneAttempts = 0;
                 return;
             }
 
+            Trace("ZONE_REQUEST", "targetZone=" + _desiredZone + ";attempt=" + (_zoneAttempts + 1));
             GClass7.smethod_0().method_42(_desiredZone, -1);
             _zoneAttempts++;
             _lastZoneCommandAt = now;
@@ -571,7 +606,8 @@ namespace AssemblyCSharp.Functions
             {
                 _rallyZoneArrivedAt = 0L;
                 _rallyZoneAttempts = 0;
-                TrackRouteProgress(now, ref _rallyRouteLastMapId, ref _rallyRouteLastProgressAt);
+                if (TrackRouteProgress(now, ref _rallyRouteLastMapId, ref _rallyRouteLastProgressAt))
+                    Trace("RALLY_XMAP_PROGRESS", "targetMap=" + _targetMapId);
 
                 bool xmapRunning = GClass148.smethod_0().bool_0;
                 if (xmapRunning && now - _rallyRouteLastProgressAt < RouteStallTimeoutMs)
@@ -579,6 +615,7 @@ namespace AssemblyCSharp.Functions
 
                 if (xmapRunning)
                 {
+                    Trace("RALLY_XMAP_STALL_RESTART", "targetMap=" + _targetMapId);
                     Class21.smethod_0().method_9();
                     _lastRouteCommandAt = 0L;
                     _rallyRouteLastProgressAt = now;
@@ -586,6 +623,7 @@ namespace AssemblyCSharp.Functions
 
                 if (now - _lastRouteCommandAt >= RouteRetryDelayMs)
                 {
+                    Trace("RALLY_XMAP_START", "targetMap=" + _targetMapId);
                     Class21.smethod_0().method_8(_targetMapId);
                     _lastRouteCommandAt = now;
                 }
@@ -604,6 +642,7 @@ namespace AssemblyCSharp.Functions
                     return;
                 }
 
+                Trace("RALLY_ZONE_REQUEST", "targetZone=" + _targetZone + ";attempt=" + (_rallyZoneAttempts + 1));
                 GClass7.smethod_0().method_42(_targetZone, -1);
                 _rallyZoneAttempts++;
                 _lastZoneCommandAt = now;
@@ -631,10 +670,12 @@ namespace AssemblyCSharp.Functions
 
             _targetMissingSince = 0L;
             _state = ScannerState.Fighting;
+            Trace("RALLY_TARGET_FOUND", "hp=" + target.int_25);
             EnableAndFocus(target, now);
             if (!_readyReported)
             {
                 _readyReported = true;
+                Trace("READY", "targetZone=" + _targetZone);
                 SendEvent(CmdReady, "Đã tới boss");
             }
         }
@@ -645,7 +686,10 @@ namespace AssemblyCSharp.Functions
             if (target == null)
             {
                 if (_targetMissingSince <= 0L)
+                {
                     _targetMissingSince = now;
+                    Trace("TARGET_MISSING", "graceMs=" + FightingTargetLostGraceMs);
+                }
                 else if (now - _targetMissingSince >= FightingTargetLostGraceMs)
                     ReportFailed("TARGET_LOST");
                 return;
@@ -731,6 +775,7 @@ namespace AssemblyCSharp.Functions
 
                 if (DeathAnnouncementMatches(message, _bossName))
                 {
+                    Trace("ANNOUNCEMENT_DEATH", message);
                     ReportDead(message);
                     return;
                 }
@@ -744,6 +789,7 @@ namespace AssemblyCSharp.Functions
                     if (GClass156.TryParseBossAnnouncement(message, out announcedBoss, out announcedMap, out announcedMapId, out announcedZone) &&
                         BossNameMatches(announcedBoss, _bossName))
                     {
+                        Trace("ANNOUNCEMENT_SPAWN", "mapId=" + announcedMapId + ";map=" + announcedMap + ";zone=" + announcedZone);
                         SetScanLocation(announcedMapId, announcedMap, announcedZone, GClass203.smethod_18());
                     }
                 }
@@ -754,6 +800,69 @@ namespace AssemblyCSharp.Functions
         {
             lock (_announcementLock)
                 _pendingAnnouncements.Clear();
+        }
+
+        private void BeginEntityObservation(long now)
+        {
+            _lastEntityCount = GetVisibleEntityCount();
+            _lastBossCount = GetVisibleBossCount();
+            _lastEntityChangeAt = now;
+            Trace("ZONE_ARRIVED", "zone=" + _desiredZone + ";entities=" + _lastEntityCount + ";bosses=" + _lastBossCount + ";announced=" + _usingAnnouncedZone);
+        }
+
+        private void UpdateEntityObservation(long now)
+        {
+            int entityCount = GetVisibleEntityCount();
+            int bossCount = GetVisibleBossCount();
+            if (entityCount == _lastEntityCount && bossCount == _lastBossCount)
+                return;
+
+            _lastEntityCount = entityCount;
+            _lastBossCount = bossCount;
+            _lastEntityChangeAt = now;
+            Trace("ENTITY_CHANGE", "entities=" + entityCount + ";bosses=" + bossCount);
+        }
+
+        private bool ShouldAdvanceFromCurrentZone(long now)
+        {
+            long elapsed = now - _arrivedAt;
+            if (elapsed < EntityMinDwellMs)
+                return false;
+
+            if (_lastEntityCount > 0 && now - _lastEntityChangeAt >= EntityStableWindowMs)
+                return true;
+
+            long maxDwell = _usingAnnouncedZone ? AnnouncedZoneMaxDwellMs : EntityMaxDwellMs;
+            return elapsed >= maxDwell;
+        }
+
+        private static int GetVisibleEntityCount()
+        {
+            try
+            {
+                return GClass144.gclass88_5.method_2();
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        private static int GetVisibleBossCount()
+        {
+            try
+            {
+                return GClass158.list_3.Count;
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        private void Trace(string eventName, string detail)
+        {
+            BossHuntDiagnostics.Log("GAME", eventName, _sessionId, _bossName, _state.ToString(), detail);
         }
 
         private void MoveToNextAssignedZone()
@@ -845,6 +954,7 @@ namespace AssemblyCSharp.Functions
                     if (object.ReferenceEquals(current, _zoneListBaseline))
                         return -1;
                     _zoneListFresh = true;
+                    Trace("ZONE_LIST_FRESH", "zones=" + current.Length + ";mapId=" + _zoneListMapId);
                 }
 
                 return current.Length - 1;
@@ -861,6 +971,7 @@ namespace AssemblyCSharp.Functions
                 return;
             try
             {
+                Trace("ZONE_LIST_REQUEST", "mapId=" + _zoneListMapId);
                 GClass7.smethod_0().method_58();
                 _lastZoneListRequestAt = now;
             }
@@ -873,6 +984,7 @@ namespace AssemblyCSharp.Functions
         {
             if (!_active)
                 return;
+            Trace("DEAD", detail);
             SendEvent(CmdDead, detail);
             StopInternal();
         }
@@ -881,6 +993,7 @@ namespace AssemblyCSharp.Functions
         {
             if (!_active)
                 return;
+            Trace("FAILED", detail);
             SendEvent(CmdFailed, detail);
             StopInternal();
         }
@@ -902,6 +1015,7 @@ namespace AssemblyCSharp.Functions
                     accountId = GClass150.int_0,
                     detail = detail ?? ""
                 };
+                Trace("TX_EVENT", "cmd=" + cmd + ";detail=" + (detail ?? ""));
                 GClass150.smethod_0().method_2(new vMessage
                 {
                     cmd = cmd,
@@ -916,6 +1030,7 @@ namespace AssemblyCSharp.Functions
         private void StopInternal()
         {
             string oldBoss = _bossName;
+            Trace("STOP_LOCAL", "");
             _active = false;
             _state = ScannerState.Idle;
 
@@ -961,6 +1076,9 @@ namespace AssemblyCSharp.Functions
             _zoneListWaitStartedAt = 0L;
             _zoneListFresh = false;
             _zonePlanReady = false;
+            _lastEntityCount = -1;
+            _lastBossCount = -1;
+            _lastEntityChangeAt = 0L;
             _scanRouteLastMapId = -1;
             _scanRouteLastProgressAt = 0L;
             _rallyRouteLastMapId = -1;

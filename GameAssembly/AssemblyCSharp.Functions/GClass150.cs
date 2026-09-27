@@ -86,6 +86,7 @@ namespace AssemblyCSharp.Functions
 						}
 						catch (Exception ex)
 						{
+							BossHuntDiagnostics.Log("GAME_SOCKET", "CONNECT_RETRY", 0, "", "SOCKET", ex.GetType().Name);
 							GClass149.smethod_0("Data/Errors/Connect.txt", ex.ToString());
 							Thread.Sleep(1000);
 						}
@@ -106,7 +107,9 @@ namespace AssemblyCSharp.Functions
 			Socket newSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 			try
 			{
+				BossHuntDiagnostics.Log("GAME_SOCKET", "CONNECT_ATTEMPT", 0, "", "SOCKET", "port=" + port);
 				newSocket.Connect(IPAddress.Loopback, port);
+				BossHuntDiagnostics.Log("GAME_SOCKET", "CONNECTED", 0, "", "SOCKET", "port=" + port);
 
 				Socket oldSocket = socket_0;
 				socket_0 = newSocket;
@@ -121,6 +124,7 @@ namespace AssemblyCSharp.Functions
 					data = Encoding.ASCII.GetBytes(int_0.ToString())
 				});
 				bool_2 = true;
+				BossHuntDiagnostics.Log("GAME_SOCKET", "HANDSHAKE_SENT", 0, "", "SOCKET", "account=" + int_0);
 
 				if (oldSocket != null && oldSocket != newSocket)
 				{
@@ -166,7 +170,10 @@ namespace AssemblyCSharp.Functions
 				if (vMessage2 != null)
 				{
 					if (vMessage2.cmd >= 100 && vMessage2.cmd <= 102)
+					{
+						BossHuntDiagnostics.Log("GAME_SOCKET", "RX_CMD", 0, "", "SOCKET", "cmd=" + vMessage2.cmd);
 						BossZoneScanner.Instance.HandleManagerMessage(vMessage2.cmd, vMessage2.data);
+					}
 					else
 						GClass171.smethod_0().method_23(vMessage2);
 				}
@@ -306,6 +313,7 @@ namespace AssemblyCSharp.Functions
 
 			socket_0 = null;
 			bool_2 = false;
+			BossHuntDiagnostics.Log("GAME_SOCKET", "DISCONNECTED", 0, "", "SOCKET", "");
 			if (bool_0)
 				method_0(GClass172.int_0);
 		}

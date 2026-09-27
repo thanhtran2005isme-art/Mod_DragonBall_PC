@@ -124,6 +124,7 @@ namespace DragonBoyManager
 							}
 						}
 
+						BossHuntDiagnostics.Log("MANAGER_SOCKET", "HANDSHAKE", 0, state.account.ID, "", "SOCKET", "");
 						if (MainController.instance != null)
 							MainController.instance.REFRESH = true;
 					}
@@ -196,6 +197,7 @@ namespace DragonBoyManager
 			{
 				workSocket = socket
 			};
+			BossHuntDiagnostics.Log("MANAGER_SOCKET", "ACCEPT", 0, -1, "", "SOCKET", "");
 			socket.BeginReceive(stateObject.buffer, 0, stateObject.buffer.Length, SocketFlags.None, ReadCallback, stateObject);
 			Send(socket, new vMessage
 			{
@@ -304,6 +306,7 @@ namespace DragonBoyManager
 			Account account = stateObject.account;
 			if (account != null && account.workSocket == workSocket)
 			{
+				BossHuntDiagnostics.Log("MANAGER_SOCKET", "CLOSE", 0, account.ID, "", "SOCKET", "");
 				account.workSocket = null;
 				account.Status = "";
 				BossHuntCoordinator.Instance.HandleDisconnected(account);

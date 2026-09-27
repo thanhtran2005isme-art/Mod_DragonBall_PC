@@ -156,6 +156,7 @@ namespace DragonBoyManager
                 }
             }
 
+            BossHuntDiagnostics.Log("MANAGER", "SESSION_START", sessionId, -1, bossName, BossHuntState.Scanning.ToString(), "workers=" + accounts.Count + ";startZone=" + Math.Max(0, startZone));
             SendScanAssignments(accounts, sessionId, bossName, Math.Max(0, startZone));
             Publish();
             return true;
@@ -181,6 +182,7 @@ namespace DragonBoyManager
                 }
             }
 
+            BossHuntDiagnostics.Log("MANAGER", "SESSION_STOP", payload.sessionId, -1, payload.bossName, BossHuntState.Stopped.ToString(), payload.detail);
             Broadcast(targets, CmdStop, payload);
             Publish();
         }
@@ -201,6 +203,8 @@ namespace DragonBoyManager
             }
             if (payload == null)
                 return;
+
+            BossHuntDiagnostics.Log("MANAGER", "CLIENT_EVENT", payload.sessionId, account.ID, payload.bossName, _state.ToString(), "cmd=" + cmd + ";detail=" + (payload.detail ?? "") + ";map=" + payload.mapId + ";zone=" + payload.zone);
 
             if (cmd == CmdFailed)
             {
@@ -334,6 +338,8 @@ namespace DragonBoyManager
         {
             if (account == null)
                 return;
+
+            BossHuntDiagnostics.Log("MANAGER", "WORKER_DISCONNECTED", _sessionId, account.ID, _bossName, _state.ToString(), "");
 
             List<Account> reassign = null;
             int sessionId = 0;
@@ -473,6 +479,7 @@ namespace DragonBoyManager
                 rally = CreatePayload();
             }
 
+            BossHuntDiagnostics.Log("MANAGER", "RALLY_BROADCAST", rally.sessionId, account.ID, rally.bossName, BossHuntState.Rallying.ToString(), "map=" + rally.mapId + ";zone=" + rally.zone + ";targets=" + targets.Count);
             Broadcast(targets, CmdRally, rally);
             Publish();
         }
@@ -482,6 +489,7 @@ namespace DragonBoyManager
             int count = accounts.Count;
             for (int i = 0; i < count; i++)
             {
+                BossHuntDiagnostics.Log("MANAGER", "ASSIGN", sessionId, accounts[i].ID, bossName, BossHuntState.Scanning.ToString(), "worker=" + i + "/" + count + ";startZone=" + startZone);
                 Send(accounts[i], CmdStartScan, new BossHuntPayload
                 {
                     sessionId = sessionId,
