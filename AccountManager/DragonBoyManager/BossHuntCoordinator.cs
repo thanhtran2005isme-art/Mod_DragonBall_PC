@@ -125,6 +125,7 @@ namespace DragonBoyManager
         public int sessionId;
         public int assignmentGeneration;
         public string bossName;
+        public string targetBossName;
         public int startZone;
         public int workerIndex;
         public int workerCount;
@@ -202,6 +203,7 @@ namespace DragonBoyManager
         private int _zonePlanIssuedGeneration;
         private DateTime _sessionStartedAtUtc = DateTime.MinValue;
         private string _bossName = "";
+        private BossHuntBossSnapshot _sessionTargetBoss;
         private int _startZone;
         private BossHuntState _state = BossHuntState.Idle;
         private int _foundMapId = -1;
@@ -350,6 +352,9 @@ namespace DragonBoyManager
                 _sessionAccounts.AddRange(accounts);
                 AddTimelineLocked("SESSION_START", -1, "boss=" + bossName + ";workers=" + accounts.Count + ";generation=" + generation);
                 knownBoss = CloneBoss(FindLatestBossLocked(bossName, true));
+                _sessionTargetBoss = CloneBoss(knownBoss);
+                if (_sessionTargetBoss != null)
+                    AddTimelineLocked("TARGET_LOCK", -1, DescribeBossInstance(_sessionTargetBoss));
             }
 
             BossHuntDiagnostics.Log("MANAGER", "SESSION_START", sessionId, -1, bossName, BossHuntState.Scanning.ToString(),
@@ -576,7 +581,7 @@ namespace DragonBoyManager
                         boss = _bossName;
                         startZone = _startZone;
                         PrepareAssignmentsLocked(reassign, true);
-                        knownBoss = CloneBoss(FindLatestBossLocked(_bossName, true));
+                        knownBoss = CloneBoss(_sessionTargetBoss ?? FindLatestBossLocked(_bossName, true));
                     }
                 }
                 else
@@ -620,7 +625,7 @@ namespace DragonBoyManager
                     UniqueCoverageCount = GetUniqueCoverageCountLocked(),
                     CoverageTotalZones = GetCoverageTotalZonesLocked(),
                     StopReason = _stopReason,
-                    TargetBoss = CloneBoss(FindLatestBossLocked(_bossName, false))
+                    TargetBoss = CloneBoss(_sessionTargetBoss ?? FindLatestBossLocked(_bossName, false))
                 };
 
                 foreach (BossHuntWorkerSnapshot worker in _workers.Values)
@@ -699,6 +704,24 @@ namespace DragonBoyManager
                         AddTimelineLocked("BOSS_SPAWN", account.ID, record.MapName + " K" + record.Zone + " | " + (payload.rawMessage ?? ""));
                 }
 
+                if (IsRunningState(_state) && BossMatches(record.BossName, _bossName))
+                {
+                    if (_sessionTargetBoss == null)
+                    {
+                        _sessionTargetBoss = CloneBoss(record);
+                        AddTimelineLocked("TARGET_LOCK", account.ID, DescribeBossInstance(_sessionTargetBoss));
+                    }
+                    else if (SameBossInstance(_sessionTargetBoss, record))
+                    {
+                        _sessionTargetBoss = CloneBoss(record);
+                    }
+                    else
+                    {
+                        AddTimelineLocked("BOSS_SPAWN_QUEUED", account.ID,
+                            DescribeBossInstance(record) + " | current=" + DescribeBossInstance(_sessionTargetBoss));
+                    }
+                }
+
                 canonical = CloneBoss(record);
             }
 
@@ -717,38 +740,54 @@ namespace DragonBoyManager
 
             BossHuntCatalog.RememberBoss(payload.bossName);
             DateTime observedUtc = ReadObservedUtc(payload.observedAtTicks);
-            bool matchesCurrent;
+            bool matchesCurrent = false;
             string killer = payload.killer ?? "";
+            BossHuntBossSnapshot updatedRecord = null;
 
             lock (_sync)
             {
-                bool updatedAny = false;
-                foreach (BossHuntBossSnapshot record in _bossRecords.Values)
-                {
-                    if (!BossMatches(record.BossName, payload.bossName) && !BossMatches(payload.bossName, record.BossName))
-                        continue;
+                BossHuntBossSnapshot targetRecord = null;
 
-                    bool newEvent = record.Alive || record.DiedAtUtc == DateTime.MinValue;
-                    record.Alive = false;
-                    record.Presence = BossPresenceState.Dead;
-                    if (record.DiedAtUtc == DateTime.MinValue || observedUtc < record.DiedAtUtc)
-                        record.DiedAtUtc = observedUtc;
-                    if (string.IsNullOrEmpty(record.Killer) && !string.IsNullOrEmpty(killer))
-                        record.Killer = killer;
-                    if (string.IsNullOrEmpty(record.RawDeath) && !string.IsNullOrEmpty(payload.rawMessage))
-                        record.RawDeath = payload.rawMessage;
-                    record.LastSourceAccountId = account.ID;
-                    AddSourceAccount(record, account.ID);
-                    if (newEvent)
-                    {
-                        AddBossEventLocked("DEATH", record, record.DiedAtUtc, account.ID, record.Killer, record.RawDeath);
-                        if (_sessionId > 0 && BossMatches(record.BossName, _bossName))
-                            AddTimelineLocked("BOSS_DEATH", account.ID, "killer=" + record.Killer + " | " + record.RawDeath);
-                    }
-                    updatedAny = true;
+                if (_sessionTargetBoss != null &&
+                    IsRunningState(_state) &&
+                    DeathNameMatchesInstance(payload.bossName, _sessionTargetBoss.BossName))
+                {
+                    targetRecord = FindRecordForInstanceLocked(_sessionTargetBoss);
                 }
 
-                if (!updatedAny)
+                if (targetRecord == null)
+                    targetRecord = FindBestAliveRecordForDeathLocked(payload.bossName);
+
+                if (targetRecord != null)
+                {
+                    bool newEvent = targetRecord.Alive || targetRecord.DiedAtUtc == DateTime.MinValue;
+                    targetRecord.Alive = false;
+                    targetRecord.Presence = BossPresenceState.Dead;
+                    if (targetRecord.DiedAtUtc == DateTime.MinValue || observedUtc < targetRecord.DiedAtUtc)
+                        targetRecord.DiedAtUtc = observedUtc;
+                    if (string.IsNullOrEmpty(targetRecord.Killer) && !string.IsNullOrEmpty(killer))
+                        targetRecord.Killer = killer;
+                    if (string.IsNullOrEmpty(targetRecord.RawDeath) && !string.IsNullOrEmpty(payload.rawMessage))
+                        targetRecord.RawDeath = payload.rawMessage;
+                    targetRecord.LastSourceAccountId = account.ID;
+                    AddSourceAccount(targetRecord, account.ID);
+
+                    if (newEvent)
+                    {
+                        AddBossEventLocked("DEATH", targetRecord, targetRecord.DiedAtUtc, account.ID, targetRecord.Killer, targetRecord.RawDeath);
+                        AddTimelineLocked("BOSS_DEATH", account.ID,
+                            DescribeBossInstance(targetRecord) + " | killer=" + targetRecord.Killer + " | " + targetRecord.RawDeath);
+                    }
+
+                    updatedRecord = CloneBoss(targetRecord);
+
+                    if (_sessionTargetBoss != null && SameBossInstance(_sessionTargetBoss, targetRecord))
+                    {
+                        _sessionTargetBoss = CloneBoss(targetRecord);
+                        matchesCurrent = IsRunningState(_state);
+                    }
+                }
+                else
                 {
                     string key = NormalizeBossName(payload.bossName).ToLowerInvariant();
                     BossHuntBossSnapshot record = new BossHuntBossSnapshot
@@ -764,19 +803,19 @@ namespace DragonBoyManager
                     AddSourceAccount(record, account.ID);
                     _bossRecords[key] = record;
                     AddBossEventLocked("DEATH", record, observedUtc, account.ID, killer, payload.rawMessage);
-                    if (_sessionId > 0 && BossMatches(record.BossName, _bossName))
-                        AddTimelineLocked("BOSS_DEATH", account.ID, "killer=" + killer + " | " + (payload.rawMessage ?? ""));
+                    AddTimelineLocked("BOSS_DEATH_UNBOUND", account.ID,
+                        record.BossName + " | killer=" + killer + " | " + (payload.rawMessage ?? ""));
+                    updatedRecord = CloneBoss(record);
                 }
-
-                matchesCurrent = IsRunningState(_state) && BossMatches(payload.bossName, _bossName);
             }
 
             BossHuntDiagnostics.Log("MANAGER", "BOSS_DEATH", 0, account.ID, payload.bossName, "GLOBAL",
-                "killer=" + killer + ";at=" + observedUtc.ToString("o"));
+                "killer=" + killer + ";at=" + observedUtc.ToString("o") +
+                ";currentTarget=" + matchesCurrent);
 
             BossHuntPayload invalidate = new BossHuntPayload
             {
-                bossName = payload.bossName,
+                bossName = updatedRecord == null ? payload.bossName : updatedRecord.BossName,
                 observedAtTicks = observedUtc.Ticks,
                 killer = killer,
                 rawMessage = payload.rawMessage ?? "",
@@ -949,12 +988,13 @@ namespace DragonBoyManager
 
                     if (coverageComplete)
                     {
-                        BossHuntBossSnapshot latest = FindLatestBossLocked(_bossName, true);
+                        BossHuntBossSnapshot latest = _sessionTargetBoss ?? FindLatestBossLocked(_bossName, true);
                         if (latest != null &&
                             latest.SpawnedAtUtc != DateTime.MinValue &&
                             DateTime.UtcNow.Subtract(latest.SpawnedAtUtc).TotalSeconds >= 45.0)
                         {
                             latest.Presence = BossPresenceState.Stale;
+                            _sessionTargetBoss = CloneBoss(latest);
                             staleBossName = latest.BossName;
                             AddTimelineLocked("SCAN_EXHAUSTED", account.ID,
                                 "boss=" + latest.BossName + ";cycle>=3;coverage=" +
@@ -1231,6 +1271,7 @@ namespace DragonBoyManager
                     sessionId = sessionId,
                     assignmentGeneration = generation,
                     bossName = bossName,
+                    targetBossName = knownBoss == null ? "" : knownBoss.BossName,
                     startZone = startZone,
                     workerIndex = i,
                     workerCount = count,
@@ -1476,6 +1517,76 @@ namespace DragonBoyManager
                 return;
             if (!boss.SourceAccounts.Contains(accountId))
                 boss.SourceAccounts.Add(accountId);
+        }
+
+        private BossHuntBossSnapshot FindRecordForInstanceLocked(BossHuntBossSnapshot target)
+        {
+            if (target == null)
+                return null;
+
+            foreach (BossHuntBossSnapshot record in _bossRecords.Values)
+            {
+                if (SameBossInstance(target, record))
+                    return record;
+            }
+            return null;
+        }
+
+        private BossHuntBossSnapshot FindBestAliveRecordForDeathLocked(string deathBossName)
+        {
+            BossHuntBossSnapshot best = null;
+            foreach (BossHuntBossSnapshot record in _bossRecords.Values)
+            {
+                if (!record.Alive || !DeathNameMatchesInstance(deathBossName, record.BossName))
+                    continue;
+                if (best == null || record.SpawnedAtUtc > best.SpawnedAtUtc)
+                    best = record;
+            }
+            return best;
+        }
+
+        private static bool SameBossInstance(BossHuntBossSnapshot a, BossHuntBossSnapshot b)
+        {
+            if (a == null || b == null)
+                return false;
+            if (!NormalizeBossName(a.BossName).Equals(NormalizeBossName(b.BossName), StringComparison.OrdinalIgnoreCase))
+                return false;
+            if (a.MapId >= 0 && b.MapId >= 0 && a.MapId != b.MapId)
+                return false;
+            if (a.Zone >= 0 && b.Zone >= 0 && a.Zone != b.Zone)
+                return false;
+
+            if (a.SpawnedAtUtc != DateTime.MinValue && b.SpawnedAtUtc != DateTime.MinValue)
+                return Math.Abs(a.SpawnedAtUtc.Subtract(b.SpawnedAtUtc).TotalSeconds) <= 10.0;
+
+            return true;
+        }
+
+        private static bool DeathNameMatchesInstance(string deathName, string instanceName)
+        {
+            deathName = NormalizeBossName(deathName);
+            instanceName = NormalizeBossName(instanceName);
+            if (deathName.Length == 0 || instanceName.Length == 0)
+                return false;
+            if (deathName.Equals(instanceName, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            if (instanceName.StartsWith(deathName, StringComparison.OrdinalIgnoreCase) &&
+                instanceName.Length > deathName.Length)
+            {
+                char next = instanceName[deathName.Length];
+                return char.IsWhiteSpace(next) || next == '-' || next == '(' || next == '[';
+            }
+
+            return false;
+        }
+
+        private static string DescribeBossInstance(BossHuntBossSnapshot boss)
+        {
+            if (boss == null)
+                return "-";
+            return boss.BossName + " @ " + (boss.MapName ?? "") + " K" + boss.Zone +
+                   (boss.SpawnedAtUtc == DateTime.MinValue ? "" : " | " + boss.SpawnedAtUtc.ToLocalTime().ToString("HH:mm:ss"));
         }
 
         private BossHuntBossSnapshot FindLatestBossLocked(string bossName, bool aliveOnly)
