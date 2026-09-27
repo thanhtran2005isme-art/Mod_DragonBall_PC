@@ -36,6 +36,7 @@ namespace AssemblyCSharp.Functions
             public string eventName;
             public string rawMessage;
             public string killer;
+            public int killerId = -1;
             public long observedAtTicks;
             public int entityCount;
             public int bossCount;
@@ -51,6 +52,18 @@ namespace AssemblyCSharp.Functions
         {
             public int cmd;
             public BossHuntPayload payload;
+        }
+
+        private sealed class PendingCombatDeath
+        {
+            public int attackerId;
+            public string attackerName;
+            public int targetId;
+            public string targetName;
+            public int mapId;
+            public string mapName;
+            public int zone;
+            public long observedAtTicks;
         }
 
         private const int CmdStartScan = 100;
@@ -93,6 +106,8 @@ namespace AssemblyCSharp.Functions
         private readonly Queue<PendingCommand> _pendingCommands = new Queue<PendingCommand>();
         private readonly object _announcementLock = new object();
         private readonly Queue<string> _pendingAnnouncements = new Queue<string>();
+        private readonly object _combatDeathLock = new object();
+        private readonly Queue<PendingCombatDeath> _pendingCombatDeaths = new Queue<PendingCombatDeath>();
         private readonly List<int> _assignedZones = new List<int>();
 
         private bool _active;
@@ -186,6 +201,7 @@ namespace AssemblyCSharp.Functions
             try
             {
                 DrainManagerCommands();
+                DrainCombatDeaths();
                 DrainAnnouncements();
 
                 long now = GClass203.smethod_18();
@@ -913,6 +929,114 @@ namespace AssemblyCSharp.Functions
             return null;
         }
 
+        public void ObserveCombatCharacterDeath(
+            int attackerId,
+            string attackerName,
+            int targetId,
+            string targetName,
+            int mapId,
+            string mapName,
+            int zone,
+            long observedAtTicks)
+        {
+            if (targetId >= 0 || string.IsNullOrEmpty(targetName))
+                return;
+
+            PendingCombatDeath pending = new PendingCombatDeath
+            {
+                attackerId = attackerId,
+                attackerName = attackerName ?? "",
+                targetId = targetId,
+                targetName = targetName ?? "",
+                mapId = mapId,
+                mapName = mapName ?? "",
+                zone = zone,
+                observedAtTicks = observedAtTicks > 0L ? observedAtTicks : DateTime.UtcNow.Ticks
+            };
+
+            BossHuntDiagnostics.Log("GAME_COMBAT", "COMBAT_DEATH_RX",
+                _active ? _sessionId : 0,
+                pending.targetName,
+                _state.ToString(),
+                "attackerId=" + pending.attackerId +
+                ";attacker=" + pending.attackerName +
+                ";targetId=" + pending.targetId +
+                ";map=" + pending.mapId +
+                ";zone=" + pending.zone);
+
+            lock (_combatDeathLock)
+            {
+                if (_pendingCombatDeaths.Count >= 32)
+                    _pendingCombatDeaths.Dequeue();
+                _pendingCombatDeaths.Enqueue(pending);
+            }
+        }
+
+        private void DrainCombatDeaths()
+        {
+            while (true)
+            {
+                PendingCombatDeath pending;
+                lock (_combatDeathLock)
+                {
+                    if (_pendingCombatDeaths.Count == 0)
+                        return;
+                    pending = _pendingCombatDeaths.Dequeue();
+                }
+
+                if (pending == null || !_active || !_sessionTargetLocked)
+                    continue;
+
+                string lockedName = _sessionTargetBossName ?? "";
+                if (!BossNameMatches(pending.targetName, lockedName))
+                {
+                    Trace("COMBAT_DEATH_IGNORE",
+                        "reason=NAME;locked=" + lockedName + ";target=" + pending.targetName +
+                        ";targetId=" + pending.targetId);
+                    continue;
+                }
+
+                if (_sessionTargetMapId >= 0 && pending.mapId >= 0 && pending.mapId != _sessionTargetMapId)
+                {
+                    Trace("COMBAT_DEATH_IGNORE",
+                        "reason=MAP;locked=" + _sessionTargetMapId + ";actual=" + pending.mapId +
+                        ";target=" + pending.targetName);
+                    continue;
+                }
+
+                if (_sessionTargetZone >= 0 && pending.zone >= 0 && pending.zone != _sessionTargetZone)
+                {
+                    Trace("COMBAT_DEATH_IGNORE",
+                        "reason=ZONE;locked=" + _sessionTargetZone + ";actual=" + pending.zone +
+                        ";target=" + pending.targetName);
+                    continue;
+                }
+
+                string killer = string.IsNullOrEmpty(pending.attackerName)
+                    ? ("#" + pending.attackerId)
+                    : pending.attackerName;
+                string raw =
+                    "combat:-60;isDie=1" +
+                    ";attackerId=" + pending.attackerId +
+                    ";attacker=" + killer +
+                    ";targetId=" + pending.targetId +
+                    ";target=" + pending.targetName +
+                    ";map=" + pending.mapId +
+                    ";zone=" + pending.zone;
+
+                Trace("COMBAT_DEATH_ACCEPT",
+                    "target=" + pending.targetName +
+                    ";targetId=" + pending.targetId +
+                    ";killer=" + killer +
+                    ";killerId=" + pending.attackerId);
+
+                GClass156.InvalidateBossLocation(pending.targetName);
+                SendCombatDeathObservation(pending, killer, raw);
+                StopInternal();
+                return;
+            }
+        }
+
         public void ObserveAnnouncement(string message)
         {
             if (string.IsNullOrEmpty(message))
@@ -1501,6 +1625,36 @@ namespace AssemblyCSharp.Functions
             {
             }
         }
+ 
+        private void SendCombatDeathObservation(PendingCombatDeath pending, string killer, string rawMessage)
+        {
+            try
+            {
+                BossHuntPayload payload = new BossHuntPayload
+                {
+                    sessionId = _sessionId,
+                    assignmentGeneration = _assignmentGeneration,
+                    bossName = pending.targetName ?? "",
+                    targetBossName = _sessionTargetBossName ?? "",
+                    mapId = pending.mapId,
+                    mapName = pending.mapName ?? "",
+                    zone = pending.zone,
+                    accountId = GClass150.int_0,
+                    killer = killer ?? "",
+                    killerId = pending.attackerId,
+                    rawMessage = rawMessage ?? "",
+                    observedAtTicks = pending.observedAtTicks
+                };
+                GClass150.smethod_0().method_2(new vMessage
+                {
+                    cmd = CmdBossDeath,
+                    data = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(payload))
+                });
+            }
+            catch
+            {
+            }
+        }
 
         private BossHuntPayload CreateClientPayload()
         {
@@ -1597,6 +1751,8 @@ namespace AssemblyCSharp.Functions
             _rallyRouteLastMapId = -1;
             _rallyRouteLastProgressAt = 0L;
             ClearAnnouncements();
+            lock (_combatDeathLock)
+                _pendingCombatDeaths.Clear();
             _lastFocusAt = 0L;
             _lastHeartbeatAt = 0L;
             _scanCycle = 0;
