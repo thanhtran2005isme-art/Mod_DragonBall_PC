@@ -185,3 +185,35 @@ private readonly System.Windows.Forms.TabControl detailTabs =
 
 Không đổi tên `DragonBoyManager.TabControl` chỉ để sửa lỗi này vì class đó là control chức năng cũ của Manager.
 
+### Boss Hunt quét nhiều vòng nhưng Coverage kẹt 50/51
+
+Dấu hiệu:
+
+```text
+Coverage 50/51
+Vòng >= 5
+Heartbeat vẫn khỏe
+Boss vẫn ALIVE rất lâu
+```
+
+Nguyên nhân cũ: fallback STALE yêu cầu tuyệt đối `coveredZones >= totalZones`; chỉ một khu không vào được hoặc không gửi `ZONE_CLEAR` cũng làm scan chạy vô hạn.
+
+Fix:
+
+- ledger ghi failure theo từng zone;
+- panel hiện khu còn thiếu;
+- full coverage vẫn dùng ngưỡng vòng 3;
+- near-complete thiếu tối đa 1 khu chỉ được STALE sau nhiều vòng/failure, không bao giờ tự ghi DEAD/killer.
+
+Event chẩn đoán:
+
+```text
+SCAN_STALLED_NEAR_COMPLETE
+coverage=50/51
+missing=K...
+missingFailures=...
+cycle=...
+```
+
+Nếu thấy `DEATH_UNPARSED` của boss khác target, đó là bug filter; source hiện tại đã siết để chỉ forward death-like raw nhắc tới target đang săn.
+
