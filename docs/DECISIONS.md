@@ -477,3 +477,14 @@ Quy tắc mới:
 
 Ngoài ra `DEATH_UNPARSED` chỉ được gửi lên Manager nếu raw death-like message thực sự nhắc tới boss target hiện tại; thông báo death của boss khác chỉ log `DEATH_UNPARSED_IGNORED`.
 
+## D-042 — FOUND xác nhận canonical map/zone
+
+**Trạng thái:** active — 2026-09-27
+
+- Spawn announcement có thể chỉ cung cấp map, không có zone.
+- Khi một worker thật sự resolve được boss entity và gửi `FOUND`, map/zone hiện tại của worker trở thành vị trí canonical mạnh nhất cho spawn đó.
+- Manager cập nhật `_sessionTargetBoss` và canonical `_bossRecords`, ghi event `LOCATION_CONFIRMED` + timeline `TARGET_LOCATION_CONFIRMED`.
+- Manager broadcast `CmdBossSync` với vị trí đã xác nhận tới toàn bộ client connected, đồng thời `CmdRally` tới các worker trong session.
+- `RALLY` mang `targetBossName` concrete (ví dụ `Super Broly 28`) + map + zone; Game `StartRally` lock lại concrete target trước khi di chuyển.
+- Nếu chưa có canonical record trước FOUND, Manager tạo và lưu record mới thay vì chỉ giữ session-local.
+
