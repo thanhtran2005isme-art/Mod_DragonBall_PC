@@ -520,6 +520,55 @@ namespace AssemblyCSharp.Functions
                 return bossName.Length > 0;
             }
 
+            // Format runtime đã quan sát:
+            // "Đệ tử diệt được Fide Đại Ca 3 mọi người đều ngưỡng mộ."
+            // Đây là announcement boss-death global, không phụ thuộc Boss Hunt đang active.
+            string[] admirationKillMarkers = new string[]
+            {
+                " tiêu diệt được ",
+                " diệt được ",
+                " hạ được ",
+                " đánh bại được "
+            };
+            for (int i = 0; i < admirationKillMarkers.Length; i++)
+            {
+                int index = lower.IndexOf(admirationKillMarkers[i], StringComparison.Ordinal);
+                if (index <= 0)
+                    continue;
+
+                int victimStart = index + admirationKillMarkers[i].Length;
+                string remainder = text.Substring(victimStart).Trim();
+                string remainderLower = remainder.ToLowerInvariant();
+
+                string[] admirationSuffixes = new string[]
+                {
+                    " mọi người đều ngưỡng mộ",
+                    " mọi người ngưỡng mộ",
+                    " khiến mọi người đều ngưỡng mộ"
+                };
+
+                int suffixIndex = -1;
+                for (int j = 0; j < admirationSuffixes.Length; j++)
+                {
+                    int found = remainderLower.IndexOf(admirationSuffixes[j], StringComparison.Ordinal);
+                    if (found >= 0 && (suffixIndex < 0 || found < suffixIndex))
+                        suffixIndex = found;
+                }
+                if (suffixIndex <= 0)
+                    continue;
+
+                string victim = remainder.Substring(0, suffixIndex)
+                    .Trim()
+                    .Trim('.', '!', ':', '-', '[', ']', ' ');
+                if (victim.StartsWith("BOSS ", StringComparison.OrdinalIgnoreCase))
+                    victim = victim.Substring(5).Trim();
+
+                bossName = NormalizeBossLocationName(victim);
+                killer = CleanKiller(text.Substring(0, index));
+                if (bossName.Length > 0)
+                    return true;
+            }
+
             // Một số server có thể phát thông báo theo chiều killer -> boss, ví dụ:
             // "NgườiChơi vừa tiêu diệt BOSS Super Broly 28".
             string[] killerFirstMarkers = new string[]
@@ -574,6 +623,7 @@ namespace AssemblyCSharp.Functions
 
             string lower = chatVip.ToLowerInvariant();
             return lower.IndexOf("tiêu diệt", StringComparison.Ordinal) >= 0 ||
+                   lower.IndexOf(" diệt được ", StringComparison.Ordinal) >= 0 ||
                    lower.IndexOf("hạ gục", StringComparison.Ordinal) >= 0 ||
                    lower.IndexOf("đánh bại", StringComparison.Ordinal) >= 0 ||
                    lower.IndexOf(" bị hạ", StringComparison.Ordinal) >= 0 ||
