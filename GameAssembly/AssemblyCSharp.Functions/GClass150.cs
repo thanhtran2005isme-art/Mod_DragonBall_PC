@@ -184,8 +184,10 @@ namespace AssemblyCSharp.Functions
 
 				Thread.Sleep(400);
 			}
-			catch
+			catch (Exception ex)
 			{
+				BossHuntDiagnostics.Log("GAME_SOCKET", "CONNECT_STAGE_FAIL", 0, "", "SOCKET",
+					ex.GetType().Name + ":" + ex.Message);
 				if (socket_0 == newSocket)
 					socket_0 = null;
 				bool_2 = false;
@@ -313,14 +315,17 @@ namespace AssemblyCSharp.Functions
 			{
 				num = state.socket.EndReceive(ar);
 			}
-			catch
+			catch (Exception ex)
 			{
+				BossHuntDiagnostics.Log("GAME_SOCKET", "RECEIVE_END_FAIL", 0, "", "SOCKET",
+					ex.GetType().Name + ":" + ex.Message);
 				HandleConnectionClosed(state);
 				return;
 			}
 
 			if (num <= 0)
 			{
+				BossHuntDiagnostics.Log("GAME_SOCKET", "REMOTE_CLOSED", 0, "", "SOCKET", "");
 				HandleConnectionClosed(state);
 				return;
 			}
