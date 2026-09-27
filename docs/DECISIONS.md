@@ -418,3 +418,15 @@ Dữ liệu này đến từ `117 TELEMETRY` + `118 HEARTBEAT`, không suy ngư�
 - Nếu tên concrete bắt đầu bằng family đã biết, ví dụ `Super Broly 28`, catalog giữ family `Super Broly` để tránh dropdown phình theo từng instance.
 - Boss hoàn toàn mới vẫn được thêm nguyên tên.
 - `TabBossHunt` theo dõi catalog revision và tự refresh dropdown.
+
+## D-038 — Ưu tiên combat packet -60 để xác nhận death + killer
+
+**Trạng thái:** active — 2026-09-27
+
+- VIP packet `93` vẫn dùng cho spawn/death text nếu server broadcast.
+- Nguồn death+killer mạnh hơn là combat packet `GClass12 case -60`: có attacker charId, target charId và server boolean `isDie`.
+- Chỉ nhận combat death khi target là boss-like `GClass78` (`targetId < 0`) và `isDie=true`.
+- Network handler chỉ enqueue evidence; `BossZoneScanner.Update()` xử lý trên game loop.
+- Scanner chỉ accept khi target name khớp concrete session target và map/zone khớp lock hiện tại.
+- Killer name resolve từ attacker charId; nếu không resolve được vẫn giữ `killerId` và fallback `#<id>`.
+- HP packet `56` / entity remove `-6` không đủ để suy killer; chỉ dùng làm fallback death/lost-target nếu cần.

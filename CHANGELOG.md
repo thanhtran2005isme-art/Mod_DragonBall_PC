@@ -5,6 +5,8 @@ Không dùng file này để giải thích kiến trúc dài; chi tiết nằm t
 
 ## 2026-09-27
 
+- Boss Hunt bắt death+killer trực tiếp từ combat packet `-60` (`attackerId + targetId + isDie`), validate theo locked boss instance/map/zone và hiển thị killer ID/name trên Manager. HEAD `09ee59f` full workflow SUCCESS.
+
 - Boss catalog không còn phụ thuộc 23 tên seed: Game clients sync boss runtime về Manager, batch-merge vào `BossHuntBosses.txt`, canonicalize family và dropdown tự refresh. Commit `9071a6e` full workflow SUCCESS.
 
 - Boss Hunt session target lock: spawn mới cùng family không còn kéo phiên đang chạy sang map/khu mới; entity/death match theo concrete locked target. Commits `12ee5c8`, `9102779`, `d36acaa`; full workflow SUCCESS.
