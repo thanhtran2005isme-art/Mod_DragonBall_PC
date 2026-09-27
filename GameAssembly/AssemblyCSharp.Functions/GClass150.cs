@@ -280,7 +280,7 @@ namespace AssemblyCSharp.Functions
 			string json = JsonConvert.SerializeObject(obj);
 			byte[] payload = Encoding.UTF8.GetBytes(json ?? "");
 			if (payload.Length > MaxFrameSize)
-				throw new InvalidDataException("Manager/game frame too large: " + payload.Length);
+				throw new IOException("Manager/game frame too large: " + payload.Length);
 
 			byte[] header = BitConverter.GetBytes(IPAddress.HostToNetworkOrder(payload.Length));
 			byte[] frame = new byte[4 + payload.Length];
@@ -362,7 +362,7 @@ namespace AssemblyCSharp.Functions
 			byte[] header = pendingBytes.GetRange(0, 4).ToArray();
 			int length = IPAddress.NetworkToHostOrder(BitConverter.ToInt32(header, 0));
 			if (length < 0 || length > MaxFrameSize)
-				throw new InvalidDataException("Invalid manager/game frame length: " + length);
+				throw new IOException("Invalid manager/game frame length: " + length);
 			if (pendingBytes.Count < 4 + length)
 				return false;
 
