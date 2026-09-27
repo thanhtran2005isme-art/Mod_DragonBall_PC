@@ -907,6 +907,13 @@ namespace DragonBoyManager
 
             lock (_sync)
             {
+                bool currentSessionDeathWithoutLock =
+                    _sessionTargetBoss == null &&
+                    IsRunningState(_state) &&
+                    payload.sessionId == _sessionId &&
+                    payload.assignmentGeneration == _assignmentGeneration &&
+                    BossMatches(payload.bossName, _bossName);
+
                 BossHuntBossSnapshot targetRecord = null;
 
                 // Session target remains the strongest binding even after the session was already stopped
@@ -923,7 +930,27 @@ namespace DragonBoyManager
 
                 if (targetRecord != null)
                 {
-                    bool newEvent = targetRecord.Alive || targetRecord.DiedAtUtc == DateTime.MinValue;
+                    bool forceNewUnboundDeath =
+                        currentSessionDeathWithoutLock &&
+                        !targetRecord.Alive &&
+                        targetRecord.DiedAtUtc != DateTime.MinValue &&
+                        observedUtc.Subtract(targetRecord.DiedAtUtc).TotalSeconds > 2.0;
+
+                    if (forceNewUnboundDeath)
+                    {
+                        targetRecord.MapId = payload.mapId;
+                        targetRecord.MapName = payload.mapName ?? "";
+                        targetRecord.Zone = payload.zone;
+                        targetRecord.SpawnedAtUtc = DateTime.MinValue;
+                        targetRecord.DiedAtUtc = DateTime.MinValue;
+                        targetRecord.Killer = "";
+                        targetRecord.KillerId = -1;
+                        targetRecord.RawSpawn = "";
+                        targetRecord.RawDeath = "";
+                        targetRecord.DeathEvidence = "";
+                    }
+
+                    bool newEvent = forceNewUnboundDeath || targetRecord.Alive || targetRecord.DiedAtUtc == DateTime.MinValue;
                     string oldKiller = targetRecord.Killer ?? "";
                     int oldKillerId = targetRecord.KillerId;
                     string oldRaw = targetRecord.RawDeath ?? "";
@@ -1002,13 +1029,7 @@ namespace DragonBoyManager
                     updatedRecord = CloneBoss(record);
                 }
 
-                bool deathBelongsToCurrentSession =
-                    IsRunningState(_state) &&
-                    payload.sessionId == _sessionId &&
-                    payload.assignmentGeneration == _assignmentGeneration &&
-                    BossMatches(payload.bossName, _bossName);
-
-                if (!matchesCurrent && _sessionTargetBoss == null && deathBelongsToCurrentSession && updatedRecord != null)
+                if (!matchesCurrent && currentSessionDeathWithoutLock && updatedRecord != null)
                 {
                     _sessionTargetBoss = CloneBoss(updatedRecord);
                     matchesCurrent = true;
