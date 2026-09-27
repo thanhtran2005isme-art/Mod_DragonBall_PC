@@ -931,24 +931,44 @@ namespace DragonBoyManager
                     changed = true;
                 }
 
+                if (eventName == "ANNOUNCEMENT_RAW")
+                {
+                    string raw = payload.detail ?? "";
+                    if (!string.IsNullOrEmpty(raw))
+                        AddTimelineLocked("ANNOUNCEMENT_RAW", account.ID, raw);
+                    changed = true;
+                }
+
                 if (_state == BossHuntState.Scanning &&
                     (eventName == "ZONE_CLEAR" || eventName == "ZONE_FAILED") &&
                     AllHealthyWorkersReachedScanCycleLocked(3))
                 {
-                    BossHuntBossSnapshot latest = FindLatestBossLocked(_bossName, true);
-                    if (latest != null &&
-                        latest.SpawnedAtUtc != DateTime.MinValue &&
-                        DateTime.UtcNow.Subtract(latest.SpawnedAtUtc).TotalSeconds >= 45.0)
+                    int coveredZones = GetUniqueCoverageCountLocked();
+                    int totalZones = GetCoverageTotalZonesLocked();
+                    bool coverageComplete = totalZones > 0 && coveredZones >= totalZones;
+
+                    if (coverageComplete)
                     {
-                        latest.Presence = BossPresenceState.Stale;
-                        staleBossName = latest.BossName;
-                        AddTimelineLocked("SCAN_EXHAUSTED", account.ID,
-                            "boss=" + latest.BossName + ";cycle>=3;coverage=" +
-                            GetUniqueCoverageCountLocked() + "/" + GetCoverageTotalZonesLocked());
-                        stopForScanExhausted = true;
-                        scanExhaustedReason = MainController.language == 0
-                            ? "Không còn tìm thấy boss sau 3 vòng quét; chưa xác nhận được death/killer"
-                            : "Boss not found after 3 scan cycles; death/killer not confirmed";
+                        BossHuntBossSnapshot latest = FindLatestBossLocked(_bossName, true);
+                        if (latest != null &&
+                            latest.SpawnedAtUtc != DateTime.MinValue &&
+                            DateTime.UtcNow.Subtract(latest.SpawnedAtUtc).TotalSeconds >= 45.0)
+                        {
+                            latest.Presence = BossPresenceState.Stale;
+                            staleBossName = latest.BossName;
+                            AddTimelineLocked("SCAN_EXHAUSTED", account.ID,
+                                "boss=" + latest.BossName + ";cycle>=3;coverage=" +
+                                coveredZones + "/" + totalZones);
+                            stopForScanExhausted = true;
+                            scanExhaustedReason = MainController.language == 0
+                                ? "Đã phủ đủ toàn bộ khu nhưng không còn tìm thấy boss; chưa xác nhận được death/killer"
+                                : "All zones covered but boss was not found; death/killer not confirmed";
+                        }
+                    }
+                    else if (eventName == "ZONE_CLEAR")
+                    {
+                        worker.Status = (MainController.language == 0 ? "Đang quét tiếp - chưa phủ đủ khu" : "Scanning - coverage incomplete") +
+                                        " | " + coveredZones + "/" + (totalZones > 0 ? totalZones.ToString() : "?");
                     }
                 }
             }
