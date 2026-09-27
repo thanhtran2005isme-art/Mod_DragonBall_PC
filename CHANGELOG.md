@@ -5,6 +5,14 @@ Không dùng file này để giải thích kiến trúc dài; chi tiết nằm t
 
 ## 2026-09-27
 
+- Boss Hunt observability: thêm Unknown/Alive/Dead/Stale, cache age, exact spawn/death time, lifetime, raw announcement, source account và finder username+ID.
+- Worker dashboard thêm assigned/scanned zones, unique coverage, scan cycle, zone dwell, entity/boss count, target HP, zone-fail count và rally telemetry.
+- Thêm live session timeline từ spawn/route/zone/FOUND/RALLY/READY tới death/stop.
+- Giữ timestamp observation sớm nhất khi cùng announcement được nhiều account báo.
+- Tách Boss Hunt log theo PID, dùng absolute runtime path; sửa tương thích `.NET 3.5` cho `Path.Combine`.
+- `fe5379d`, `5f03c50`, `836f4fa` full workflow SUCCESS.
+
+
 - Critical Boss Hunt hardening: Manager trở thành canonical source cho spawn/death/location; protocol thêm `103/104/115/116/117/118`.
 - Thêm assignment generation chống stale event sau disconnect/reassign.
 - Thêm central zone ledger + per-worker scan history + duplicate-zone warning.

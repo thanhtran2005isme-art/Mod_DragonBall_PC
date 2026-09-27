@@ -364,3 +364,35 @@ Liveness:
 - quá 8 giây không heartbeat -> worker `Unresponsive/Failed`;
 - ở Scanning, worker còn khỏe được reassign bằng generation mới;
 - ở Rallying/Fighting, worker timeout không còn chặn các worker còn lại.
+
+
+## 13. Boss Hunt observability model
+
+Manager snapshot hiện mang đủ dữ liệu để nghiệm thu runtime, không chỉ hiển thị state tổng:
+
+- boss presence: `Unknown / Alive / Dead / Stale`;
+- spawn/death observation time đến millisecond, raw announcement, killer nếu parser lấy được, source accounts;
+- finder username + accountId;
+- worker assignment: generation, worker index/count, assigned zones;
+- scan audit: scanned zones, unique coverage, scan cycle, zone-enter timestamp;
+- runtime load: entity count, boss count, target HP;
+- failure audit: zone-fail count + lỗi gần nhất;
+- route/rally action và heartbeat/event age;
+- session timeline: session start, assignment, route, zone enter/clear/fail, duplicate, FOUND, RALLY, READY, FAILED, WATCHDOG, boss spawn/death và stop.
+
+Coverage được tính theo zone ledger của **generation hiện tại**, nên cùng một zone quét nhiều vòng vẫn chỉ tính một lần trong unique coverage.
+
+### Timestamp lifecycle
+
+Nhiều client có thể nhận cùng announcement gần như đồng thời. Với cùng một lifecycle event, Manager giữ timestamp quan sát **sớm nhất** và chỉ gom thêm `SourceAccounts`; observation tới sau không được phép dời spawn/death time về sau.
+
+### Boss Hunt log files
+
+Không process nào còn append chung một Boss Hunt log:
+
+```text
+<runtime-base>\Data\Errors\BossHuntProtocol.Game.pid<PID>.log
+<runtime-base>\Data\Errors\BossHuntProtocol.Manager.pid<PID>.log
+```
+
+Path được tạo từ `AppDomain.CurrentDomain.BaseDirectory`, không phụ thuộc current working directory. Nhánh fallback dùng `Path.GetTempPath()`, vẫn là absolute path. Cách tách theo PID tránh lock nội-process bị hiểu nhầm là lock xuyên process.

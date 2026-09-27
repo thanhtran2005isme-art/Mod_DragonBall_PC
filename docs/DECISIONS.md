@@ -255,3 +255,43 @@ Không được quét map hiện tại khi chưa biết vị trí boss. Không h
 - Worker timeout bị đánh dấu Unresponsive/Failed.
 - Nếu đang Scanning, Manager reassign worker khỏe bằng generation mới.
 - Socket.Connected chỉ còn là điều kiện transport phụ, không phải bằng chứng worker gameplay còn sống.
+
+
+## D-023 — Boss lifecycle hiển thị Unknown/Alive/Dead/Stale và giữ timestamp sớm nhất
+
+**Trạng thái:** active — 2026-09-27
+
+- `Alive` chỉ áp dụng khi spawn canonical còn trong freshness window.
+- Spawn canonical quá 60 phút nhưng chưa có death -> `Stale`; không dùng làm location khởi động phiên.
+- Không có record -> `Unknown`; death đã xác nhận -> `Dead`.
+- Cùng một spawn/death được nhiều client báo: giữ timestamp observation sớm nhất.
+- Raw announcement, source accounts và killer (nếu có) phải được giữ để audit.
+
+## D-024 — Worker observability phải đủ để nghiệm thu partition thực tế
+
+**Trạng thái:** active — 2026-09-27
+
+Manager phải giữ và expose tối thiểu:
+
+- assigned zones;
+- scanned zones;
+- unique coverage;
+- scan cycle;
+- zone-enter time/dwell;
+- entity count / boss count;
+- zone change failure count;
+- rally route/zone state;
+- target HP;
+- finder username + ID;
+- session timeline.
+
+Dữ liệu này đến từ `117 TELEMETRY` + `118 HEARTBEAT`, không suy ngược từ label UI.
+
+## D-025 — Boss Hunt diagnostics không dùng file chung xuyên process
+
+**Trạng thái:** active — 2026-09-27
+
+- Game và Manager ghi file riêng theo PID.
+- File nằm dưới absolute runtime base path `Data/Errors`.
+- Không dựa vào current working directory.
+- Không dùng `lock` nội-process để giả định an toàn cho nhiều process.

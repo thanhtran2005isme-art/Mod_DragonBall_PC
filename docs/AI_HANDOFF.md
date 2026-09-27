@@ -120,7 +120,10 @@ f02197f Thêm săn boss đa tài khoản trên Manager
 - Game gửi `117 TELEMETRY` cho `ZONE_ENTER / ZONE_CLEAR / ZONE_FAILED`; Manager giữ zone ledger + lịch sử khu theo account và tự cảnh báo duplicate zone trong cùng generation;
 - Game gửi `118 HEARTBEAT` mỗi 2 giây khi session active; Manager watchdog timeout 8 giây, đánh dấu worker `Unresponsive` và reassign phần còn lại khi đang Scanning;
 - boss-name match đã siết theo boundary giống nhau ở Game/Manager/cache, không còn substring hai chiều kiểu `Số 1` match `Số 10`;
-- panel Manager hiển thị generation, worker, các khu đã dò, tuổi event/heartbeat và warning dò trùng; box Boss hiển thị spawn/death time, map/khu, source account và killer khi parse được.
+- panel Manager hiển thị generation, worker, các khu đã dò, tuổi event/heartbeat và warning dò trùng; box Boss hiển thị spawn/death time, map/khu, source account và killer khi parse được;
+- observability mức cao đã bổ sung: trạng thái boss `Unknown/Alive/Dead/Stale`, cache age, lifetime, raw announcement, finder username+ID, assigned zones, scanned zones, unique coverage, scan cycle, zone dwell, entity/boss count, zone-fail count, rally progress, target HP và live session timeline;
+- cùng một lifecycle event từ nhiều account giữ **timestamp quan sát sớm nhất**; các observer sau chỉ bổ sung source account, không ghi đè spawn/death time;
+- Boss Hunt log không còn dùng chung một file giữa process: Game ghi `BossHuntProtocol.Game.pid<PID>.log`, Manager ghi `BossHuntProtocol.Manager.pid<PID>.log`; cả hai dùng absolute path dưới `AppDomain.CurrentDomain.BaseDirectory\\Data\\Errors`, fallback cũng là absolute temp path.
 
 File mới chính:
 
@@ -194,6 +197,12 @@ Log ghi sequence ATTACK/probe, HP response, MISS, MOB DIE, drop owner, SM/TN, st
 ## 5. Commit gần đây đáng chú ý
 
 ```text
+836f4fa Loại bỏ fallback log tương đối của săn boss   [feature branch]
+53b9ba7 Sửa Path.Combine tương thích net35 cho log boss   [feature branch]
+3c807ec Giữ timestamp sớm nhất cho lifecycle boss   [feature branch]
+0d350ae Tách log săn boss theo process và cố định đường dẫn   [feature branch]
+5f03c50 Nâng dashboard săn boss với coverage HP và timeline   [feature branch]
+fe5379d Bổ sung telemetry chi tiết và timeline săn boss   [feature branch]
 786c3ff Ngăn cache spawn cũ hồi sinh boss đã chết   [feature branch]
 7198770 Hiển thị giám sát generation khu dò và lịch sử boss   [feature branch]
 f21f72d Đồng bộ boss toàn cục và thêm telemetry worker   [feature branch]
@@ -220,7 +229,7 @@ bfdc638 Bắt KOL trực tiếp từ packet 22 thực tế
 
 ## 6. Rủi ro/lỗi đã biết
 
-- Boss Hunt đã harden P0/P1/P2 và lớp điều phối critical: Manager authority cho boss cache, generation chống stale event, zone ledger/duplicate detection, heartbeat/watchdog, killer/spawn/death history và UI giám sát. Các commit code `f21f72d`, `7198770`, `786c3ff` đều full workflow SUCCESS. Vẫn phải runtime test 1→2→3 account trước khi bỏ Draft/merge.
+- Boss Hunt đã harden P0/P1/P2 + critical + nhóm lỗi mức cao: lifecycle/timestamps/raw/source/status stale, assigned/scanned/coverage/cycle/dwell/entity/zone-fail/rally/HP/finder/timeline và per-process absolute log. `fe5379d`, `5f03c50`, `836f4fa` đều full workflow SUCCESS. Vẫn phải runtime test 1→2→3 account trước khi bỏ Draft/merge.
 - Full solution local từng fail ở PostBuild copy của một số project dù source compile được; gameplay thường nên build riêng.
 - DLL `Assembly-CSharp.dll` có thể bị game/manager lock.
 - `GameAssembly` là .NET Framework 3.5, dễ lỗi nếu dùng API mới.
