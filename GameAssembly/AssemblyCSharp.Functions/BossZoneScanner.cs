@@ -1045,46 +1045,6 @@ namespace AssemblyCSharp.Functions
             BossHuntDiagnostics.Log("GAME_ANNOUNCEMENT", "RAW", _active ? _sessionId : 0,
                 _active ? _bossName : "", _state.ToString(), message);
 
-            if (_active)
-            {
-                bool relevantRaw =
-                    message.StartsWith("BOSS ", StringComparison.OrdinalIgnoreCase) ||
-                    GClass156.LooksLikeBossDeathAnnouncement(message) ||
-                    (!string.IsNullOrEmpty(_bossName) &&
-                     message.IndexOf(_bossName, StringComparison.OrdinalIgnoreCase) >= 0);
-                if (relevantRaw)
-                    SendTelemetry("ANNOUNCEMENT_RAW", message);
-            }
-
-            string deadBoss;
-            string killer;
-            if (GClass156.TryParseBossDeathAnnouncement(message, out deadBoss, out killer))
-            {
-                BossHuntDiagnostics.Log("GAME_ANNOUNCEMENT", "DEATH_PARSED", _active ? _sessionId : 0,
-                    deadBoss, _state.ToString(), "killer=" + killer + ";raw=" + message);
-                SendBossObservation(CmdBossDeath, deadBoss, -1, "", -1, killer, message, DateTime.UtcNow.Ticks);
-            }
-            else
-            {
-                if (GClass156.LooksLikeBossDeathAnnouncement(message))
-                    BossHuntDiagnostics.Log("GAME_ANNOUNCEMENT", "DEATH_UNPARSED", _active ? _sessionId : 0,
-                        _active ? _bossName : "", _state.ToString(), message);
-
-                string spawnBoss;
-                string mapName;
-                int mapId;
-                int zone;
-                if (GClass156.TryParseBossAnnouncement(message, out spawnBoss, out mapName, out mapId, out zone))
-                {
-                    BossHuntDiagnostics.Log("GAME_ANNOUNCEMENT", "SPAWN_PARSED", _active ? _sessionId : 0,
-                        spawnBoss, _state.ToString(), "map=" + mapId + ";zone=" + zone + ";raw=" + message);
-                    SendBossObservation(CmdBossSpawn, spawnBoss, mapId, mapName, zone, "", message, DateTime.UtcNow.Ticks);
-                }
-            }
-
-            if (!_active)
-                return;
-
             lock (_announcementLock)
             {
                 if (_pendingAnnouncements.Count >= 32)
@@ -1105,33 +1065,65 @@ namespace AssemblyCSharp.Functions
                     message = _pendingAnnouncements.Dequeue();
                 }
 
-                if (!_active)
-                    continue;
-
-                string deathTarget = _sessionTargetLocked && !string.IsNullOrEmpty(_sessionTargetBossName)
-                    ? _sessionTargetBossName
-                    : _bossName;
-                if (DeathAnnouncementMatches(message, deathTarget))
+                if (_active)
                 {
-                    Trace("ANNOUNCEMENT_DEATH", message);
-                    ReportDead(message);
-                    return;
+                    bool relevantRaw =
+                        message.StartsWith("BOSS ", StringComparison.OrdinalIgnoreCase) ||
+                        GClass156.LooksLikeBossDeathAnnouncement(message) ||
+                        (!string.IsNullOrEmpty(_bossName) &&
+                         message.IndexOf(_bossName, StringComparison.OrdinalIgnoreCase) >= 0);
+                    if (relevantRaw)
+                        SendTelemetry("ANNOUNCEMENT_RAW", message);
                 }
 
-                if (_state == ScannerState.WaitingLocation || _state == ScannerState.RoutingToScanMap || _state == ScannerState.Scanning)
+                string deadBoss;
+                string killer;
+                if (GClass156.TryParseBossDeathAnnouncement(message, out deadBoss, out killer))
                 {
-                    string announcedBoss;
-                    string announcedMap;
-                    int announcedMapId;
-                    int announcedZone;
-                    if (GClass156.TryParseBossAnnouncement(message, out announcedBoss, out announcedMap, out announcedMapId, out announcedZone) &&
-                        BossNameMatches(announcedBoss, _bossName))
+                    BossHuntDiagnostics.Log("GAME_ANNOUNCEMENT", "DEATH_PARSED", _active ? _sessionId : 0,
+                        deadBoss, _state.ToString(), "killer=" + killer + ";raw=" + message);
+
+                    GClass156.InvalidateBossLocation(deadBoss);
+                    SendBossObservation(CmdBossDeath, deadBoss, -1, "", -1, killer, message, DateTime.UtcNow.Ticks);
+
+                    if (_active)
+                    {
+                        string deathTarget = _sessionTargetLocked && !string.IsNullOrEmpty(_sessionTargetBossName)
+                            ? _sessionTargetBossName
+                            : _bossName;
+                        if (BossNameMatches(deadBoss, deathTarget))
+                        {
+                            Trace("ANNOUNCEMENT_DEATH", "boss=" + deadBoss + ";killer=" + killer + ";raw=" + message);
+                            StopInternal();
+                            return;
+                        }
+                    }
+                    continue;
+                }
+
+                if (GClass156.LooksLikeBossDeathAnnouncement(message))
+                    BossHuntDiagnostics.Log("GAME_ANNOUNCEMENT", "DEATH_UNPARSED", _active ? _sessionId : 0,
+                        _active ? _bossName : "", _state.ToString(), message);
+
+                string spawnBoss;
+                string mapName;
+                int mapId;
+                int zone;
+                if (GClass156.TryParseBossAnnouncement(message, out spawnBoss, out mapName, out mapId, out zone))
+                {
+                    BossHuntDiagnostics.Log("GAME_ANNOUNCEMENT", "SPAWN_PARSED", _active ? _sessionId : 0,
+                        spawnBoss, _state.ToString(), "map=" + mapId + ";zone=" + zone + ";raw=" + message);
+                    SendBossObservation(CmdBossSpawn, spawnBoss, mapId, mapName, zone, "", message, DateTime.UtcNow.Ticks);
+
+                    if (_active &&
+                        (_state == ScannerState.WaitingLocation || _state == ScannerState.RoutingToScanMap || _state == ScannerState.Scanning) &&
+                        BossNameMatches(spawnBoss, _bossName))
                     {
                         string lockedText = _sessionTargetLocked
                             ? _sessionTargetBossName + "@" + _sessionTargetMapId + "/K" + _sessionTargetZone
                             : "-";
                         Trace("ANNOUNCEMENT_SPAWN_LOCAL",
-                            "mapId=" + announcedMapId + ";map=" + announcedMap + ";zone=" + announcedZone +
+                            "mapId=" + mapId + ";map=" + mapName + ";zone=" + zone +
                             ";locked=" + lockedText + ";waitingManagerSync=true");
                     }
                 }
@@ -1799,40 +1791,6 @@ namespace AssemblyCSharp.Functions
             return (value ?? "").Trim().Trim('[', ']', ':', '-', '.', ' ');
         }
 
-        private static bool DeathAnnouncementMatches(string message, string target)
-        {
-            if (string.IsNullOrEmpty(message) || string.IsNullOrEmpty(target))
-                return false;
 
-            string text = message.Trim();
-            if (text.StartsWith("!", StringComparison.Ordinal))
-                text = text.Substring(1).Trim();
-            if (text.StartsWith("BOSS ", StringComparison.OrdinalIgnoreCase))
-                text = text.Substring(5).Trim();
-
-            string[] markers = new string[]
-            {
-                " vừa bị tiêu diệt", " đã bị tiêu diệt", " bị tiêu diệt",
-                " vừa chết", " đã chết",
-                " vừa bị hạ", " đã bị hạ", " bị hạ",
-                " has been defeated", " was defeated",
-                " has been killed", " was killed",
-                " is dead", " defeated by", " killed by"
-            };
-
-            string lower = text.ToLowerInvariant();
-            int cut = -1;
-            for (int i = 0; i < markers.Length; i++)
-            {
-                int index = lower.IndexOf(markers[i], StringComparison.Ordinal);
-                if (index >= 0 && (cut < 0 || index < cut))
-                    cut = index;
-            }
-            if (cut < 0)
-                return false;
-
-            string announcedBoss = text.Substring(0, cut).Trim();
-            return BossNameMatches(announcedBoss, target);
-        }
     }
 }
