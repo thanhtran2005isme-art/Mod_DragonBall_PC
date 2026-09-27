@@ -285,3 +285,14 @@ Nếu nội dung cũ dài ra, chuyển nó sang `docs/history/YYYY-MM.md` thay v
 - Raw announcement và killer name thật được ưu tiên hiển thị; combat `-60` vẫn là nguồn xác nhận có `killerId`.
 - Code commits: `80cd904`, `1a13b43`, `7689c1c`. Chưa có GitHub Actions run/status trên HEAD tại thời điểm handoff; vẫn cần runtime test thật.
 
+### Boss Hunt operational panel + reconnect — 2026-09-27
+
+- Death trước `TARGET_LOCK` đã được xử lý theo current `sessionId + generation`; không dùng global death để dừng phiên.
+- Boss record có `DeathEvidence` và merge `ANNOUNCEMENT + COMBAT_-60 + FALLBACK`.
+- Game forward `DEATH_UNPARSED` lên Manager; panel hiển thị raw cảnh báo.
+- Start hỗ trợ toàn bộ account connected hoặc chỉ account đang selected ở tab ACCOUNT. Requested account offline hiện placeholder và được giữ để rejoin.
+- Reconnect lúc Scanning -> generation mới + repartition; Rallying/Fighting -> bootstrap lại worker và đưa về target hiện tại.
+- Panel có healthy/requested worker, worst heartbeat, StopReason, target lock, evidence, tab SỰ KIỆN từ `RecentBossEvents`, double-click focus game, toggle âm báo và autocomplete boss.
+- Log Viewer có filter session/account/event/boss + copy.
+- Các commit triển khai sau baseline `b22a4d0`; chưa có GitHub Actions run cho HEAD tại thời điểm cập nhật, nên vẫn cần build + runtime test thật trước merge.
+
