@@ -43,6 +43,49 @@ namespace DragonBoyManager
 
 		private const int MaxFrameSize = 1048576;
 
+		private static readonly object ListenerSync = new object();
+
+		private static bool listenerStartingOrRunning;
+
+		private static int listenerPort = -1;
+
+		public static void EnsureStarted(int port)
+		{
+			lock (ListenerSync)
+			{
+				if (listenerStartingOrRunning)
+				{
+					if (listenerPort != port)
+						ManagerRuntimeDiagnostics.Log("SOCKET_LISTENER_PORT_MISMATCH", "current=" + listenerPort + ";requested=" + port);
+					return;
+				}
+
+				listenerStartingOrRunning = true;
+				listenerPort = port;
+			}
+
+			Thread thread = new Thread((ThreadStart)delegate
+			{
+				try
+				{
+					StartListening(port);
+				}
+				finally
+				{
+					lock (ListenerSync)
+					{
+						if (listenerPort == port)
+						{
+							listenerStartingOrRunning = false;
+							listenerPort = -1;
+						}
+					}
+				}
+			});
+			thread.IsBackground = true;
+			thread.Start();
+		}
+
 		public static void StartListening(int port)
 		{
 			Dns.GetHostEntry(Dns.GetHostName());
@@ -106,6 +149,12 @@ namespace DragonBoyManager
 						lock (waitingAccounts)
 							account = waitingAccounts.Find(acc => acc != null && acc.ID == accountId);
 					}
+
+					int waitingCount;
+					lock (waitingAccounts)
+						waitingCount = waitingAccounts.Count;
+					ManagerRuntimeDiagnostics.Log("HANDSHAKE_RX",
+						"account=" + accountId + ";mapped=" + (account != null) + ";waiting=" + waitingCount);
 
 					state.account = account;
 					if (state.account != null)

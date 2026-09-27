@@ -58,7 +58,16 @@ namespace DragonBoyManager
             try
             {
                 string directory = BossHuntDiagnostics.GetLogDirectory();
-                string[] files = Directory.GetFiles(directory, "BossHuntProtocol.*.log*");
+                string[] protocolFiles = Directory.GetFiles(directory, "BossHuntProtocol.*.log*");
+                List<string> fileList = new List<string>();
+                for (int i = 0; i < protocolFiles.Length; i++)
+                    fileList.Add(protocolFiles[i]);
+
+                string runtimePath = Path.Combine(directory, "ManagerRuntime.log");
+                if (File.Exists(runtimePath))
+                    fileList.Add(runtimePath);
+
+                string[] files = fileList.ToArray();
                 List<string> merged = new List<string>();
 
                 for (int i = 0; i < files.Length; i++)

@@ -68,6 +68,14 @@ namespace AssemblyCSharp.Functions
 		{
 			lock (connectLock)
 			{
+				try
+				{
+					if (socket_0 != null && socket_0.Connected && bool_2)
+						return;
+				}
+				catch
+				{
+				}
 				if (connecting)
 					return;
 				connecting = true;

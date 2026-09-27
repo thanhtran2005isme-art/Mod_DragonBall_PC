@@ -226,6 +226,8 @@ namespace DragonBoyManager
                 string size = string.IsNullOrEmpty(account.SizeScreen) ? "1024x600" : account.SizeScreen;
                 string options = (Options[0] ?? "") + "|" + (Options[1] ?? "") + "|" + (Options[2] ?? "") + "|" + (Options[3] ?? "");
                 string uuid = "username:" + (CheckInfo.t1 ?? "") + "," + (CheckInfo.t ?? "");
+                int managerPort = int.Parse(File.ReadAllText(TabData._instance.PortPath));
+                SocketServer.EnsureStarted(managerPort);
 
                 if (account.isUseProxy && Options[1] == "T")
                 {
@@ -239,7 +241,9 @@ namespace DragonBoyManager
                         " --isUseProxy " + account.isUseProxy +
                         " --proxy " + proxy.Trim() +
                         " --size " + size.Trim() +
-                        " --uuid " + uuid;
+                        " --uuid " + uuid +
+                        " --manager 1" +
+                        " --managerPort " + managerPort;
                 }
                 else
                 {
@@ -251,10 +255,13 @@ namespace DragonBoyManager
                         " --options " + options +
                         " --isUseProxy " + account.isUseProxy +
                         " --size " + size +
-                        " --uuid " + uuid;
+                        " --uuid " + uuid +
+                        " --manager 1" +
+                        " --managerPort " + managerPort;
                 }
 
-                ManagerRuntimeDiagnostics.Log("OPEN_ACCOUNT_START", "account=" + account.ID + ";game=" + gamePath);
+                ManagerRuntimeDiagnostics.Log("OPEN_ACCOUNT_START",
+                    "account=" + account.ID + ";game=" + gamePath + ";managerPort=" + managerPort);
                 account.process.Start();
 
                 DateTime deadline = DateTime.UtcNow.AddSeconds(30.0);
@@ -327,7 +334,8 @@ namespace DragonBoyManager
 					TabData._instance.dataGridView1.Columns[2].Visible = true;
 					if (!isSetupConnect)
 					{
-                        new Thread(() => SocketServer.StartListening(int.Parse(File.ReadAllText(TabData._instance.PortPath)))) { IsBackground = true }.Start();
+                        int managerPort = int.Parse(File.ReadAllText(TabData._instance.PortPath));
+                        SocketServer.EnsureStarted(managerPort);
                         TabData._instance.LoadData();
 						isSetupConnect = true;
 					}
