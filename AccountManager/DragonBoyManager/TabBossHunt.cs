@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Text;
 using System.Windows.Forms;
 
 namespace DragonBoyManager
@@ -19,6 +20,7 @@ namespace DragonBoyManager
         private readonly Label labelState = new Label();
         private readonly Label labelResult = new Label();
         private readonly DataGridView grid = new DataGridView();
+        private readonly TextBox timeline = new TextBox();
         private readonly Timer timer = new Timer();
 
         public TabBossHunt()
@@ -30,7 +32,7 @@ namespace DragonBoyManager
             Font = new Font("Segoe UI", 9F, FontStyle.Regular);
             BuildUi();
             BossHuntCoordinator.Instance.Changed += Coordinator_Changed;
-            timer.Interval = 1000;
+            timer.Interval = 500;
             timer.Tick += delegate
             {
                 RefreshConnectedCount();
@@ -60,15 +62,11 @@ namespace DragonBoyManager
             buttonStart.Text = vi ? "BẮT ĐẦU DÒ" : "START SCAN";
             buttonStop.Text = vi ? "DỪNG" : "STOP";
 
-            grid.Columns[0].HeaderText = "ID";
-            grid.Columns[1].HeaderText = vi ? "Tài khoản" : "Account";
-            grid.Columns[2].HeaderText = "Gen";
-            grid.Columns[3].HeaderText = "Worker";
-            grid.Columns[4].HeaderText = "Map";
-            grid.Columns[5].HeaderText = vi ? "Khu" : "Zone";
-            grid.Columns[6].HeaderText = vi ? "Đã dò" : "Scanned";
-            grid.Columns[7].HeaderText = vi ? "Nhịp cuối" : "Last signal";
-            grid.Columns[8].HeaderText = vi ? "Trạng thái" : "Status";
+            string[] headers = vi
+                ? new string[] { "ID", "Tài khoản", "Gen", "Worker", "Map", "Khu", "Được giao", "Đã dò", "Vòng", "Entity", "Boss", "HP", "Ở khu", "Lỗi khu", "Nhịp cuối", "Trạng thái" }
+                : new string[] { "ID", "Account", "Gen", "Worker", "Map", "Zone", "Assigned", "Scanned", "Cycle", "Entity", "Boss", "HP", "Zone age", "Zone fail", "Last signal", "Status" };
+            for (int i = 0; i < headers.Length && i < grid.Columns.Count; i++)
+                grid.Columns[i].HeaderText = headers[i];
 
             RefreshConnectedCount();
             ApplySnapshot(BossHuntCoordinator.Instance.GetSnapshot());
@@ -107,7 +105,7 @@ namespace DragonBoyManager
             labelState.SetBounds(270, 52, 450, 24);
             labelState.Font = new Font(labelState.Font, FontStyle.Bold);
 
-            grid.SetBounds(14, 82, 710, 205);
+            grid.SetBounds(14, 82, 710, 135);
             grid.AllowUserToAddRows = false;
             grid.AllowUserToDeleteRows = false;
             grid.AllowUserToResizeRows = false;
@@ -125,24 +123,34 @@ namespace DragonBoyManager
             grid.DefaultCellStyle.SelectionForeColor = Color.White;
             grid.ScrollBars = ScrollBars.Both;
 
-            grid.Columns.Add(new DataGridViewTextBoxColumn { Width = 45 });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { Width = 120 });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { Width = 45 });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { Width = 65 });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { Width = 150 });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { Width = 45 });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { Width = 190 });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { Width = 115 });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { Width = 260 });
+            int[] widths = new int[] { 42, 110, 42, 58, 135, 42, 150, 160, 42, 50, 45, 70, 58, 120, 105, 250 };
+            for (int i = 0; i < widths.Length; i++)
+                grid.Columns.Add(new DataGridViewTextBoxColumn { Width = widths[i] });
 
             GroupBox resultBox = new GroupBox();
             resultBox.Text = "Boss";
             resultBox.ForeColor = Color.White;
-            resultBox.SetBounds(14, 295, 710, 95);
+            resultBox.SetBounds(14, 223, 710, 82);
             labelResult.Dock = DockStyle.Fill;
-            labelResult.Padding = new Padding(10, 6, 10, 6);
+            labelResult.Padding = new Padding(8, 4, 8, 4);
             labelResult.AutoEllipsis = true;
+            labelResult.Font = new Font("Segoe UI", 8.25F, FontStyle.Regular);
             resultBox.Controls.Add(labelResult);
+
+            GroupBox timelineBox = new GroupBox();
+            timelineBox.Text = "Timeline";
+            timelineBox.ForeColor = Color.White;
+            timelineBox.SetBounds(14, 311, 710, 74);
+            timeline.Dock = DockStyle.Fill;
+            timeline.Multiline = true;
+            timeline.ReadOnly = true;
+            timeline.ScrollBars = ScrollBars.Vertical;
+            timeline.WordWrap = false;
+            timeline.BackColor = Color.FromArgb(45, 45, 45);
+            timeline.ForeColor = Color.White;
+            timeline.BorderStyle = BorderStyle.None;
+            timeline.Font = new Font("Consolas", 8F, FontStyle.Regular);
+            timelineBox.Controls.Add(timeline);
 
             Controls.Add(labelBoss);
             Controls.Add(comboBoss);
@@ -154,6 +162,7 @@ namespace DragonBoyManager
             Controls.Add(labelState);
             Controls.Add(grid);
             Controls.Add(resultBox);
+            Controls.Add(timelineBox);
         }
 
         private void buttonStart_Click(object sender, EventArgs e)
@@ -209,6 +218,8 @@ namespace DragonBoyManager
                 string status = worker.Status ?? "";
                 if (!string.IsNullOrEmpty(worker.DuplicateWarning))
                     status = "⚠ " + worker.DuplicateWarning + " | " + status;
+                if (!string.IsNullOrEmpty(worker.LastAction) && status.IndexOf(worker.LastAction, StringComparison.OrdinalIgnoreCase) < 0)
+                    status += " | " + worker.LastAction;
 
                 grid.Rows.Add(
                     worker.AccountId,
@@ -216,14 +227,22 @@ namespace DragonBoyManager
                     worker.AssignmentGeneration > 0 ? "G" + worker.AssignmentGeneration : "-",
                     workerText,
                     mapText,
-                    worker.Zone < 0 ? "-" : worker.Zone.ToString(),
+                    worker.Zone < 0 ? "-" : "K" + worker.Zone,
+                    string.IsNullOrEmpty(worker.AssignedZones) ? "-" : worker.AssignedZones,
                     GetScannedText(worker),
+                    worker.ScanCycle > 0 ? worker.ScanCycle.ToString() : "-",
+                    worker.EntityCount >= 0 ? worker.EntityCount.ToString() : "-",
+                    worker.BossCount >= 0 ? worker.BossCount.ToString() : "-",
+                    worker.TargetHp >= 0 ? FormatNumber(worker.TargetHp) : "-",
+                    GetZoneAge(worker),
+                    GetZoneFailureText(worker),
                     GetSignalText(worker),
                     status);
             }
 
             labelState.Text = GetStateText(snapshot);
             UpdateBossInfo(snapshot);
+            UpdateTimeline(snapshot);
         }
 
         private void UpdateBossInfo(BossHuntSnapshot snapshot)
@@ -242,36 +261,78 @@ namespace DragonBoyManager
             if (boss == null)
             {
                 labelResult.Text =
-                    "Boss: " + (string.IsNullOrEmpty(selectedBoss) ? "-" : selectedBoss) + Environment.NewLine +
-                    (vi ? "Manager chưa nhận được thông báo spawn/death của boss này." : "Manager has not received spawn/death data for this boss.");
+                    "Boss: " + (string.IsNullOrEmpty(selectedBoss) ? "-" : selectedBoss) + " | " + (vi ? "UNKNOWN" : "UNKNOWN") + Environment.NewLine +
+                    (vi ? "Chưa có announcement hợp lệ trong Manager." : "No valid announcement in Manager.") + Environment.NewLine +
+                    (vi ? "Coverage: " : "Coverage: ") + snapshot.UniqueCoverageCount + "/" + (snapshot.CoverageTotalZones > 0 ? snapshot.CoverageTotalZones.ToString() : "?");
                 return;
             }
 
-            string state = boss.Alive ? (vi ? "ĐANG SỐNG" : "ALIVE") : (vi ? "ĐÃ CHẾT" : "DEAD");
-            string spawn = boss.SpawnedAtUtc == DateTime.MinValue
-                ? "-"
-                : boss.SpawnedAtUtc.ToLocalTime().ToString("dd/MM HH:mm:ss");
-            string death = boss.DiedAtUtc == DateTime.MinValue
-                ? "-"
-                : boss.DiedAtUtc.ToLocalTime().ToString("dd/MM HH:mm:ss");
+            string presence = GetPresenceText(boss.Presence, vi);
+            string spawn = FormatExactTime(boss.SpawnedAtUtc);
+            string death = FormatExactTime(boss.DiedAtUtc);
             string map = boss.MapId < 0
                 ? "-"
                 : (string.IsNullOrEmpty(boss.MapName) ? "#" + boss.MapId : boss.MapName + " (#" + boss.MapId + ")");
-            string sources = GetSourcesText(boss.SourceAccounts);
+            string sources = GetSourcesText(snapshot, boss.SourceAccounts);
             string killer = string.IsNullOrEmpty(boss.Killer) ? (vi ? "Không rõ" : "Unknown") : boss.Killer;
+            string age = GetBossAgeText(boss);
+            string life = GetBossLifetimeText(boss);
+            string finder = GetFinderText(snapshot);
+            string raw = !string.IsNullOrEmpty(boss.RawDeath) && boss.Presence == BossPresenceState.Dead ? boss.RawDeath : boss.RawSpawn;
+            raw = Truncate(raw, 118);
 
             labelResult.Text =
-                "Boss: " + boss.BossName + " | " + state + Environment.NewLine +
+                "Boss: " + boss.BossName + " | " + presence + " | " + (vi ? "Tuổi cache: " : "Cache age: ") + age +
+                " | Coverage " + snapshot.UniqueCoverageCount + "/" + (snapshot.CoverageTotalZones > 0 ? snapshot.CoverageTotalZones.ToString() : "?") + Environment.NewLine +
                 (vi ? "Xuất hiện: " : "Spawn: ") + spawn + " | " + map + (boss.Zone >= 0 ? " K" + boss.Zone : "") +
-                " | " + (vi ? "Nguồn: " : "Sources: ") + sources + Environment.NewLine +
-                (vi ? "Chết: " : "Death: ") + death + " | " + (vi ? "Người hạ: " : "Killer: ") + killer;
+                " | " + (vi ? "Nguồn: " : "Source: ") + sources + Environment.NewLine +
+                (vi ? "Chết: " : "Death: ") + death + " | " + (vi ? "Sống: " : "Lifetime: ") + life +
+                " | " + (vi ? "Người hạ: " : "Killer: ") + killer + " | Finder: " + finder + Environment.NewLine +
+                "RAW: " + (string.IsNullOrEmpty(raw) ? "-" : raw);
+        }
+
+        private void UpdateTimeline(BossHuntSnapshot snapshot)
+        {
+            if (snapshot.RecentTimeline == null || snapshot.RecentTimeline.Count == 0)
+            {
+                timeline.Text = MainController.language == 0 ? "Chưa có sự kiện trong phiên." : "No session events yet.";
+                return;
+            }
+
+            StringBuilder builder = new StringBuilder();
+            int start = Math.Max(0, snapshot.RecentTimeline.Count - 12);
+            for (int i = start; i < snapshot.RecentTimeline.Count; i++)
+            {
+                BossHuntTimelineEntry item = snapshot.RecentTimeline[i];
+                builder.Append(item.AtUtc == DateTime.MinValue ? "--:--:--.---" : item.AtUtc.ToLocalTime().ToString("HH:mm:ss.fff"));
+                builder.Append(" ");
+                if (item.AccountId > 0)
+                {
+                    builder.Append("[#");
+                    builder.Append(item.AccountId);
+                    builder.Append("] ");
+                }
+                builder.Append(item.EventName);
+                if (!string.IsNullOrEmpty(item.Detail))
+                {
+                    builder.Append(" | ");
+                    builder.Append(Truncate(item.Detail, 150));
+                }
+                if (i < snapshot.RecentTimeline.Count - 1)
+                    builder.Append(Environment.NewLine);
+            }
+            timeline.Text = builder.ToString();
+            timeline.SelectionStart = timeline.TextLength;
+            timeline.ScrollToCaret();
         }
 
         private string GetStateText(BossHuntSnapshot snapshot)
         {
             string boss = string.IsNullOrEmpty(snapshot.BossName) ? "-" : snapshot.BossName;
+            string coverage = " | Coverage " + snapshot.UniqueCoverageCount + "/" +
+                              (snapshot.CoverageTotalZones > 0 ? snapshot.CoverageTotalZones.ToString() : "?");
             string suffix = snapshot.SessionId > 0
-                ? " | S#" + snapshot.SessionId + " G" + snapshot.AssignmentGeneration
+                ? " | S#" + snapshot.SessionId + " G" + snapshot.AssignmentGeneration + coverage
                 : "";
 
             if (MainController.language == 0)
@@ -301,18 +362,39 @@ namespace DragonBoyManager
             if (worker.ScannedZones == null || worker.ScannedZones.Count == 0)
                 return "-";
 
-            int start = Math.Max(0, worker.ScannedZones.Count - 6);
+            int start = Math.Max(0, worker.ScannedZones.Count - 8);
             List<string> values = new List<string>();
             for (int i = start; i < worker.ScannedZones.Count; i++)
-                values.Add(worker.ScannedZones[i]);
-            return string.Join(", ", values.ToArray());
+            {
+                string token = worker.ScannedZones[i] ?? "";
+                int index = token.LastIndexOf(":K", StringComparison.Ordinal);
+                values.Add(index >= 0 ? "K" + token.Substring(index + 2) : token);
+            }
+            return string.Join(",", values.ToArray());
         }
 
         private static string GetSignalText(BossHuntWorkerSnapshot worker)
         {
-            string eventAge = FormatAge(worker.LastEventUtc);
-            string heartbeatAge = FormatAge(worker.LastHeartbeatUtc);
-            return "E:" + eventAge + " H:" + heartbeatAge;
+            return "E:" + FormatAge(worker.LastEventUtc) + " H:" + FormatAge(worker.LastHeartbeatUtc);
+        }
+
+        private static string GetZoneAge(BossHuntWorkerSnapshot worker)
+        {
+            if (worker.ZoneEnteredAtUtc == DateTime.MinValue)
+                return "-";
+            double seconds = DateTime.UtcNow.Subtract(worker.ZoneEnteredAtUtc).TotalSeconds;
+            if (seconds < 0)
+                seconds = 0;
+            return seconds.ToString("0.0") + "s";
+        }
+
+        private static string GetZoneFailureText(BossHuntWorkerSnapshot worker)
+        {
+            if (worker.ZoneFailureCount <= 0)
+                return "0";
+            if (string.IsNullOrEmpty(worker.LastZoneFailure))
+                return worker.ZoneFailureCount.ToString();
+            return worker.ZoneFailureCount + " | " + worker.LastZoneFailure;
         }
 
         private static string FormatAge(DateTime utc)
@@ -324,17 +406,102 @@ namespace DragonBoyManager
                 seconds = 0;
             if (seconds < 60)
                 return ((int)seconds) + "s";
-            return ((int)(seconds / 60)) + "m";
+            if (seconds < 3600)
+                return ((int)(seconds / 60)) + "m";
+            return ((int)(seconds / 3600)) + "h";
         }
 
-        private static string GetSourcesText(List<int> sources)
+        private static string FormatExactTime(DateTime utc)
+        {
+            if (utc == DateTime.MinValue)
+                return "-";
+            return utc.ToLocalTime().ToString("dd/MM HH:mm:ss.fff");
+        }
+
+        private static string GetBossAgeText(BossHuntBossSnapshot boss)
+        {
+            if (boss == null || boss.SpawnedAtUtc == DateTime.MinValue)
+                return "-";
+            return FormatDuration(DateTime.UtcNow.Subtract(boss.SpawnedAtUtc));
+        }
+
+        private static string GetBossLifetimeText(BossHuntBossSnapshot boss)
+        {
+            if (boss == null || boss.SpawnedAtUtc == DateTime.MinValue)
+                return "-";
+            DateTime end = boss.DiedAtUtc != DateTime.MinValue ? boss.DiedAtUtc : DateTime.UtcNow;
+            TimeSpan span = end.Subtract(boss.SpawnedAtUtc);
+            if (span.TotalSeconds < 0)
+                return "-";
+            return FormatDuration(span);
+        }
+
+        private static string FormatDuration(TimeSpan span)
+        {
+            if (span.TotalSeconds < 0)
+                return "-";
+            if (span.TotalHours >= 1)
+                return ((int)span.TotalHours).ToString("00") + ":" + span.Minutes.ToString("00") + ":" + span.Seconds.ToString("00");
+            return span.Minutes.ToString("00") + ":" + span.Seconds.ToString("00");
+        }
+
+        private static string GetPresenceText(BossPresenceState presence, bool vi)
+        {
+            switch (presence)
+            {
+                case BossPresenceState.Alive: return vi ? "ĐANG SỐNG" : "ALIVE";
+                case BossPresenceState.Dead: return vi ? "ĐÃ CHẾT" : "DEAD";
+                case BossPresenceState.Stale: return vi ? "STALE - VỊ TRÍ CŨ" : "STALE";
+                default: return "UNKNOWN";
+            }
+        }
+
+        private static string GetSourcesText(BossHuntSnapshot snapshot, List<int> sources)
         {
             if (sources == null || sources.Count == 0)
                 return "-";
             List<string> values = new List<string>();
             for (int i = 0; i < sources.Count; i++)
-                values.Add("#" + sources[i]);
+            {
+                int id = sources[i];
+                string username = FindUsername(snapshot, id);
+                values.Add(string.IsNullOrEmpty(username) ? ("#" + id) : (username + "(#" + id + ")"));
+            }
             return string.Join(",", values.ToArray());
+        }
+
+        private static string GetFinderText(BossHuntSnapshot snapshot)
+        {
+            if (snapshot == null || snapshot.FinderAccountId <= 0)
+                return "-";
+            string username = snapshot.FinderUsername;
+            return string.IsNullOrEmpty(username)
+                ? "#" + snapshot.FinderAccountId
+                : username + " (#" + snapshot.FinderAccountId + ")";
+        }
+
+        private static string FindUsername(BossHuntSnapshot snapshot, int accountId)
+        {
+            if (snapshot == null || snapshot.Workers == null)
+                return "";
+            for (int i = 0; i < snapshot.Workers.Count; i++)
+            {
+                if (snapshot.Workers[i].AccountId == accountId)
+                    return snapshot.Workers[i].Username ?? "";
+            }
+            return "";
+        }
+
+        private static string FormatNumber(int value)
+        {
+            return value.ToString("N0");
+        }
+
+        private static string Truncate(string value, int maxLength)
+        {
+            if (string.IsNullOrEmpty(value) || value.Length <= maxLength)
+                return value ?? "";
+            return value.Substring(0, maxLength - 3) + "...";
         }
 
         private static bool BossNamesCompatible(string value, string target)
