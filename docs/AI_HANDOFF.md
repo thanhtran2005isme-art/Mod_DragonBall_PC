@@ -242,6 +242,8 @@ bfdc638 Bắt KOL trực tiếp từ packet 22 thực tế
 - Coverage correction: scan exhaustion không còn dựa riêng vào `scanCycle`; bắt buộc `uniqueCoverage >= totalZones`. Coverage 5/17 phải tiếp tục scan, không được STALE/STOP. Game forward raw announcement liên quan boss lên Manager timeline bằng telemetry `ANNOUNCEMENT_RAW`, giúp nhìn trực tiếp death text thật. Commits `b210ba5`, `ce4af3b`; `ce4af3b` full workflow SUCCESS.
 - Zone partition rule chốt: Game báo `totalZones = int_63.Length` cho toàn map; `Khu bắt đầu` chỉ xoay thứ tự danh sách, không cắt bỏ khu trước đó. 1 account nhận toàn bộ zone list; N account được chia contiguous cân bằng bằng quotient/remainder, chênh tối đa 1 khu; account dư Standby. Không overlap trong cùng generation. Commits `30d12fc`, `e9468fc`; `e9468fc` full workflow SUCCESS.
 - Session target lock: khi Start đã chọn/nhận một spawn cụ thể, Manager giữ `_sessionTargetBoss`; spawn mới cùng family chỉ ghi `BOSS_SPAWN_QUEUED`, không thay target session. Game khóa concrete target name + map + zone + observedAt và bỏ qua `BOSS_SYNC` khác instance (`SESSION_TARGET_SYNC_IGNORED`). Entity lookup và local death matching dùng concrete locked target. Commits `12ee5c8`, `9102779`, `d36acaa`; `d36acaa` full workflow SUCCESS.
+- Boss catalog runtime sync: repo không có master list boss đầy đủ; seed 23 tên chỉ là fallback. Game gửi `CmdBossCatalog=119` ngay sau handshake và mỗi ~15s, lấy tên từ `GClass158.list_3`, `GClass156` cache và target hiện tại. Manager batch-merge vào `Data/BossHuntBosses.txt`, canonicalize instance về family đã biết và tăng revision để dropdown tự refresh. Commits `1d31b26`, `cceae42`, `23b054e`, `e2c19f2`, `9071a6e`; `9071a6e` full workflow SUCCESS.
+
 
 
 

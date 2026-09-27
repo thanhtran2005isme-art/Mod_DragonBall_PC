@@ -5,6 +5,8 @@ Không dùng file này để giải thích kiến trúc dài; chi tiết nằm t
 
 ## 2026-09-27
 
+- Boss catalog không còn phụ thuộc 23 tên seed: Game clients sync boss runtime về Manager, batch-merge vào `BossHuntBosses.txt`, canonicalize family và dropdown tự refresh. Commit `9071a6e` full workflow SUCCESS.
+
 - Boss Hunt session target lock: spawn mới cùng family không còn kéo phiên đang chạy sang map/khu mới; entity/death match theo concrete locked target. Commits `12ee5c8`, `9102779`, `d36acaa`; full workflow SUCCESS.
 
 - Boss Hunt partition: 1 account quét toàn bộ khu; N account chia đều toàn bộ zone list theo block cân bằng, `Khu bắt đầu` chỉ xoay thứ tự. Commits `30d12fc`, `e9468fc`; full workflow SUCCESS.

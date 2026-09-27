@@ -406,3 +406,15 @@ Dữ liệu này đến từ `117 TELEMETRY` + `118 HEARTBEAT`, không suy ngư�
 - Game bỏ qua manager sync khác locked instance cho mục đích routing.
 - Local entity/death matching dùng concrete locked target, tránh sibling spawn chết làm dừng nhầm session.
 - Sau khi target hiện tại DEAD/STOP, phiên tiếp theo mới được chọn spawn mới nhất còn sống.
+
+## D-037 — Catalog boss học từ runtime nhiều client
+
+**Trạng thái:** active — 2026-09-27
+
+- Repo không có master list boss đầy đủ đáng tin cậy; danh sách 23 tên ban đầu chỉ là seed/fallback.
+- Game gửi `CmdBossCatalog = 119` về Manager ngay sau handshake và định kỳ khoảng 15 giây.
+- Nguồn catalog Game: boss hiện diện trong `GClass158.list_3`, cache announcement `GClass156`, selector/target hiện tại.
+- Manager batch-merge catalog vào `Data/BossHuntBosses.txt`.
+- Nếu tên concrete bắt đầu bằng family đã biết, ví dụ `Super Broly 28`, catalog giữ family `Super Broly` để tránh dropdown phình theo từng instance.
+- Boss hoàn toàn mới vẫn được thêm nguyên tên.
+- `TabBossHunt` theo dõi catalog revision và tự refresh dropdown.
