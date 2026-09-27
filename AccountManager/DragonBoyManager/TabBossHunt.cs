@@ -66,8 +66,8 @@ namespace DragonBoyManager
             buttonLog.Text = vi ? "LOG" : "LOG";
 
             string[] headers = vi
-                ? new string[] { "ID", "Tài khoản", "Gen", "Worker", "Map", "Khu", "Được giao", "Đã dò", "Vòng", "Hiệu suất", "Entity", "Boss", "HP", "Ở khu", "Lỗi khu", "Nhịp cuối", "Trạng thái" }
-                : new string[] { "ID", "Account", "Gen", "Worker", "Map", "Zone", "Assigned", "Scanned", "Cycle", "Performance", "Entity", "Boss", "HP", "Zone age", "Zone fail", "Last signal", "Status" };
+                ? new string[] { "ID", "Tài khoản", "Worker", "Map / Khu", "Được giao", "Đã dò", "Vòng", "Hiệu suất", "HP", "Trạng thái" }
+                : new string[] { "ID", "Account", "Worker", "Map / Zone", "Assigned", "Scanned", "Cycle", "Performance", "HP", "Status" };
             for (int i = 0; i < headers.Length && i < grid.Columns.Count; i++)
                 grid.Columns[i].HeaderText = headers[i];
 
@@ -131,11 +131,23 @@ namespace DragonBoyManager
             grid.DefaultCellStyle.ForeColor = Color.White;
             grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(90, 90, 90);
             grid.DefaultCellStyle.SelectionForeColor = Color.White;
-            grid.ScrollBars = ScrollBars.Both;
+            grid.DefaultCellStyle.WrapMode = DataGridViewTriState.False;
+            grid.ColumnHeadersDefaultCellStyle.WrapMode = DataGridViewTriState.False;
+            grid.RowTemplate.Height = 28;
+            grid.ScrollBars = ScrollBars.Vertical;
+            grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
 
-            int[] widths = new int[] { 42, 110, 42, 58, 135, 42, 150, 160, 42, 135, 50, 45, 70, 58, 120, 105, 250 };
-            for (int i = 0; i < widths.Length; i++)
-                grid.Columns.Add(new DataGridViewTextBoxColumn { Width = widths[i] });
+            float[] fillWeights = new float[] { 5F, 14F, 9F, 18F, 14F, 14F, 6F, 11F, 7F, 20F };
+            int[] minimumWidths = new int[] { 32, 72, 52, 92, 72, 72, 38, 68, 44, 100 };
+            for (int i = 0; i < fillWeights.Length; i++)
+            {
+                grid.Columns.Add(new DataGridViewTextBoxColumn
+                {
+                    AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
+                    FillWeight = fillWeights[i],
+                    MinimumWidth = minimumWidths[i]
+                });
+            }
 
             GroupBox resultBox = new GroupBox();
             resultBox.Text = "Boss";
@@ -235,24 +247,44 @@ namespace DragonBoyManager
                 if (!string.IsNullOrEmpty(worker.LastAction) && status.IndexOf(worker.LastAction, StringComparison.OrdinalIgnoreCase) < 0)
                     status += " | " + worker.LastAction;
 
-                grid.Rows.Add(
+                string mapZoneText = mapText;
+                if (worker.Zone >= 0)
+                    mapZoneText += " / K" + worker.Zone;
+
+                int rowIndex = grid.Rows.Add(
                     worker.AccountId,
                     worker.Username,
-                    worker.AssignmentGeneration > 0 ? "G" + worker.AssignmentGeneration : "-",
-                    workerText,
-                    mapText,
-                    worker.Zone < 0 ? "-" : "K" + worker.Zone,
+                    (worker.AssignmentGeneration > 0 ? "G" + worker.AssignmentGeneration + " " : "") + workerText,
+                    mapZoneText,
                     string.IsNullOrEmpty(worker.AssignedZones) ? "-" : worker.AssignedZones,
                     GetScannedText(worker),
                     worker.ScanCycle > 0 ? worker.ScanCycle.ToString() : "-",
                     GetPerformanceText(worker),
-                    worker.EntityCount >= 0 ? worker.EntityCount.ToString() : "-",
-                    worker.BossCount >= 0 ? worker.BossCount.ToString() : "-",
                     worker.TargetHp >= 0 ? FormatNumber(worker.TargetHp) : "-",
-                    GetZoneAge(worker),
-                    GetZoneFailureText(worker),
-                    GetSignalText(worker),
                     status);
+
+                string detail =
+                    "ID: " + worker.AccountId + Environment.NewLine +
+                    "Account: " + (worker.Username ?? "") + Environment.NewLine +
+                    "Generation: " + worker.AssignmentGeneration + Environment.NewLine +
+                    "Worker: " + workerText + Environment.NewLine +
+                    "Map: " + mapText + Environment.NewLine +
+                    "Zone: " + (worker.Zone < 0 ? "-" : "K" + worker.Zone) + Environment.NewLine +
+                    "Assigned: " + (string.IsNullOrEmpty(worker.AssignedZones) ? "-" : worker.AssignedZones) + Environment.NewLine +
+                    "Scanned: " + GetScannedText(worker) + Environment.NewLine +
+                    "Cycle: " + (worker.ScanCycle > 0 ? worker.ScanCycle.ToString() : "-") + Environment.NewLine +
+                    "Performance: " + GetPerformanceText(worker) + Environment.NewLine +
+                    "Entity: " + (worker.EntityCount >= 0 ? worker.EntityCount.ToString() : "-") + Environment.NewLine +
+                    "Boss entities: " + (worker.BossCount >= 0 ? worker.BossCount.ToString() : "-") + Environment.NewLine +
+                    "Target HP: " + (worker.TargetHp >= 0 ? FormatNumber(worker.TargetHp) : "-") + Environment.NewLine +
+                    "Zone age: " + GetZoneAge(worker) + Environment.NewLine +
+                    "Zone failures: " + GetZoneFailureText(worker) + Environment.NewLine +
+                    "Last signal: " + GetSignalText(worker) + Environment.NewLine +
+                    "Status: " + status;
+
+                DataGridViewRow row = grid.Rows[rowIndex];
+                for (int cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
+                    row.Cells[cellIndex].ToolTipText = detail;
             }
 
             labelState.Text = GetStateText(snapshot);
