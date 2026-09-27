@@ -526,6 +526,15 @@ namespace DragonBoyManager
             string boss = string.IsNullOrEmpty(snapshot.BossName) ? "-" : snapshot.BossName;
             string coverage = " | Coverage " + snapshot.UniqueCoverageCount + "/" +
                               (snapshot.CoverageTotalZones > 0 ? snapshot.CoverageTotalZones.ToString() : "?");
+            if (!string.IsNullOrEmpty(snapshot.MissingZones) &&
+                snapshot.CoverageTotalZones > 0 &&
+                snapshot.UniqueCoverageCount < snapshot.CoverageTotalZones)
+            {
+                coverage += (MainController.language == 0 ? " | Thiếu " : " | Missing ") + snapshot.MissingZones;
+            }
+            if (snapshot.MinimumHealthyScanCycle > 0)
+                coverage += (MainController.language == 0 ? " | Vòng min " : " | Min cycle ") + snapshot.MinimumHealthyScanCycle;
+
             string elapsed = snapshot.SessionStartedAtUtc == DateTime.MinValue
                 ? ""
                 : " | " + FormatDuration(DateTime.UtcNow.Subtract(snapshot.SessionStartedAtUtc));
