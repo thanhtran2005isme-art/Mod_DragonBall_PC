@@ -237,6 +237,8 @@ bfdc638 Bắt KOL trực tiếp từ packet 22 thực tế
 - Crash hardening Manager: `OpenAccount()` không để exception thoát ra async UI handler; `SocketServer.AcceptCallback()` có outer guard; listener lỗi thoáng qua không còn gọi `Application.Exit()`; account được đưa vào `waitingAccounts` trước `process.Start()`; thêm `Data/Errors/ManagerRuntime.log` với nguồn `OPEN_ACCOUNT_*`, `SOCKET_*`, `UI_THREAD_EXCEPTION`, `APPDOMAIN_UNHANDLED`. Commit `2694b4c` full workflow SUCCESS.
 - Fix Boss Hunt connected-count=0: Manager launch truyền `--manager 1 --managerPort <port>`, gọi `SocketServer.EnsureStarted(port)` trước `process.Start()`, Game force `GClass150.bool_0=true` cho manager-launched process và override port bằng argument. Không còn phụ thuộc `FunctionSetting.ini` index 7. Thêm `HANDSHAKE_RX ... mapped=<bool>` vào `ManagerRuntime.log`; log viewer đọc cả ManagerRuntime. Commit `5cfc15f` full workflow SUCCESS.
 - Handshake transport đã tách rõ semantics: Game gửi `cmd=0 + accountId` (HELLO), Manager chỉ trả `cmd=99 + accountId` (ACK) sau khi map account; Manager không gửi `cmd=0` ngay khi Accept nữa. Game retry HELLO tối đa 10 lần trên cùng socket, chỉ coi kết nối ready và sync boss cache sau ACK. Thêm log `HANDSHAKE_TX/HANDSHAKE_ACK/HANDSHAKE_ACK_TIMEOUT/SOCKET_PREHANDSHAKE_CLOSE`. Commit `7771a15` full workflow SUCCESS.
+- Runtime compatibility fix: Unity/.NET runtime của Game không load được `System.IO.InvalidDataException` dù CI net35 compile được. Điều này làm `GClass150` chết ngay sau CONNECTED trước HANDSHAKE_TX. Hai chỗ framing trong `GClass150.cs` đã đổi sang `IOException`; commit `41e5484` full workflow SUCCESS. Không dùng `InvalidDataException` trong GameAssembly mới.
+
 
 
 

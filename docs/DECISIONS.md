@@ -345,3 +345,12 @@ Dữ liệu này đến từ `117 TELEMETRY` + `118 HEARTBEAT`, không suy ngư�
 - Manager không chủ động gửi `cmd=0` khi vừa accept socket.
 - Game không sync boss cache trước khi nhận ACK.
 - HELLO được retry trên cùng socket trước khi reconnect để tránh vòng connect/close mù.
+
+## D-031 — Không dùng InvalidDataException trong GameAssembly
+
+**Trạng thái:** active — 2026-09-27
+
+- CI target net35 có thể compile `System.IO.InvalidDataException`, nhưng runtime Unity client hiện tại ném `TypeLoadException` khi JIT method chứa type này.
+- Game-side framing/parser phải dùng `IOException` hoặc exception runtime-compatible khác.
+- Manager net48 không bị giới hạn này.
+- Runtime log 2026-09-27 cho thấy chuỗi `CONNECTED -> TypeLoadException -> CONNECT_RETRY`, trước khi có `HANDSHAKE_TX`.
