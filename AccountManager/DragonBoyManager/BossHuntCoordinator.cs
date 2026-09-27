@@ -1451,6 +1451,9 @@ namespace DragonBoyManager
         {
             List<Account> targets;
             BossHuntPayload rally;
+            BossHuntPayload confirmedSync = null;
+            BossHuntBossSnapshot confirmedBoss = null;
+
             lock (_sync)
             {
                 if (!IsCurrentLocked(payload) || _state != BossHuntState.Scanning || !BossMatches(payload.bossName, _bossName))
@@ -1463,6 +1466,76 @@ namespace DragonBoyManager
                 _foundMapName = payload.mapName ?? "";
                 _foundZone = payload.zone;
                 _finderAccountId = account.ID;
+
+                string concreteTargetName = (payload.targetBossName ?? "").Trim();
+                if (concreteTargetName.Length == 0 && _sessionTargetBoss != null)
+                    concreteTargetName = _sessionTargetBoss.BossName ?? "";
+                if (concreteTargetName.Length == 0)
+                    concreteTargetName = payload.bossName ?? _bossName;
+
+                BossHuntBossSnapshot record = null;
+                if (_sessionTargetBoss != null &&
+                    DeathNameMatchesInstance(concreteTargetName, _sessionTargetBoss.BossName))
+                {
+                    record = FindRecordForInstanceLocked(_sessionTargetBoss);
+                }
+                if (record == null)
+                    record = FindLatestBossLocked(concreteTargetName, true);
+                if (record == null)
+                    record = FindLatestBossLocked(_bossName, true);
+
+                if (record != null)
+                {
+                    record.BossName = string.IsNullOrEmpty(concreteTargetName) ? record.BossName : NormalizeBossName(concreteTargetName);
+                    record.MapId = payload.mapId;
+                    record.MapName = payload.mapName ?? "";
+                    record.Zone = payload.zone;
+                    record.Alive = true;
+                    record.Presence = BossPresenceState.Alive;
+                    record.LastSourceAccountId = account.ID;
+                    AddSourceAccount(record, account.ID);
+
+                    _sessionTargetBoss = CloneBoss(record);
+                    confirmedBoss = CloneBoss(record);
+                    confirmedSync = CreateBossSyncPayload(record);
+                    confirmedSync.eventName = "FOUND_SYNC";
+                    confirmedSync.targetBossName = record.BossName;
+
+                    string foundDetail =
+                        record.BossName + " @ " +
+                        (record.MapName ?? "") + " (#" + record.MapId + ") / K" + record.Zone +
+                        ";hp=" + payload.targetHp;
+                    AddBossEventLocked("LOCATION_CONFIRMED", record, DateTime.UtcNow, account.ID, "", foundDetail);
+                    AddTimelineLocked("TARGET_LOCATION_CONFIRMED", account.ID, foundDetail);
+                }
+                else
+                {
+                    _sessionTargetBoss = new BossHuntBossSnapshot
+                    {
+                        BossName = NormalizeBossName(concreteTargetName),
+                        MapId = payload.mapId,
+                        MapName = payload.mapName ?? "",
+                        Zone = payload.zone,
+                        Alive = true,
+                        Presence = BossPresenceState.Alive,
+                        SpawnedAtUtc = payload.observedAtTicks > 0L
+                            ? ReadObservedUtc(payload.observedAtTicks)
+                            : DateTime.UtcNow,
+                        LastSourceAccountId = account.ID
+                    };
+                    AddSourceAccount(_sessionTargetBoss, account.ID);
+                    confirmedBoss = CloneBoss(_sessionTargetBoss);
+                    confirmedSync = CreateBossSyncPayload(_sessionTargetBoss);
+                    confirmedSync.eventName = "FOUND_SYNC";
+                    confirmedSync.targetBossName = _sessionTargetBoss.BossName;
+
+                    string foundDetail =
+                        _sessionTargetBoss.BossName + " @ " +
+                        (_sessionTargetBoss.MapName ?? "") + " (#" + _sessionTargetBoss.MapId + ") / K" + _sessionTargetBoss.Zone +
+                        ";hp=" + payload.targetHp;
+                    AddBossEventLocked("LOCATION_CONFIRMED", _sessionTargetBoss, DateTime.UtcNow, account.ID, "", foundDetail);
+                    AddTimelineLocked("TARGET_LOCATION_CONFIRMED", account.ID, foundDetail);
+                }
 
                 BossHuntWorkerSnapshot finder;
                 if (_workers.TryGetValue(account.ID, out finder))
@@ -1487,12 +1560,38 @@ namespace DragonBoyManager
                     if (target.ID != account.ID)
                         worker.Status = MainController.language == 0 ? "Đang tới boss" : "Rallying";
                 }
+
                 rally = CreatePayload();
-                AddTimelineLocked("RALLY", account.ID, _foundMapName + " K" + _foundZone + ";targets=" + targets.Count);
+                rally.targetBossName = confirmedBoss == null
+                    ? concreteTargetName
+                    : confirmedBoss.BossName;
+                rally.observedAtTicks = confirmedBoss == null || confirmedBoss.SpawnedAtUtc == DateTime.MinValue
+                    ? payload.observedAtTicks
+                    : confirmedBoss.SpawnedAtUtc.Ticks;
+
+                AddTimelineLocked("RALLY", account.ID,
+                    _foundMapName + " K" + _foundZone +
+                    ";target=" + rally.targetBossName +
+                    ";targets=" + targets.Count);
             }
 
-            BossHuntDiagnostics.Log("MANAGER", "RALLY_BROADCAST", rally.sessionId, account.ID, rally.bossName, BossHuntState.Rallying.ToString(),
-                "generation=" + rally.assignmentGeneration + ";map=" + rally.mapId + ";zone=" + rally.zone + ";targets=" + targets.Count);
+            if (confirmedSync != null)
+            {
+                BossHuntDiagnostics.Log("MANAGER", "FOUND_LOCATION_SYNC", rally.sessionId, account.ID,
+                    confirmedSync.bossName, BossHuntState.Rallying.ToString(),
+                    "map=" + confirmedSync.mapId + ";zone=" + confirmedSync.zone +
+                    ";target=" + (confirmedSync.targetBossName ?? ""));
+                Broadcast(GetConnectedAccounts(), CmdBossSync, confirmedSync);
+            }
+
+            BossHuntDiagnostics.Log("MANAGER", "RALLY_BROADCAST", rally.sessionId, account.ID,
+                rally.targetBossName ?? rally.bossName, BossHuntState.Rallying.ToString(),
+                "generation=" + rally.assignmentGeneration +
+                ";map=" + rally.mapId +
+                ";zone=" + rally.zone +
+                ";target=" + (rally.targetBossName ?? "") +
+                ";targets=" + targets.Count);
+
             Broadcast(targets, CmdRally, rally);
             Publish();
         }
