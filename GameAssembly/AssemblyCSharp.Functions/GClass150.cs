@@ -163,6 +163,7 @@ namespace AssemblyCSharp.Functions
 				bool_2 = true;
 				BossHuntDiagnostics.Log("GAME_SOCKET", "HANDSHAKE_READY", 0, "", "SOCKET", "account=" + int_0);
 				BossZoneScanner.Instance.SendKnownBossLocations();
+				BossZoneScanner.Instance.SendBossCatalogSnapshot();
 
 				if (oldSocket != null && oldSocket != newSocket)
 				{
