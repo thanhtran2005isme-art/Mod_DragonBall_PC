@@ -24,6 +24,7 @@ namespace AssemblyCSharp.Functions
             public int sessionId;
             public int assignmentGeneration;
             public string bossName;
+            public string targetBossName;
             public int startZone;
             public int workerIndex;
             public int workerCount;
@@ -94,6 +95,11 @@ namespace AssemblyCSharp.Functions
         private int _sessionId;
         private int _assignmentGeneration;
         private string _bossName = "";
+        private bool _sessionTargetLocked;
+        private string _sessionTargetBossName = "";
+        private int _sessionTargetMapId = -1;
+        private int _sessionTargetZone = -1;
+        private long _sessionTargetObservedAtTicks;
         private int _startZone;
         private int _workerIndex;
         private int _workerCount = 1;
@@ -272,6 +278,11 @@ namespace AssemblyCSharp.Functions
             _sessionId = payload.sessionId;
             _assignmentGeneration = Math.Max(1, payload.assignmentGeneration);
             _bossName = (payload.bossName ?? "").Trim();
+            _sessionTargetLocked = false;
+            _sessionTargetBossName = "";
+            _sessionTargetMapId = -1;
+            _sessionTargetZone = -1;
+            _sessionTargetObservedAtTicks = 0L;
             _startZone = Math.Max(0, payload.startZone);
             _workerIndex = Math.Max(0, payload.workerIndex);
             _workerCount = Math.Max(1, payload.workerCount);
@@ -323,13 +334,28 @@ namespace AssemblyCSharp.Functions
             GClass78 currentTarget = FindTargetBoss();
             if (currentTarget != null)
             {
+                LockSessionTarget(
+                    string.IsNullOrEmpty(payload.targetBossName) ? _bossName : payload.targetBossName,
+                    GClass20.int_37,
+                    GClass20.int_39,
+                    payload.observedAtTicks);
                 SetScanLocation(GClass20.int_37, GClass20.string_1, GClass20.int_39, _startedAt);
                 return;
             }
 
             if (payload.mapId >= 0)
             {
-                GClass156.ApplyBossLocationSync(_bossName, payload.mapName, payload.mapId, payload.zone, payload.observedAtTicks);
+                LockSessionTarget(
+                    string.IsNullOrEmpty(payload.targetBossName) ? _bossName : payload.targetBossName,
+                    payload.mapId,
+                    payload.zone,
+                    payload.observedAtTicks);
+                GClass156.ApplyBossLocationSync(
+                    string.IsNullOrEmpty(payload.targetBossName) ? _bossName : payload.targetBossName,
+                    payload.mapName,
+                    payload.mapId,
+                    payload.zone,
+                    payload.observedAtTicks);
                 SetScanLocation(payload.mapId, payload.mapName, payload.zone, _startedAt);
                 return;
             }
@@ -426,6 +452,44 @@ namespace AssemblyCSharp.Functions
             if (lastProgressAt <= 0L)
                 lastProgressAt = now;
             return false;
+        }
+
+        private void LockSessionTarget(string bossName, int mapId, int zone, long observedAtTicks)
+        {
+            _sessionTargetLocked = true;
+            _sessionTargetBossName = (bossName ?? "").Trim();
+            _sessionTargetMapId = mapId;
+            _sessionTargetZone = zone;
+            _sessionTargetObservedAtTicks = observedAtTicks;
+            Trace("SESSION_TARGET_LOCK",
+                "boss=" + _sessionTargetBossName + ";map=" + mapId + ";zone=" + zone + ";ticks=" + observedAtTicks);
+        }
+
+        private bool SyncMatchesLockedTarget(BossHuntPayload payload)
+        {
+            if (!_sessionTargetLocked || payload == null)
+                return true;
+
+            if (_sessionTargetMapId >= 0 && payload.mapId != _sessionTargetMapId)
+                return false;
+            if (_sessionTargetZone >= 0 && payload.zone >= 0 && payload.zone != _sessionTargetZone)
+                return false;
+
+            string lockedName = (_sessionTargetBossName ?? "").Trim();
+            string incomingName = (payload.bossName ?? "").Trim();
+            if (lockedName.Length > 0 && incomingName.Length > 0)
+            {
+                bool sameConcreteName = lockedName.Equals(incomingName, StringComparison.OrdinalIgnoreCase);
+                bool genericLock = lockedName.Equals(_bossName, StringComparison.OrdinalIgnoreCase);
+                if (!sameConcreteName && !genericLock)
+                    return false;
+            }
+
+            if (_sessionTargetObservedAtTicks > 0L && payload.observedAtTicks > 0L &&
+                Math.Abs(_sessionTargetObservedAtTicks - payload.observedAtTicks) > TimeSpan.TicksPerSecond * 10L)
+                return false;
+
+            return true;
         }
 
         private void SetScanLocation(int mapId, string mapName, int zone, long now)
@@ -1164,6 +1228,17 @@ namespace AssemblyCSharp.Functions
             if (_state != ScannerState.WaitingLocation && _state != ScannerState.RoutingToScanMap && _state != ScannerState.Scanning)
                 return;
 
+            if (_sessionTargetLocked && !SyncMatchesLockedTarget(payload))
+            {
+                Trace("SESSION_TARGET_SYNC_IGNORED",
+                    "locked=" + _sessionTargetBossName + "@" + _sessionTargetMapId + "/K" + _sessionTargetZone +
+                    ";incoming=" + payload.bossName + "@" + payload.mapId + "/K" + payload.zone);
+                return;
+            }
+
+            if (!_sessionTargetLocked)
+                LockSessionTarget(payload.bossName, payload.mapId, payload.zone, payload.observedAtTicks);
+
             if (_scanMapId == payload.mapId && _announcedZone == payload.zone && _state != ScannerState.WaitingLocation)
                 return;
 
@@ -1415,6 +1490,11 @@ namespace AssemblyCSharp.Functions
             _lastHeartbeatAt = 0L;
             _scanCycle = 0;
             _assignmentGeneration = 0;
+            _sessionTargetLocked = false;
+            _sessionTargetBossName = "";
+            _sessionTargetMapId = -1;
+            _sessionTargetZone = -1;
+            _sessionTargetObservedAtTicks = 0L;
         }
 
         private static BossHuntPayload Deserialize(byte[] data)
