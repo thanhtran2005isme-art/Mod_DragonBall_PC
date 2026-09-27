@@ -326,3 +326,13 @@ Nếu nội dung cũ dài ra, chuyển nó sang `docs/history/YYYY-MM.md` thay v
 - Commits: `a135b90`, `9dfeffa`.
 - Cần rebuild và runtime test bằng một death announcement thực tế.
 
+### FOUND canonical location sync — 2026-09-27
+
+- Runtime screenshot cho thấy spawn Super Broly 28 ở Nam Kame nhưng target lock không hiện zone dù worker thấy boss ở K3.
+- Root cause: `HandleFound` chỉ ghi `_foundZone` để rally, không cập nhật canonical boss record; `CmdFound` cũng chưa mang concrete target name.
+- Game giờ gửi `targetBossName` concrete khi FOUND.
+- Manager cập nhật canonical map/zone, ghi `LOCATION_CONFIRMED`, broadcast `FOUND_SYNC`, rồi rally worker bằng concrete name + exact map/zone.
+- Game `StartRally` lock lại concrete target và cache exact location.
+- Commits: `4a43600`, `508dda1`, `4c571e9`.
+- Cần rebuild + test với >=2 connected accounts để xác nhận acc khác tự tới đúng K3.
+
