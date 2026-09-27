@@ -215,3 +215,43 @@ Không được quét map hiện tại khi chưa biết vị trí boss. Không h
 - Chỉ log transition/action/event; không log mỗi frame.
 - Các nhóm bắt buộc: socket connect/handshake/disconnect, session/assignment, Xmap, zone-list, zone request/arrival, entity change, FOUND, RALLY, READY, FAILED, DEAD, STOP.
 - Runtime bug Boss Hunt nên kèm file log này trước khi thay thuật toán.
+
+
+## D-019 — Manager là authority chung cho lifecycle/location boss
+
+**Trạng thái:** active — 2026-09-27
+
+- Game chỉ là observer của announcement; mọi spawn/death được gửi lên Manager bằng `115/116`.
+- Manager giữ canonical record: boss, map, zone, spawn/death time, raw message, killer nếu parse được và source accounts.
+- Manager sync location/invalidate xuống mọi client bằng `103/104`.
+- START_SCAN ưu tiên canonical location từ Manager; scanner không tự route bằng cache cục bộ khi Manager chưa xác nhận.
+- Client reconnect gửi lại cache hiện có; spawn observation cũ hơn death đã biết không được phép hồi sinh boss.
+
+## D-020 — Assignment phải có generation
+
+**Trạng thái:** active — 2026-09-27
+
+- `sessionId` một mình không đủ sau reassign.
+- Mỗi partition có `assignmentGeneration`.
+- Reassign tăng generation.
+- Event session-scoped chỉ hợp lệ khi cả sessionId và generation bằng hiện tại.
+- STOP generation mới được phép dừng scanner generation cũ trong watchdog/reassign.
+
+## D-021 — Manager giữ zone ledger và tự phát hiện dò trùng
+
+**Trạng thái:** active — 2026-09-27
+
+- Game gửi telemetry `ZONE_ENTER / ZONE_CLEAR / ZONE_FAILED`.
+- Ledger key là `generation + mapId + zone`.
+- Enter trùng zone đang active hoặc zone đã được worker khác scan trong cùng generation sinh cảnh báo duplicate.
+- Lịch sử khu được giữ theo worker để audit, không chỉ dựa vào UI hiện thời.
+
+## D-022 — Heartbeat là nguồn liveness của Boss Hunt, không dùng Socket.Connected một mình
+
+**Trạng thái:** active — 2026-09-27
+
+- Game heartbeat mỗi 2 giây khi Boss Hunt active.
+- Manager watchdog timeout sau 8 giây.
+- Worker timeout bị đánh dấu Unresponsive/Failed.
+- Nếu đang Scanning, Manager reassign worker khỏe bằng generation mới.
+- Socket.Connected chỉ còn là điều kiện transport phụ, không phải bằng chứng worker gameplay còn sống.

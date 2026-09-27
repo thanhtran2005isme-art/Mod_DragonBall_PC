@@ -5,6 +5,16 @@ Không dùng file này để giải thích kiến trúc dài; chi tiết nằm t
 
 ## 2026-09-27
 
+- Critical Boss Hunt hardening: Manager trở thành canonical source cho spawn/death/location; protocol thêm `103/104/115/116/117/118`.
+- Thêm assignment generation chống stale event sau disconnect/reassign.
+- Thêm central zone ledger + per-worker scan history + duplicate-zone warning.
+- Thêm heartbeat 2s và Manager watchdog 8s để phát hiện worker treo dù socket còn Connected.
+- Death parser giữ killer khi raw announcement có thông tin; Manager lưu spawn/death timestamp, raw message và source account.
+- Panel SĂN BOSS hiển thị generation, worker, scanned zones, last signal, duplicate warning và lifecycle boss.
+- Chặn cache spawn cũ hồi sinh boss sau death/reconnect.
+- Commits `f21f72d`, `7198770`, `786c3ff` đều full workflow SUCCESS.
+
+
 - Hardening P2 Boss Hunt: thay dwell 900 ms bằng entity grace động (min 2s, stable 0.8s, max 5s; announced zone max 7s).
 - Thêm structured `Data/Errors/BossHuntProtocol.log` xuyên Game/Manager cho socket, route, zone, entity và state transition.
 - Commit `3a94b2e` đã qua bước MSBuild full solution.

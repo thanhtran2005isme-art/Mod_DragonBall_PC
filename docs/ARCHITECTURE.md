@@ -75,7 +75,7 @@ Manager có thêm:
 | File/module | Vai trò |
 |---|---|
 | `DragonBoyManager/TabBossHunt.cs` | tab top-level SĂN BOSS |
-| `DragonBoyManager/BossHuntCoordinator.cs` | session state, chia worker, FOUND/DEAD/RALLY/READY/FAILED |
+| `DragonBoyManager/BossHuntCoordinator.cs` | central boss authority, session/generation, zone ledger, heartbeat/watchdog, FOUND/DEAD/RALLY/READY/FAILED |
 | `DragonBoyManager/SocketServer.cs` | nhận event boss từ từng account và gửi lệnh targeted |
 
 ## 3. Luồng săn boss đa tài khoản
@@ -142,7 +142,7 @@ Boss biến mất khỏi entity list một mình **không** được coi là ch�
 
 Rally hiện có guard để không treo vô hạn:
 
-- toàn pha rally: 45 giây;
+- toàn pha rally: 90 giây;
 - đổi khu: tối đa 3 lần;
 - đã vào đúng map+khu nhưng target chưa load: 8 giây;
 - worker fail được cô lập, không chặn worker khác tiếp tục đánh.
@@ -150,11 +150,26 @@ Rally hiện có guard để không treo vô hạn:
 Protocol Manager/Game dành riêng cho Boss Hunt:
 
 ```text
-Manager -> Game: 100 START_SCAN, 101 STOP, 102 RALLY
-Game -> Manager: 110 ZONE, 111 FOUND, 112 DEAD, 113 READY, 114 FAILED
+Manager -> Game:
+100 START_SCAN
+101 STOP
+102 RALLY
+103 BOSS_SYNC
+104 BOSS_INVALIDATE
+
+Game -> Manager:
+110 ZONE
+111 FOUND
+112 DEAD
+113 READY
+114 FAILED
+115 BOSS_SPAWN
+116 BOSS_DEATH
+117 TELEMETRY
+118 HEARTBEAT
 ```
 
-Payload boss được JSON-serialize thành UTF-8 trong `vMessage.data`; transport ngoài dùng frame `[4-byte network-order length][UTF-8 JSON]`. `sessionId` bắt buộc dùng để bỏ event/lệnh cũ tới trễ.
+Payload boss được JSON-serialize thành UTF-8 trong `vMessage.data`; transport ngoài dùng frame `[4-byte network-order length][UTF-8 JSON]`. Mọi event session-scoped dùng cả `sessionId + assignmentGeneration`; generation tăng khi reassign để event cũ tới trễ không thể sửa state hiện tại.
 
 Thông báo boss chết không còn được poll bằng index từ queue UI `gclass88_14`. `GClass144.method_121()` đưa từng thông báo mới vào queue riêng của `BossZoneScanner`; queue này được drain trong `Update()` trên game loop.
 
@@ -310,3 +325,42 @@ Data/Errors/BossHuntProtocol.log
 ```
 
 Mỗi dòng dùng trường `source/event/session/account/boss/state/map/zone/detail`. Game ghi các event route, zone-list, zone request/arrival, entity change, target, rally và terminal event. Socket Game ghi connect/handshake/reconnect. Manager ghi session, assignment, client event, rally và disconnect. Chỉ event/action mới được ghi; không log mỗi frame.
+
+
+## 12. Manager authority, generation, zone ledger và watchdog
+
+Boss Hunt không còn xem cache riêng trong từng Game process là source of truth cuối.
+
+Luồng announcement:
+
+```text
+Server announcement
+  -> mỗi Game parse spawn/death
+  -> Game -> Manager: 115/116 + observedAt + rawMessage + killer nếu có
+  -> Manager deduplicate và giữ record canonical
+  -> Manager -> mọi Game: 103 BOSS_SYNC hoặc 104 BOSS_INVALIDATE
+```
+
+Khi Manager reconnect/restart trong cùng runtime client, Game gửi lại cache location hiện có sau handshake. Manager chọn observation mới nhất; nếu đã có death record mới hơn thì spawn cache cũ bị từ chối và client reconnect được gửi invalidate.
+
+Assignment safety:
+
+- mỗi lần phân worker có `assignmentGeneration`;
+- reassign do disconnect/FAILED/watchdog tăng generation;
+- Manager bỏ `ZONE/FOUND/READY/FAILED/117/118` có generation cũ;
+- Scanner cũng bỏ START/RALLY cũ.
+
+Zone ledger:
+
+- `ZONE_ENTER` mở ownership của `generation + mapId + zone`;
+- `ZONE_CLEAR` ghi account đã scan xong;
+- nếu account khác enter cùng zone đang active hoặc zone đã được worker khác scan trong cùng generation, Manager sinh `DUPLICATE_ZONE` và đưa warning vào snapshot/UI;
+- worker giữ `ScannedZones` và `ZoneHistory` để audit.
+
+Liveness:
+
+- Game gửi heartbeat 2 giây/lần khi Boss Hunt active;
+- Manager watchdog chạy 2 giây/lần;
+- quá 8 giây không heartbeat -> worker `Unresponsive/Failed`;
+- ở Scanning, worker còn khỏe được reassign bằng generation mới;
+- ở Rallying/Fighting, worker timeout không còn chặn các worker còn lại.
