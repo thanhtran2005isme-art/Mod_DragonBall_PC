@@ -354,3 +354,21 @@ Dữ liệu này đến từ `117 TELEMETRY` + `118 HEARTBEAT`, không suy ngư�
 - Game-side framing/parser phải dùng `IOException` hoặc exception runtime-compatible khác.
 - Manager net48 không bị giới hạn này.
 - Runtime log 2026-09-27 cho thấy chuỗi `CONNECTED -> TypeLoadException -> CONNECT_RETRY`, trước khi có `HANDSHAKE_TX`.
+
+## D-032 — Không suy death/killer từ scan exhaustion
+
+**Trạng thái:** active — 2026-09-27
+
+- Death/killer chỉ được xác nhận từ announcement parse được hoặc HP<=0 khi đang giữ entity mục tiêu.
+- Scan không thấy boss không được phép tự ghi `Dead` hay tự tạo killer.
+- Nếu boss đã spawn >=45 giây và toàn bộ worker khỏe đạt scan cycle >=3 mà chưa FOUND, record chuyển `Stale`, location bị invalidate và session dừng.
+- Mục đích là chặn vòng scan vô hạn mà vẫn giữ đúng tính xác thực dữ liệu.
+
+## D-033 — Log raw announcement để audit parser boss
+
+**Trạng thái:** active — 2026-09-27
+
+- Mọi chatVip đi qua Boss Hunt được ghi event `GAME_ANNOUNCEMENT/RAW`.
+- Parse thành công ghi `DEATH_PARSED` hoặc `SPAWN_PARSED`.
+- Message có dấu hiệu death nhưng parser không nhận được ghi `DEATH_UNPARSED`.
+- Log rotation hiện có giới hạn dung lượng, nên raw diagnostic được phép bật thường trực.
