@@ -1102,8 +1102,12 @@ namespace AssemblyCSharp.Functions
                 }
 
                 if (GClass156.LooksLikeBossDeathAnnouncement(message))
+                {
                     BossHuntDiagnostics.Log("GAME_ANNOUNCEMENT", "DEATH_UNPARSED", _active ? _sessionId : 0,
                         _active ? _bossName : "", _state.ToString(), message);
+                    if (_active)
+                        SendTelemetry("DEATH_UNPARSED", message);
+                }
 
                 string spawnBoss;
                 string mapName;
