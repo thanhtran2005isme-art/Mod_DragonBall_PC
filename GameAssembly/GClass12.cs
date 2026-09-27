@@ -59,6 +59,46 @@ public class GClass12 : GInterface3
 		return gclass12_1;
 	}
 
+	private static string BossHuntResolveEntityName(GClass78 character)
+	{
+		if (character == null)
+			return "";
+		try
+		{
+			return GClass158.smethod_0().method_0(character, false);
+		}
+		catch
+		{
+			string value = character.string_3 ?? "";
+			int bracket = value.IndexOf(']');
+			if (bracket >= 0 && bracket + 1 < value.Length)
+				value = value.Substring(bracket + 1);
+			return value.Trim().TrimStart('#', (char)36);
+		}
+	}
+
+	private static string BossHuntResolveCharacterName(int characterId)
+	{
+		try
+		{
+			GClass78 character = characterId == GClass78.smethod_1().int_13
+				? GClass78.smethod_1()
+				: GClass144.smethod_14(characterId);
+			if (character == null)
+				return "";
+
+			string value = character.string_3 ?? "";
+			int bracket = value.IndexOf(']');
+			if (bracket >= 0 && bracket + 1 < value.Length)
+				value = value.Substring(bracket + 1);
+			return value.Trim().TrimStart('#', (char)36);
+		}
+		catch
+		{
+			return "";
+		}
+	}
+
 	public void onConnectOK(bool isMain1)
 	{
 		bool_4 = isMain1;
@@ -1424,6 +1464,18 @@ public class GClass12 : GInterface3
 						GClass50.smethod_8("dame hit= " + num140);
 						gClass.bool_7 = msg.method_1().method_11();
 						GClass50.smethod_8("isDie=" + gClass.bool_7 + "---------------------------------------");
+						if (gClass.bool_7 && num138 < 0)
+						{
+							BossZoneScanner.Instance.ObserveCombatCharacterDeath(
+								num137,
+								BossHuntResolveCharacterName(num137),
+								num138,
+								BossHuntResolveEntityName(gClass),
+								GClass20.int_37,
+								GClass20.string_1,
+								GClass20.int_39,
+								DateTime.UtcNow.Ticks);
+						}
 						flag9 = (gClass.bool_6 = msg.method_1().method_11());
 						gClass.bool_5 = false;
 						num140 = (gClass.int_39 = num140 + 0);

@@ -111,6 +111,21 @@ public class Main : MonoBehaviour
 			Screen.SetResolution(int.Parse(arguments["size"].Split('x')[0]), int.Parse(arguments["size"].Split('x')[1]), false);
 			GClass150.int_0 = int.Parse(arguments["ID"]);
 			GClass172.smethod_0().method_6();
+
+			string managerFlag;
+			if (arguments.TryGetValue("manager", out managerFlag) && managerFlag == "1")
+			{
+				string managerPortText;
+				int managerPort;
+				if (arguments.TryGetValue("managerPort", out managerPortText) &&
+					int.TryParse(managerPortText, out managerPort) &&
+					managerPort > 0 && managerPort <= 65535)
+					GClass172.int_0 = managerPort;
+
+				GClass150.smethod_0().bool_0 = true;
+				BossHuntDiagnostics.Log("GAME_SOCKET", "MANAGER_LAUNCH_FORCE", 0, "", "SOCKET",
+					"account=" + GClass150.int_0 + ";port=" + GClass172.int_0);
+			}
 		}
 	}
 

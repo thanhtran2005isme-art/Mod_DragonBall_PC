@@ -41,13 +41,30 @@ namespace DragonBoyManager
 
 		public long TimePlus;
 
+        private TabPage bossHuntTabPage;
+
+        private TabBossHunt bossHuntTab;
+
 		public MainController()
 		{
 			InitializeComponent();
 			instance = this;
+            InitializeBossHuntTab();
 #if DEBUG
             CheckForIllegalCrossThreadCalls = false;
 #endif
+        }
+
+        private void InitializeBossHuntTab()
+        {
+            bossHuntTabPage = new TabPage(language == 0 ? "SĂN BOSS" : "BOSS HUNT");
+            bossHuntTabPage.Padding = new Padding(4);
+            bossHuntTab = new TabBossHunt
+            {
+                Dock = DockStyle.Fill
+            };
+            bossHuntTabPage.Controls.Add(bossHuntTab);
+            mainTab.Controls.Add(bossHuntTabPage);
         }
 
 		private void MainController_Load(object sender, EventArgs e)
@@ -86,6 +103,10 @@ namespace DragonBoyManager
 				tabPage2.Text = "CONTROL";
 				tabPage3.Text = "SETTING";
 				tabPage4.Text = "INFORMATION";
+                if (bossHuntTabPage != null)
+                    bossHuntTabPage.Text = "BOSS HUNT";
+                if (bossHuntTab != null)
+                    bossHuntTab.loadLanguage();
 				đăngNhậpToolStripMenuItem.Text = "LOGIN";
 				sửaKíchThướcToolStripMenuItem.Text = "EDIT SIZE";
 				groupBox2.Text = "Activated Options";
@@ -178,19 +199,112 @@ namespace DragonBoyManager
 
         public async Task OpenAccount(Account account)
         {
-            if (account.process != null && !account.process.HasExited)
+            if (account == null)
                 return;
-            account.process = new Process();
-            account.process.StartInfo.FileName = "Dragon ball_237b.exe";
-            if (account.isUseProxy && Options[1] == "T")
-                account.process.StartInfo.Arguments = $"--ID {account.ID} --username {account.Username.Trim()} --password {account.Password.Trim()} --server {account.Server.ToString().ToLower().Replace(" ", "")} --options {Options[0] + "|" + Options[1] + "|" + Options[2] + "|" + Options[3]} --isUseProxy {account.isUseProxy} --proxy {account.ProxyInfo.Trim()} --size {account.SizeScreen.Trim()} --uuid {"username:" + CheckInfo.t1 + "," + CheckInfo.t.Trim()}";
-            else
-                account.process.StartInfo.Arguments = $"--ID {account.ID} --username {account.Username} --password {account.Password} --server {account.Server.ToString().ToLower().Replace(" ", "")} --options {Options[0] + "|" + Options[1] + "|" + Options[2] + "|" + Options[3]} --isUseProxy {account.isUseProxy} --size {account.SizeScreen} --uuid {"username:" + CheckInfo.t1 + "," + CheckInfo.t.Trim()}";
-            account.process.Start();
-            SocketServer.waitingAccounts.Add(account);
-            while (account.process.MainWindowHandle == IntPtr.Zero)
-                await Task.Delay(1500);
-            SetWindowText(account.process.MainWindowHandle, $"LCT [{account.ID}]");
+
+            try
+            {
+                if (account.process != null && !account.process.HasExited)
+                    return;
+
+                lock (SocketServer.waitingAccounts)
+                {
+                    SocketServer.waitingAccounts.RemoveAll(item => item == null || item.ID == account.ID);
+                    SocketServer.waitingAccounts.Add(account);
+                }
+
+                string baseDirectory = AppDomain.CurrentDomain.BaseDirectory ?? "";
+                string gamePath = Path.Combine(baseDirectory, "Dragon ball_237b.exe");
+
+                account.process = new Process();
+                account.process.StartInfo.FileName = gamePath;
+                account.process.StartInfo.WorkingDirectory = baseDirectory;
+
+                string username = account.Username ?? "";
+                string password = account.Password ?? "";
+                string server = (account.Server ?? "").ToLower().Replace(" ", "");
+                string size = string.IsNullOrEmpty(account.SizeScreen) ? "1024x600" : account.SizeScreen;
+                string options = (Options[0] ?? "") + "|" + (Options[1] ?? "") + "|" + (Options[2] ?? "") + "|" + (Options[3] ?? "");
+                string uuid = "username:" + (CheckInfo.t1 ?? "") + "," + (CheckInfo.t ?? "");
+                int managerPort = int.Parse(File.ReadAllText(TabData._instance.PortPath));
+                SocketServer.EnsureStarted(managerPort);
+
+                if (account.isUseProxy && Options[1] == "T")
+                {
+                    string proxy = account.ProxyInfo ?? "";
+                    account.process.StartInfo.Arguments =
+                        "--ID " + account.ID +
+                        " --username " + username.Trim() +
+                        " --password " + password.Trim() +
+                        " --server " + server +
+                        " --options " + options +
+                        " --isUseProxy " + account.isUseProxy +
+                        " --proxy " + proxy.Trim() +
+                        " --size " + size.Trim() +
+                        " --uuid " + uuid +
+                        " --manager 1" +
+                        " --managerPort " + managerPort;
+                }
+                else
+                {
+                    account.process.StartInfo.Arguments =
+                        "--ID " + account.ID +
+                        " --username " + username +
+                        " --password " + password +
+                        " --server " + server +
+                        " --options " + options +
+                        " --isUseProxy " + account.isUseProxy +
+                        " --size " + size +
+                        " --uuid " + uuid +
+                        " --manager 1" +
+                        " --managerPort " + managerPort;
+                }
+
+                ManagerRuntimeDiagnostics.Log("OPEN_ACCOUNT_START",
+                    "account=" + account.ID + ";game=" + gamePath + ";managerPort=" + managerPort);
+                account.process.Start();
+
+                DateTime deadline = DateTime.UtcNow.AddSeconds(30.0);
+                while (DateTime.UtcNow < deadline)
+                {
+                    if (account.process == null || account.process.HasExited)
+                    {
+                        ManagerRuntimeDiagnostics.Log("OPEN_ACCOUNT_EXITED", "account=" + account.ID);
+                        return;
+                    }
+
+                    IntPtr handle = account.process.MainWindowHandle;
+                    if (handle != IntPtr.Zero)
+                    {
+                        SetWindowText(handle, "LCT [" + account.ID + "]");
+                        ManagerRuntimeDiagnostics.Log("OPEN_ACCOUNT_READY", "account=" + account.ID);
+                        return;
+                    }
+
+                    await Task.Delay(300);
+                    account.process.Refresh();
+                }
+
+                ManagerRuntimeDiagnostics.Log("OPEN_ACCOUNT_WINDOW_TIMEOUT", "account=" + account.ID);
+            }
+            catch (Exception ex)
+            {
+                ManagerRuntimeDiagnostics.Log("OPEN_ACCOUNT_EXCEPTION account=" + account.ID, ex);
+                account.Status = MainController.language == 0 ? "Lỗi mở game" : "Open game error";
+                REFRESH = true;
+
+                try
+                {
+                    if (account.process == null || account.process.HasExited)
+                    {
+                        lock (SocketServer.waitingAccounts)
+                            SocketServer.waitingAccounts.RemoveAll(item => item == null || item.ID == account.ID);
+                    }
+                }
+                catch
+                {
+                }
+            }
         }
 
         public long CurrentTimeMillis()
@@ -220,7 +334,8 @@ namespace DragonBoyManager
 					TabData._instance.dataGridView1.Columns[2].Visible = true;
 					if (!isSetupConnect)
 					{
-                        new Thread(() => SocketServer.StartListening(int.Parse(File.ReadAllText(TabData._instance.PortPath)))) { IsBackground = true }.Start();
+                        int managerPort = int.Parse(File.ReadAllText(TabData._instance.PortPath));
+                        SocketServer.EnsureStarted(managerPort);
                         TabData._instance.LoadData();
 						isSetupConnect = true;
 					}
