@@ -30,7 +30,8 @@ namespace DragonBoyManager
             {
                 try
                 {
-                    Process.Start("explorer.exe", """ + BossHuntDiagnostics.GetLogDirectory() + """);
+                    string quote = ((char)34).ToString();
+                    Process.Start("explorer.exe", quote + BossHuntDiagnostics.GetLogDirectory() + quote);
                 }
                 catch
                 {

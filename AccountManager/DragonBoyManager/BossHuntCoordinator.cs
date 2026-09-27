@@ -714,6 +714,7 @@ namespace DragonBoyManager
             if (string.IsNullOrEmpty(payload.bossName))
                 return;
 
+            BossHuntCatalog.RememberBoss(payload.bossName);
             DateTime observedUtc = ReadObservedUtc(payload.observedAtTicks);
             bool matchesCurrent;
             string killer = payload.killer ?? "";
