@@ -1106,6 +1106,32 @@ namespace AssemblyCSharp.Functions
                     continue;
                 }
 
+                string targetedDeadBoss;
+                string targetedKiller;
+                if (_active &&
+                    TryParseTargetedAdmirationDeath(message, activeDeathTarget, out targetedDeadBoss, out targetedKiller))
+                {
+                    BossHuntDiagnostics.Log("GAME_ANNOUNCEMENT", "DEATH_PARSED_TARGET_FALLBACK",
+                        _sessionId, targetedDeadBoss, _state.ToString(),
+                        "killer=" + targetedKiller + ";raw=" + message);
+
+                    GClass156.InvalidateBossLocation(targetedDeadBoss);
+                    SendBossObservation(
+                        CmdBossDeath,
+                        targetedDeadBoss,
+                        -1,
+                        "",
+                        -1,
+                        targetedKiller,
+                        message,
+                        DateTime.UtcNow.Ticks);
+
+                    Trace("ANNOUNCEMENT_DEATH_TARGET_FALLBACK",
+                        "boss=" + targetedDeadBoss + ";killer=" + targetedKiller + ";raw=" + message);
+                    StopInternal();
+                    return;
+                }
+
                 if (looksLikeDeath)
                 {
                     if (_active && mentionsActiveTarget)
@@ -1787,6 +1813,65 @@ namespace AssemblyCSharp.Functions
             {
                 return null;
             }
+        }
+
+        private static bool TryParseTargetedAdmirationDeath(
+            string message,
+            string target,
+            out string deadBoss,
+            out string killer)
+        {
+            deadBoss = "";
+            killer = "";
+            message = (message ?? "").Trim();
+            target = NormalizeBossName(target);
+            if (message.Length == 0 || target.Length == 0)
+                return false;
+
+            string lower = message.ToLowerInvariant();
+            string[] markers = new string[]
+            {
+                " tiêu diệt được ",
+                " diệt được ",
+                " hạ được ",
+                " đánh bại được "
+            };
+
+            int markerIndex = -1;
+            string marker = "";
+            for (int i = 0; i < markers.Length; i++)
+            {
+                int index = lower.IndexOf(markers[i], StringComparison.Ordinal);
+                if (index >= 0 && (markerIndex < 0 || index < markerIndex))
+                {
+                    markerIndex = index;
+                    marker = markers[i];
+                }
+            }
+            if (markerIndex < 0)
+                return false;
+
+            int victimStart = markerIndex + marker.Length;
+            string remainder = message.Substring(victimStart).Trim();
+            string remainderLower = remainder.ToLowerInvariant();
+            int suffixIndex = remainderLower.IndexOf(" mọi người", StringComparison.Ordinal);
+            if (suffixIndex < 0)
+                return false;
+
+            string victim = remainder.Substring(0, suffixIndex).Trim().Trim('.', '!', ':', '-', '[', ']', ' ');
+            if (victim.StartsWith("BOSS ", StringComparison.OrdinalIgnoreCase))
+                victim = victim.Substring(5).Trim();
+
+            if (!BossNameMatches(victim, target))
+                return false;
+
+            deadBoss = NormalizeBossName(victim);
+            killer = message.Substring(0, markerIndex).Trim().Trim('.', '!', ':', '-', '[', ']', ' ');
+            string killerLower = killer.ToLowerInvariant();
+            if (killerLower.StartsWith("người chơi ", StringComparison.Ordinal))
+                killer = killer.Substring("người chơi ".Length).Trim();
+
+            return deadBoss.Length > 0;
         }
 
         private static bool MessageMentionsBossTarget(string message, string target)
