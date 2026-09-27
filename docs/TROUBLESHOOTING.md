@@ -167,3 +167,21 @@ KOLProtocol.log
 ```
 
 Chọn log theo module thay vì đọc tất cả.
+
+### CS1061 `TabControl` không có `TabPages` trong DragonBoyManager
+
+Repo có class riêng `DragonBoyManager.TabControl : UserControl`. Vì code trong cùng namespace ưu tiên type này, khai báo `new TabControl()` có thể bị resolve nhầm thay vì `System.Windows.Forms.TabControl`, dẫn tới:
+
+```text
+CS1061: 'TabControl' does not contain a definition for 'TabPages'
+```
+
+Cách sửa: dùng fully-qualified type cho WinForms tab control:
+
+```csharp
+private readonly System.Windows.Forms.TabControl detailTabs =
+    new System.Windows.Forms.TabControl();
+```
+
+Không đổi tên `DragonBoyManager.TabControl` chỉ để sửa lỗi này vì class đó là control chức năng cũ của Manager.
+
