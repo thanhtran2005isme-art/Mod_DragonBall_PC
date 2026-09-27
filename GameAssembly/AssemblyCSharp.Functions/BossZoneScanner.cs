@@ -1065,13 +1065,18 @@ namespace AssemblyCSharp.Functions
                     message = _pendingAnnouncements.Dequeue();
                 }
 
+                string activeDeathTarget = _sessionTargetLocked && !string.IsNullOrEmpty(_sessionTargetBossName)
+                    ? _sessionTargetBossName
+                    : _bossName;
+                bool looksLikeDeath = GClass156.LooksLikeBossDeathAnnouncement(message);
+                bool mentionsActiveTarget = _active && MessageMentionsBossTarget(message, activeDeathTarget);
+
                 if (_active)
                 {
                     bool relevantRaw =
                         message.StartsWith("BOSS ", StringComparison.OrdinalIgnoreCase) ||
-                        GClass156.LooksLikeBossDeathAnnouncement(message) ||
-                        (!string.IsNullOrEmpty(_bossName) &&
-                         message.IndexOf(_bossName, StringComparison.OrdinalIgnoreCase) >= 0);
+                        mentionsActiveTarget ||
+                        (looksLikeDeath && mentionsActiveTarget);
                     if (relevantRaw)
                         SendTelemetry("ANNOUNCEMENT_RAW", message);
                 }
@@ -1101,12 +1106,22 @@ namespace AssemblyCSharp.Functions
                     continue;
                 }
 
-                if (GClass156.LooksLikeBossDeathAnnouncement(message))
+                if (looksLikeDeath)
                 {
-                    BossHuntDiagnostics.Log("GAME_ANNOUNCEMENT", "DEATH_UNPARSED", _active ? _sessionId : 0,
-                        _active ? _bossName : "", _state.ToString(), message);
-                    if (_active)
+                    if (_active && mentionsActiveTarget)
+                    {
+                        BossHuntDiagnostics.Log("GAME_ANNOUNCEMENT", "DEATH_UNPARSED", _sessionId,
+                            activeDeathTarget ?? "", _state.ToString(), message);
                         SendTelemetry("DEATH_UNPARSED", message);
+                    }
+                    else
+                    {
+                        BossHuntDiagnostics.Log("GAME_ANNOUNCEMENT", "DEATH_UNPARSED_IGNORED",
+                            _active ? _sessionId : 0,
+                            _active ? activeDeathTarget : "",
+                            _state.ToString(),
+                            "reason=UNRELATED_TARGET;raw=" + message);
+                    }
                 }
 
                 string spawnBoss;
@@ -1772,6 +1787,48 @@ namespace AssemblyCSharp.Functions
             {
                 return null;
             }
+        }
+
+        private static bool MessageMentionsBossTarget(string message, string target)
+        {
+            message = message ?? "";
+            target = NormalizeBossName(target);
+            if (message.Length == 0 || target.Length == 0)
+                return false;
+
+            int searchStart = 0;
+            while (searchStart < message.Length)
+            {
+                int index = message.IndexOf(target, searchStart, StringComparison.OrdinalIgnoreCase);
+                if (index < 0)
+                    return false;
+
+                bool leftBoundary =
+                    index == 0 ||
+                    char.IsWhiteSpace(message[index - 1]) ||
+                    message[index - 1] == '[' ||
+                    message[index - 1] == ':' ||
+                    message[index - 1] == '-';
+
+                int end = index + target.Length;
+                bool rightBoundary =
+                    end >= message.Length ||
+                    char.IsWhiteSpace(message[end]) ||
+                    message[end] == ']' ||
+                    message[end] == ':' ||
+                    message[end] == '-' ||
+                    message[end] == '.' ||
+                    message[end] == ',' ||
+                    message[end] == '!' ||
+                    message[end] == '(';
+
+                if (leftBoundary && rightBoundary)
+                    return true;
+
+                searchStart = index + 1;
+            }
+
+            return false;
         }
 
         private static bool BossNameMatches(string actual, string target)
