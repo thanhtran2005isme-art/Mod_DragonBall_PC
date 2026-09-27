@@ -142,6 +142,7 @@ namespace DragonBoyManager
 
             labelState.SetBounds(14, 74, 710, 22);
             labelState.Font = new Font(labelState.Font, FontStyle.Bold);
+            labelState.AutoEllipsis = true;
 
             grid.SetBounds(14, 98, 710, 119);
             grid.AllowUserToAddRows = false;
@@ -294,6 +295,7 @@ namespace DragonBoyManager
             buttonStop.Enabled = running;
             comboBoss.Enabled = !running;
             numericStartZone.Enabled = !running;
+            checkSelectedOnly.Enabled = !running;
 
             grid.Rows.Clear();
             for (int i = 0; i < snapshot.Workers.Count; i++)
@@ -426,11 +428,17 @@ namespace DragonBoyManager
                 return;
             }
 
+            string selectedBoss = snapshot.State == BossHuntState.Idle || snapshot.State == BossHuntState.Stopped
+                ? comboBoss.Text
+                : snapshot.BossName;
+
             StringBuilder builder = new StringBuilder();
-            int start = Math.Max(0, snapshot.RecentBossEvents.Count - 18);
+            int start = Math.Max(0, snapshot.RecentBossEvents.Count - 30);
             for (int i = start; i < snapshot.RecentBossEvents.Count; i++)
             {
                 BossHuntBossEventSnapshot item = snapshot.RecentBossEvents[i];
+                if (!string.IsNullOrEmpty(selectedBoss) && !BossNamesCompatible(item.BossName, selectedBoss))
+                    continue;
                 builder.Append(item.ObservedAtUtc == DateTime.MinValue ? "--:--:--.---" : item.ObservedAtUtc.ToLocalTime().ToString("HH:mm:ss.fff"));
                 builder.Append(" ");
                 builder.Append(item.EventType ?? "");
@@ -471,7 +479,9 @@ namespace DragonBoyManager
                     builder.Append(Environment.NewLine);
             }
 
-            eventsText.Text = builder.ToString();
+            eventsText.Text = builder.Length == 0
+                ? (MainController.language == 0 ? "Chưa có sự kiện cho boss đang chọn." : "No events for the selected boss.")
+                : builder.ToString();
             eventsText.SelectionStart = eventsText.TextLength;
             eventsText.ScrollToCaret();
         }
@@ -574,7 +584,8 @@ namespace DragonBoyManager
             if (worker.ScanStartedAtUtc != DateTime.MinValue)
                 minutes = DateTime.UtcNow.Subtract(worker.ScanStartedAtUtc).TotalMinutes;
             double perMinute = minutes > 0.05 ? worker.ZoneClearCount / minutes : 0.0;
-            return worker.ZoneClearCount + " khu | " + perMinute.ToString("0.0") + "/m | F" +
+            string unit = MainController.language == 0 ? " khu" : " zones";
+            return worker.ZoneClearCount + unit + " | " + perMinute.ToString("0.0") + "/m | F" +
                    worker.FailureCount + " | TO" + worker.TimeoutCount;
         }
 
@@ -749,7 +760,10 @@ namespace DragonBoyManager
         private static string GetHealthText(BossHuntSnapshot snapshot)
         {
             bool vi = MainController.language == 0;
-            string heartbeat = snapshot.WorstHeartbeatAgeSeconds < 0.0
+            bool running = snapshot.State == BossHuntState.Scanning ||
+                           snapshot.State == BossHuntState.Rallying ||
+                           snapshot.State == BossHuntState.Fighting;
+            string heartbeat = !running || snapshot.WorstHeartbeatAgeSeconds < 0.0
                 ? "-"
                 : snapshot.WorstHeartbeatAgeSeconds.ToString("0.0") + "s";
             return (vi ? "Worker khỏe: " : "Healthy: ") +
@@ -861,8 +875,8 @@ namespace DragonBoyManager
         {
             int count = BossHuntCoordinator.Instance.GetConnectedCount();
             labelConnected.Text = MainController.language == 0
-                ? "Tài khoản đang kết nối: " + count
-                : "Connected accounts: " + count;
+                ? "Kết nối: " + count
+                : "Connected: " + count;
         }
     }
 }
