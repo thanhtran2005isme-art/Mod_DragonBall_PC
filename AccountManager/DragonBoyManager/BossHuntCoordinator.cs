@@ -117,6 +117,8 @@ namespace DragonBoyManager
         public string FinderUsername = "";
         public int UniqueCoverageCount;
         public int CoverageTotalZones;
+        public string MissingZones = "";
+        public int MinimumHealthyScanCycle;
         public int HealthyWorkerCount;
         public int SessionWorkerCount;
         public double WorstHeartbeatAgeSeconds = -1.0;
@@ -173,6 +175,8 @@ namespace DragonBoyManager
         public int LastScannedByAccountId = -1;
         public DateTime LastEnterUtc = DateTime.MinValue;
         public DateTime LastClearUtc = DateTime.MinValue;
+        public int FailureCount;
+        public DateTime LastFailureUtc = DateTime.MinValue;
     }
 
     public sealed class BossHuntCoordinator
@@ -197,6 +201,10 @@ namespace DragonBoyManager
 
         private const int HeartbeatTimeoutSeconds = 8;
         private const int BossLocationFreshMinutes = 60;
+        private const int NearCompleteMissingZoneAllowance = 1;
+        private const int NearCompleteMinimumCycle = 5;
+        private const int NearCompleteHardStopCycle = 6;
+        private const int NearCompleteMinimumMissingZoneFailures = 3;
 
         private static readonly BossHuntCoordinator _instance = new BossHuntCoordinator();
         private readonly object _sync = new object();
@@ -795,6 +803,8 @@ namespace DragonBoyManager
                     FinderUsername = GetWorkerUsernameLocked(_finderAccountId),
                     UniqueCoverageCount = GetUniqueCoverageCountLocked(),
                     CoverageTotalZones = GetCoverageTotalZonesLocked(),
+                    MissingZones = GetMissingZonesTextLocked(GetCoverageTotalZonesLocked()),
+                    MinimumHealthyScanCycle = GetMinimumHealthyScanCycleLocked(),
                     HealthyWorkerCount = GetHealthySessionAccountsLocked().Count,
                     SessionWorkerCount = _requestedAccountIds.Count > 0 ? _requestedAccountIds.Count : _sessionAccounts.Count,
                     WorstHeartbeatAgeSeconds = GetWorstHeartbeatAgeSecondsLocked(),
@@ -1201,6 +1211,7 @@ namespace DragonBoyManager
                 }
                 else if (eventName == "ZONE_FAILED")
                 {
+                    RecordZoneFailureLocked(worker, payload);
                     worker.ZoneFailureCount++;
                     worker.FailureCount++;
                     worker.LastZoneFailure = "K" + payload.zone + " " + (payload.detail ?? "");
@@ -1271,31 +1282,70 @@ namespace DragonBoyManager
                 {
                     int coveredZones = GetUniqueCoverageCountLocked();
                     int totalZones = GetCoverageTotalZonesLocked();
-                    bool coverageComplete = totalZones > 0 && coveredZones >= totalZones;
+                    int missingCount = totalZones > 0 ? Math.Max(0, totalZones - coveredZones) : int.MaxValue;
+                    int minimumCycle = GetMinimumHealthyScanCycleLocked();
+                    string missingZones = GetMissingZonesTextLocked(totalZones);
+                    int missingFailures = GetMissingZoneFailureCountLocked(totalZones);
 
-                    if (coverageComplete)
+                    bool coverageComplete = totalZones > 0 && missingCount == 0;
+                    bool nearCompleteStalled =
+                        totalZones > 0 &&
+                        missingCount > 0 &&
+                        missingCount <= NearCompleteMissingZoneAllowance &&
+                        minimumCycle >= NearCompleteMinimumCycle &&
+                        (missingFailures >= NearCompleteMinimumMissingZoneFailures ||
+                         minimumCycle >= NearCompleteHardStopCycle);
+
+                    if (coverageComplete || nearCompleteStalled)
                     {
                         BossHuntBossSnapshot latest = _sessionTargetBoss ?? FindLatestBossLocked(_bossName, true);
                         if (latest != null &&
                             latest.SpawnedAtUtc != DateTime.MinValue &&
                             DateTime.UtcNow.Subtract(latest.SpawnedAtUtc).TotalSeconds >= 45.0)
                         {
-                            latest.Presence = BossPresenceState.Stale;
-                            _sessionTargetBoss = CloneBoss(latest);
-                            staleBossName = latest.BossName;
-                            AddTimelineLocked("SCAN_EXHAUSTED", account.ID,
-                                "boss=" + latest.BossName + ";cycle>=3;coverage=" +
-                                coveredZones + "/" + totalZones);
+                            BossHuntBossSnapshot canonical = FindRecordForInstanceLocked(latest) ?? latest;
+                            canonical.Presence = BossPresenceState.Stale;
+                            _sessionTargetBoss = CloneBoss(canonical);
+                            staleBossName = canonical.BossName;
+
+                            string coverageDetail =
+                                "boss=" + canonical.BossName +
+                                ";cycle=" + minimumCycle +
+                                ";coverage=" + coveredZones + "/" + totalZones +
+                                ";missing=" + (string.IsNullOrEmpty(missingZones) ? "-" : missingZones) +
+                                ";missingFailures=" + missingFailures +
+                                ";mode=" + (coverageComplete ? "FULL" : "NEAR_COMPLETE_STALLED");
+
+                            AddTimelineLocked(
+                                coverageComplete ? "SCAN_EXHAUSTED" : "SCAN_STALLED_NEAR_COMPLETE",
+                                account.ID,
+                                coverageDetail);
+                            AddBossEventLocked("STALE", canonical, DateTime.UtcNow, account.ID, "", coverageDetail);
+
                             stopForScanExhausted = true;
-                            scanExhaustedReason = MainController.language == 0
-                                ? "Đã phủ đủ toàn bộ khu nhưng không còn tìm thấy boss; chưa xác nhận được death/killer"
-                                : "All zones covered but boss was not found; death/killer not confirmed";
+                            if (coverageComplete)
+                            {
+                                scanExhaustedReason = MainController.language == 0
+                                    ? "Đã phủ đủ toàn bộ khu nhưng không còn tìm thấy boss; chưa xác nhận được death/killer"
+                                    : "All zones covered but boss was not found; death/killer not confirmed";
+                            }
+                            else
+                            {
+                                scanExhaustedReason = MainController.language == 0
+                                    ? "Coverage kẹt " + coveredZones + "/" + totalZones +
+                                      (string.IsNullOrEmpty(missingZones) ? "" : " (thiếu " + missingZones + ")") +
+                                      " sau " + minimumCycle + " vòng; không còn tìm thấy boss, death chưa được xác nhận"
+                                    : "Coverage stalled at " + coveredZones + "/" + totalZones +
+                                      (string.IsNullOrEmpty(missingZones) ? "" : " (missing " + missingZones + ")") +
+                                      " after " + minimumCycle + " cycles; boss not found and death not confirmed";
+                            }
                         }
                     }
-                    else if (eventName == "ZONE_CLEAR")
+                    else
                     {
                         worker.Status = (MainController.language == 0 ? "Đang quét tiếp - chưa phủ đủ khu" : "Scanning - coverage incomplete") +
-                                        " | " + coveredZones + "/" + (totalZones > 0 ? totalZones.ToString() : "?");
+                                        " | " + coveredZones + "/" + (totalZones > 0 ? totalZones.ToString() : "?") +
+                                        (string.IsNullOrEmpty(missingZones) ? "" : " | Missing " + missingZones);
                     }
                 }
             }
@@ -1786,6 +1836,32 @@ namespace DragonBoyManager
             worker.ZoneEnteredAtUtc = entry.LastEnterUtc;
             _activeZoneByAccount[worker.AccountId] = key;
             AppendZoneHistory(worker, "G" + payload.assignmentGeneration + " K" + payload.zone + " ENTER");
+        }
+
+        private void RecordZoneFailureLocked(BossHuntWorkerSnapshot worker, BossHuntPayload payload)
+        {
+            string key = ZoneKey(payload.assignmentGeneration, payload.mapId, payload.zone);
+            BossHuntZoneLedgerEntry entry;
+            if (!_zoneLedger.TryGetValue(key, out entry))
+            {
+                entry = new BossHuntZoneLedgerEntry
+                {
+                    Generation = payload.assignmentGeneration,
+                    MapId = payload.mapId,
+                    Zone = payload.zone
+                };
+                _zoneLedger[key] = entry;
+            }
+
+            if (entry.ActiveAccountId == worker.AccountId)
+                entry.ActiveAccountId = -1;
+            entry.FailureCount++;
+            entry.LastFailureUtc = DateTime.UtcNow;
+            worker.ZoneEnteredAtUtc = DateTime.MinValue;
+            _activeZoneByAccount.Remove(worker.AccountId);
+            AppendZoneHistory(worker,
+                "G" + payload.assignmentGeneration + " K" + payload.zone +
+                " FAIL C" + payload.scanCycle + " #" + entry.FailureCount);
         }
 
         private void RecordZoneClearLocked(BossHuntWorkerSnapshot worker, BossHuntPayload payload)
@@ -2279,6 +2355,83 @@ namespace DragonBoyManager
                 builder.Append(zones[i]);
             }
             return builder.ToString();
+        }
+
+        private int GetMinimumHealthyScanCycleLocked()
+        {
+            int minimum = int.MaxValue;
+            bool any = false;
+            for (int i = 0; i < _sessionAccounts.Count; i++)
+            {
+                Account account = _sessionAccounts[i];
+                BossHuntWorkerSnapshot worker;
+                if (!IsConnected(account) || !_workers.TryGetValue(account.ID, out worker) ||
+                    worker.Failed || worker.Unresponsive || worker.AssignmentGeneration != _assignmentGeneration)
+                    continue;
+
+                any = true;
+                if (worker.ScanCycle < minimum)
+                    minimum = worker.ScanCycle;
+            }
+            return any ? minimum : 0;
+        }
+
+        private string GetMissingZonesTextLocked(int totalZones)
+        {
+            if (totalZones <= 0)
+                return "";
+
+            bool[] cleared = new bool[totalZones];
+            foreach (BossHuntZoneLedgerEntry entry in _zoneLedger.Values)
+            {
+                if (entry.Generation != _assignmentGeneration ||
+                    entry.LastClearUtc == DateTime.MinValue ||
+                    entry.Zone < 0 ||
+                    entry.Zone >= totalZones)
+                    continue;
+                cleared[entry.Zone] = true;
+            }
+
+            StringBuilder builder = new StringBuilder();
+            for (int zone = 0; zone < totalZones; zone++)
+            {
+                if (cleared[zone])
+                    continue;
+                if (builder.Length > 0)
+                    builder.Append(",");
+                builder.Append("K");
+                builder.Append(zone);
+            }
+            return builder.ToString();
+        }
+
+        private int GetMissingZoneFailureCountLocked(int totalZones)
+        {
+            if (totalZones <= 0)
+                return 0;
+
+            bool[] cleared = new bool[totalZones];
+            int[] failures = new int[totalZones];
+            foreach (BossHuntZoneLedgerEntry entry in _zoneLedger.Values)
+            {
+                if (entry.Generation != _assignmentGeneration ||
+                    entry.Zone < 0 ||
+                    entry.Zone >= totalZones)
+                    continue;
+
+                if (entry.LastClearUtc != DateTime.MinValue)
+                    cleared[entry.Zone] = true;
+                if (entry.FailureCount > failures[entry.Zone])
+                    failures[entry.Zone] = entry.FailureCount;
+            }
+
+            int totalFailures = 0;
+            for (int zone = 0; zone < totalZones; zone++)
+            {
+                if (!cleared[zone])
+                    totalFailures += failures[zone];
+            }
+            return totalFailures;
         }
 
         private bool AllHealthyWorkersReachedScanCycleLocked(int minimumCycle)
