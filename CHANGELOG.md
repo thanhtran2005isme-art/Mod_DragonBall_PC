@@ -113,3 +113,5 @@ Không dùng file này để giải thích kiến trúc dài; chi tiết nằm t
 - `a71cf1e` — Bỏ logo Thanh VLC khỏi panel HUD.
 - `f75f3da` — Fix runtime logo KaitoKid và bỏ fallback Thanh VLC.
 - `5f423e0` — Fix đường dẫn logo KaitoKid cho .NET 3.5.
+- Boss Hunt: global parser cho format `X diệt được <Boss> mọi người đều ngưỡng mộ`, cho phép cập nhật `STALE -> DEAD` kể cả sau khi session đã Stop; ẩn heartbeat stale sau Stop và đổi nhãn lifetime của STALE thành `Từ lúc spawn`.
+
