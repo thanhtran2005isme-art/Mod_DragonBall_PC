@@ -1,10 +1,11 @@
 using System;
+using System.Diagnostics;
+using System.IO;
 
 namespace AssemblyCSharp.Functions
 {
     public static class BossHuntDiagnostics
     {
-        private const string LogPath = "Data/Errors/BossHuntProtocol.log";
         private static readonly object Sync = new object();
 
         public static void Log(string source, string eventName, int sessionId, string bossName, string state, string detail)
@@ -37,10 +38,26 @@ namespace AssemblyCSharp.Functions
                     "|detail=" + Clean(detail);
 
                 lock (Sync)
-                    GClass149.smethod_2(LogPath, line);
+                    GClass149.smethod_2(GetLogPath(), line);
             }
             catch
             {
+            }
+        }
+
+        public static string GetLogPath()
+        {
+            try
+            {
+                string root = AppDomain.CurrentDomain.BaseDirectory ?? "";
+                string directory = Path.Combine(root, "Data", "Errors");
+                Directory.CreateDirectory(directory);
+                int pid = Process.GetCurrentProcess().Id;
+                return Path.Combine(directory, "BossHuntProtocol.Game.pid" + pid + ".log");
+            }
+            catch
+            {
+                return Path.Combine("Data", "Errors", "BossHuntProtocol.Game.fallback.log");
             }
         }
 

@@ -1,21 +1,17 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 
 namespace DragonBoyManager
 {
     internal static class BossHuntDiagnostics
     {
-        private const string LogPath = "Data/Errors/BossHuntProtocol.log";
         private static readonly object Sync = new object();
 
         public static void Log(string source, string eventName, int sessionId, int accountId, string bossName, string state, string detail)
         {
             try
             {
-                string directory = Path.GetDirectoryName(LogPath);
-                if (!string.IsNullOrEmpty(directory))
-                    Directory.CreateDirectory(directory);
-
                 string line =
                     "[" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff") + "] " +
                     "source=" + Clean(source) +
@@ -27,11 +23,28 @@ namespace DragonBoyManager
                     "|detail=" + Clean(detail) +
                     Environment.NewLine;
 
+                string path = GetLogPath();
                 lock (Sync)
-                    File.AppendAllText(LogPath, line);
+                    File.AppendAllText(path, line);
             }
             catch
             {
+            }
+        }
+
+        public static string GetLogPath()
+        {
+            try
+            {
+                string root = AppDomain.CurrentDomain.BaseDirectory ?? "";
+                string directory = Path.Combine(root, "Data", "Errors");
+                Directory.CreateDirectory(directory);
+                int pid = Process.GetCurrentProcess().Id;
+                return Path.Combine(directory, "BossHuntProtocol.Manager.pid" + pid + ".log");
+            }
+            catch
+            {
+                return Path.Combine("Data", "Errors", "BossHuntProtocol.Manager.fallback.log");
             }
         }
 
