@@ -5,6 +5,8 @@ Không dùng file này để giải thích kiến trúc dài; chi tiết nằm t
 
 ## 2026-09-27
 
+- Boss Hunt operational panel: xử lý death trước target lock theo đúng session/generation, lưu `DeathEvidence`, forward `DEATH_UNPARSED`, hỗ trợ chọn account scope + reconnect/rejoin, thêm summary heartbeat/StopReason/target lock, tab SỰ KIỆN, double-click focus game, âm báo, autocomplete và Log Viewer filter. Chưa đánh dấu PASS cho tới khi có build/runtime mới.
+
 - Boss Hunt bắt death+killer trực tiếp từ combat packet `-60` (`attackerId + targetId + isDie`), validate theo locked boss instance/map/zone và hiển thị killer ID/name trên Manager. HEAD `09ee59f` full workflow SUCCESS.
 
 - Boss catalog không còn phụ thuộc 23 tên seed: Game clients sync boss runtime về Manager, batch-merge vào `BossHuntBosses.txt`, canonicalize family và dropdown tự refresh. Commit `9071a6e` full workflow SUCCESS.
