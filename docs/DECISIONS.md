@@ -473,6 +473,7 @@ Quy tắc mới:
 - Stop reason phải ghi coverage, khu thiếu và vòng quét; death/killer vẫn để "chưa xác nhận".
 - Manager giữ failure count theo từng zone trong current assignment generation.
 - Panel hiển thị `Missing K...` và minimum healthy scan cycle.
+- Với format runtime đã thấy `X diệt được <Boss> mọi người đều ngưỡng mộ`, Game có targeted fallback chỉ khi victim match active target; event `DEATH_PARSED_TARGET_FALLBACK` gửi `CmdBossDeath` và dừng đúng session.
 
 Ngoài ra `DEATH_UNPARSED` chỉ được gửi lên Manager nếu raw death-like message thực sự nhắc tới boss target hiện tại; thông báo death của boss khác chỉ log `DEATH_UNPARSED_IGNORED`.
 
