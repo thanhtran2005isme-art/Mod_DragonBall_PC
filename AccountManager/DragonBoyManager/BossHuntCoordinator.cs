@@ -1591,38 +1591,53 @@ namespace DragonBoyManager
                 return null;
 
             List<Account> healthy = new List<Account>();
-            int canonicalMaxZone = int.MaxValue;
+            int canonicalZoneCount = int.MaxValue;
             for (int i = 0; i < _sessionAccounts.Count; i++)
             {
                 Account account = _sessionAccounts[i];
                 BossHuntWorkerSnapshot worker;
                 if (!IsConnected(account) || !_workers.TryGetValue(account.ID, out worker) || worker.Failed || worker.Unresponsive)
                     continue;
-                if (!worker.ZoneCapacityReported || worker.ReportedMaxZone < 0)
+                if (!worker.ZoneCapacityReported)
+                    return null;
+
+                int reportedCount = worker.TotalZones;
+                if (reportedCount <= 0 && worker.ReportedMaxZone >= 0)
+                    reportedCount = worker.ReportedMaxZone + 1;
+                if (reportedCount <= 0)
                     return null;
 
                 healthy.Add(account);
-                if (worker.ReportedMaxZone < canonicalMaxZone)
-                    canonicalMaxZone = worker.ReportedMaxZone;
+                if (reportedCount < canonicalZoneCount)
+                    canonicalZoneCount = reportedCount;
             }
 
-            if (healthy.Count == 0 || canonicalMaxZone == int.MaxValue)
+            if (healthy.Count == 0 || canonicalZoneCount == int.MaxValue || canonicalZoneCount <= 0)
                 return null;
 
-            int effectiveStart = _startZone <= canonicalMaxZone ? _startZone : 0;
-            int totalZones = canonicalMaxZone - effectiveStart + 1;
-            if (totalZones <= 0)
-                return null;
+            int effectiveStart = _startZone;
+            if (effectiveStart < 0 || effectiveStart >= canonicalZoneCount)
+                effectiveStart = 0;
 
+            List<int> orderedZones = BuildOrderedZoneList(canonicalZoneCount, effectiveStart);
             List<PendingZoneAssignment> result = new List<PendingZoneAssignment>();
+
             for (int i = 0; i < healthy.Count; i++)
             {
                 Account account = healthy[i];
                 BossHuntWorkerSnapshot worker = _workers[account.ID];
+
+                int baseSize = orderedZones.Count / healthy.Count;
+                int remainder = orderedZones.Count % healthy.Count;
+                int assignedCount = baseSize + (i < remainder ? 1 : 0);
+                int offset = i * baseSize + Math.Min(i, remainder);
+
+                string assignedZones = BuildAssignedZones(orderedZones, offset, assignedCount);
+
                 worker.WorkerIndex = i;
                 worker.WorkerCount = healthy.Count;
-                worker.TotalZones = totalZones;
-                worker.AssignedZones = BuildAssignedZones(effectiveStart, canonicalMaxZone, i, healthy.Count);
+                worker.TotalZones = canonicalZoneCount;
+                worker.AssignedZones = assignedZones;
                 worker.Status = string.IsNullOrEmpty(worker.AssignedZones)
                     ? (MainController.language == 0 ? "Dự phòng - không có khu" : "Standby - no assigned zone")
                     : (MainController.language == 0 ? "Đã nhận phân khu" : "Zone plan received");
@@ -1636,34 +1651,65 @@ namespace DragonBoyManager
                     workerIndex = i,
                     workerCount = healthy.Count,
                     accountId = account.ID,
-                    totalZones = totalZones,
-                    maxZone = canonicalMaxZone,
-                    assignedZones = worker.AssignedZones
+                    totalZones = canonicalZoneCount,
+                    maxZone = canonicalZoneCount - 1,
+                    assignedZones = assignedZones
                 };
-                result.Add(new PendingZoneAssignment { Account = account, Payload = assignment });
+
+                result.Add(new PendingZoneAssignment
+                {
+                    Account = account,
+                    Payload = assignment
+                });
+
                 AddTimelineLocked("ZONE_PLAN", account.ID,
-                    "canonicalMax=" + canonicalMaxZone + ";assigned=" + worker.AssignedZones + ";total=" + totalZones);
+                    "zones=" + canonicalZoneCount +
+                    ";start=K" + effectiveStart +
+                    ";share=" + assignedCount +
+                    ";assigned=" + assignedZones);
             }
 
             _zonePlanIssuedGeneration = _assignmentGeneration;
             BossHuntDiagnostics.Log("MANAGER", "CENTRAL_ZONE_PLAN", _sessionId, -1, _bossName, _state.ToString(),
-                "generation=" + _assignmentGeneration + ";workers=" + healthy.Count +
-                ";start=" + effectiveStart + ";max=" + canonicalMaxZone + ";total=" + totalZones);
+                "generation=" + _assignmentGeneration +
+                ";workers=" + healthy.Count +
+                ";zones=" + canonicalZoneCount +
+                ";start=K" + effectiveStart +
+                ";mode=BALANCED_CONTIGUOUS");
+
             return result;
         }
 
-        private static string BuildAssignedZones(int startZone, int maxZone, int workerIndex, int workerCount)
+        private static List<int> BuildOrderedZoneList(int zoneCount, int startZone)
         {
-            if (workerCount <= 0 || workerIndex < 0)
+            List<int> zones = new List<int>();
+            if (zoneCount <= 0)
+                return zones;
+
+            if (startZone < 0 || startZone >= zoneCount)
+                startZone = 0;
+
+            for (int zone = startZone; zone < zoneCount; zone++)
+                zones.Add(zone);
+            for (int zone = 0; zone < startZone; zone++)
+                zones.Add(zone);
+
+            return zones;
+        }
+
+        private static string BuildAssignedZones(List<int> zones, int offset, int count)
+        {
+            if (zones == null || count <= 0 || offset < 0 || offset >= zones.Count)
                 return "";
 
             StringBuilder builder = new StringBuilder();
-            for (int zone = startZone + workerIndex; zone <= maxZone; zone += workerCount)
+            int end = Math.Min(zones.Count, offset + count);
+            for (int i = offset; i < end; i++)
             {
                 if (builder.Length > 0)
                     builder.Append(",");
                 builder.Append("K");
-                builder.Append(zone);
+                builder.Append(zones[i]);
             }
             return builder.ToString();
         }
