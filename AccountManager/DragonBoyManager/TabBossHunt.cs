@@ -25,7 +25,7 @@ namespace DragonBoyManager
         private readonly Label labelState = new Label();
         private readonly Label labelResult = new Label();
         private readonly DataGridView grid = new DataGridView();
-        private readonly TabControl detailTabs = new TabControl();
+        private readonly System.Windows.Forms.TabControl detailTabs = new System.Windows.Forms.TabControl();
         private readonly TabPage tabBossInfo = new TabPage();
         private readonly TabPage tabEvents = new TabPage();
         private readonly TabPage tabTimeline = new TabPage();
