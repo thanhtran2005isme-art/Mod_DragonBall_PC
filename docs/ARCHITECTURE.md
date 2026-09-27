@@ -396,3 +396,37 @@ Không process nào còn append chung một Boss Hunt log:
 ```
 
 Path được tạo từ `AppDomain.CurrentDomain.BaseDirectory`, không phụ thuộc current working directory. Nhánh fallback dùng `Path.GetTempPath()`, vẫn là absolute path. Cách tách theo PID tránh lock nội-process bị hiểu nhầm là lock xuyên process.
+
+## 14. Central zone partition và medium observability
+
+Client không còn tự quyết định round-robin partition dựa trên zone-list cục bộ.
+
+```text
+Game -> Manager: 117 ZONE_CAPACITY { maxZone, totalZones }
+Manager chờ mọi worker khỏe báo capacity
+Manager chọn canonicalMaxZone = min(maxZone của các worker)
+Manager chia round-robin một lần
+Manager -> Game: 105 ZONE_ASSIGNMENT { assignedZones, totalZones, generation }
+Game chỉ scan đúng danh sách Manager cấp
+```
+
+Nếu số worker lớn hơn số zone, worker dư nhận danh sách rỗng và chuyển Standby. Cách chọn giao phần an toàn chung tránh việc hai client nhìn zone-list khác nhau rồi tự sinh partition chồng lấn.
+
+Dashboard medium metrics theo worker:
+
+- số khu đã clear;
+- khu/phút tính từ thời điểm worker vào session;
+- tổng failure;
+- tổng timeout;
+- scan cycle;
+- assigned/scanned zones vẫn giữ làm audit.
+
+Boss catalog không còn nằm cứng trong `TabBossHunt.cs`. Runtime đọc:
+
+```text
+<runtime-base>\Data\BossHuntBosses.txt
+```
+
+Tên boss mới có thể được thêm bằng file, target người dùng nhập hoặc announcement đã quan sát; không cần sửa source UI.
+
+Boss Hunt log mỗi process rotate khi file đạt 5 MB, giữ 3 archive và dọn file cùng loại cũ hơn 14 ngày. Manager có viewer log trực tiếp, merge các `BossHuntProtocol.*.log*` gần nhất để debug nhiều process.

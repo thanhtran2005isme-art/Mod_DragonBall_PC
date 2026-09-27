@@ -5,6 +5,12 @@ Không dùng file này để giải thích kiến trúc dài; chi tiết nằm t
 
 ## 2026-09-27
 
+- Medium Boss Hunt hardening: central zone partition do Manager quyết định qua `105 ZONE_ASSIGNMENT`, loại bỏ client-side partition cuối cùng.
+- Thêm log rotation 5 MB x 3 archive, cleanup 14 ngày và viewer log trực tiếp trong Manager.
+- Chuyển boss dropdown sang runtime catalog `Data/BossHuntBosses.txt`; tự ghi nhớ boss nhập tay/announcement.
+- Thêm performance theo worker: zone clear count, khu/phút, failure count, timeout count.
+- `26db73a` và `dd7a97d` full workflow SUCCESS.
+
 - Boss Hunt observability: thêm Unknown/Alive/Dead/Stale, cache age, exact spawn/death time, lifetime, raw announcement, source account và finder username+ID.
 - Worker dashboard thêm assigned/scanned zones, unique coverage, scan cycle, zone dwell, entity/boss count, target HP, zone-fail count và rally telemetry.
 - Thêm live session timeline từ spawn/route/zone/FOUND/RALLY/READY tới death/stop.

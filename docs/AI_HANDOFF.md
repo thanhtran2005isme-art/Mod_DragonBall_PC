@@ -198,6 +198,9 @@ Log ghi sequence ATTACK/probe, HP response, MISS, MOB DIE, drop owner, SM/TN, st
 
 ```text
 836f4fa Loại bỏ fallback log tương đối của săn boss   [feature branch]
+dd7a97d Sửa viewer log tương thích CSharp 7.3   [feature branch]
+208a1a6 Hoàn thiện log catalog và thống kê săn boss   [feature branch]
+26db73a Đưa phân khu săn boss về Manager trung tâm   [feature branch]
 53b9ba7 Sửa Path.Combine tương thích net35 cho log boss   [feature branch]
 3c807ec Giữ timestamp sớm nhất cho lifecycle boss   [feature branch]
 0d350ae Tách log săn boss theo process và cố định đường dẫn   [feature branch]
@@ -230,6 +233,8 @@ bfdc638 Bắt KOL trực tiếp từ packet 22 thực tế
 ## 6. Rủi ro/lỗi đã biết
 
 - Boss Hunt đã harden P0/P1/P2 + critical + nhóm lỗi mức cao: lifecycle/timestamps/raw/source/status stale, assigned/scanned/coverage/cycle/dwell/entity/zone-fail/rally/HP/finder/timeline và per-process absolute log. `fe5379d`, `5f03c50`, `836f4fa` đều full workflow SUCCESS. Vẫn phải runtime test 1→2→3 account trước khi bỏ Draft/merge.
+- Nhóm lỗi mức trung bình đã xử lý: Manager central zone partition (`105 ZONE_ASSIGNMENT`) lấy min `maxZone` chung của các worker đã báo capacity; log rotation 5 MB x 3 archive + cleanup 14 ngày; viewer log trực tiếp trong Manager; boss catalog động ở `Output/Data/BossHuntBosses.txt` và tự học boss từ announcement/target nhập tay; dashboard có throughput `khu/phút`, tổng fail và timeout. Heartbeat và duplicate warning đã được xử lý từ vòng critical/high trước đó. `26db73a` và `dd7a97d` full workflow SUCCESS.
+
 - Full solution local từng fail ở PostBuild copy của một số project dù source compile được; gameplay thường nên build riêng.
 - DLL `Assembly-CSharp.dll` có thể bị game/manager lock.
 - `GameAssembly` là .NET Framework 3.5, dễ lỗi nếu dùng API mới.

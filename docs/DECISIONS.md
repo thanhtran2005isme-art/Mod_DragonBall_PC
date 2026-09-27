@@ -295,3 +295,43 @@ Dữ liệu này đến từ `117 TELEMETRY` + `118 HEARTBEAT`, không suy ngư�
 - File nằm dưới absolute runtime base path `Data/Errors`.
 - Không dựa vào current working directory.
 - Không dùng `lock` nội-process để giả định an toàn cho nhiều process.
+
+## D-026 — Manager quyết định partition zone cuối cùng
+
+**Trạng thái:** active — 2026-09-27
+
+- Game chỉ báo `ZONE_CAPACITY`, không tự chia round-robin cuối cùng.
+- Manager đợi toàn bộ worker khỏe báo `maxZone`.
+- Canonical max là giá trị nhỏ nhất giữa các worker, ưu tiên safety hơn tận dụng zone mà chỉ một client nhìn thấy.
+- Manager gửi explicit `assignedZones` bằng command `105 ZONE_ASSIGNMENT`.
+- Scanner chỉ quét các zone trong danh sách này.
+- Worker dư được Standby.
+
+## D-027 — Boss catalog là dữ liệu runtime, không hard-code trong UI
+
+**Trạng thái:** active — 2026-09-27
+
+- File runtime: `Data/BossHuntBosses.txt`.
+- Dropdown đọc file khi mở.
+- Boss từ target nhập tay hoặc announcement mới được tự ghi nhớ.
+- Thêm boss mới không yêu cầu sửa `TabBossHunt.cs`.
+
+## D-028 — Boss Hunt log có rotation và viewer trực tiếp
+
+**Trạng thái:** active — 2026-09-27
+
+- Mỗi PID giữ file riêng như D-025.
+- Rotate ở 5 MB.
+- Giữ 3 archive cho mỗi active log path.
+- Cleanup file cùng loại cũ hơn 14 ngày.
+- Manager có `BossHuntLogViewer` để xem trực tiếp các log Game/Manager gần nhất.
+
+## D-029 — Performance worker được đo bằng event thật
+
+**Trạng thái:** active — 2026-09-27
+
+- `ZoneClearCount` tăng ở `ZONE_CLEAR`.
+- throughput hiển thị `zones/minute` từ thời điểm worker tham gia session.
+- `FailureCount` tăng ở zone failure, FAILED hoặc watchdog.
+- `TimeoutCount` tăng cho FAILED chứa TIMEOUT và watchdog timeout.
+- Không suy performance từ label UI.
