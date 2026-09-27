@@ -430,3 +430,16 @@ Dữ liệu này đến từ `117 TELEMETRY` + `118 HEARTBEAT`, không suy ngư�
 - Scanner chỉ accept khi target name khớp concrete session target và map/zone khớp lock hiện tại.
 - Killer name resolve từ attacker charId; nếu không resolve được vẫn giữ `killerId` và fallback `#<id>`.
 - HP packet `56` / entity remove `-6` không đủ để suy killer; chỉ dùng làm fallback death/lost-target nếu cần.
+
+## D-039 — Announcement cập nhật death ngay; combat chỉ bổ sung/xác nhận
+
+**Trạng thái:** active — 2026-09-27
+
+- VIP announcement đi qua `GClass144.method_121()` và được enqueue vào `BossZoneScanner`; parse/send Boss Hunt thực hiện trên game loop.
+- Khi announcement parse được boss chết, Game gửi ngay `CmdBossDeath=116` với boss name, killer text, raw announcement và timestamp. Nếu đó là target của session, local scanner dừng sau khi gửi evidence.
+- `CmdDead=112` không còn là đường chỉ dừng session: Manager chuyển nó thành death fallback có killer rỗng, vì vậy UI vẫn có death time nhưng tuyệt đối không tự đoán người hạ.
+- Manager merge nhiều evidence vào cùng canonical record, kể cả khi record đã Dead: announcement và combat `-60` đến trước/sau đều bổ sung cho nhau thay vì tạo/ghi đè record mới.
+- Ưu tiên dữ liệu hiển thị: tên killer thực > fallback `#id`; raw announcement thực > raw `combat:` / `fallback:`. `killerId` từ combat vẫn được bổ sung khi có.
+- Parser hỗ trợ cả dạng victim-first (`BOSS X ... bởi Y`) và killer-first có marker BOSS (`Y ... BOSS X`).
+- Không suy killer từ HP/entity disappearance.
+
