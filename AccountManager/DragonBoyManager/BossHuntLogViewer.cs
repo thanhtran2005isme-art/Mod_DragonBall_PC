@@ -184,13 +184,13 @@ namespace DragonBoyManager
                 for (int i = 0; i < allLines.Count; i++)
                 {
                     string line = allLines[i] ?? "";
-                    if (session.Length > 0 && !ContainsIgnoreCase(line, "|session=" + session))
+                    if (session.Length > 0 && !FieldEquals(line, "session", session))
                         continue;
-                    if (account.Length > 0 && !ContainsIgnoreCase(line, "|account=" + account))
+                    if (account.Length > 0 && !FieldEquals(line, "account", account))
                         continue;
-                    if (eventName.Length > 0 && !ContainsIgnoreCase(line, "|event=" + eventName))
+                    if (eventName.Length > 0 && !FieldContains(line, "event", eventName))
                         continue;
-                    if (boss.Length > 0 && !ContainsIgnoreCase(line, "|boss=" + boss))
+                    if (boss.Length > 0 && !FieldContains(line, "boss", boss))
                         continue;
                     filtered.Add(line);
                 }
@@ -206,9 +206,28 @@ namespace DragonBoyManager
             }
         }
 
-        private static bool ContainsIgnoreCase(string value, string token)
+        private static bool FieldEquals(string line, string field, string expected)
         {
-            return (value ?? "").IndexOf(token ?? "", StringComparison.OrdinalIgnoreCase) >= 0;
+            return string.Equals(ReadField(line, field), expected ?? "", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool FieldContains(string line, string field, string expected)
+        {
+            return ReadField(line, field).IndexOf(expected ?? "", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static string ReadField(string line, string field)
+        {
+            line = line ?? "";
+            string marker = "|" + field + "=";
+            int start = line.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            if (start < 0)
+                return "";
+            start += marker.Length;
+            int end = line.IndexOf("|", start, StringComparison.Ordinal);
+            if (end < 0)
+                end = line.Length;
+            return line.Substring(start, end - start);
         }
 
         private static string Decorate(string file, string line)
