@@ -902,6 +902,7 @@ namespace DragonBoyManager
             string killer = (payload.killer ?? "").Trim();
             int killerId = payload.killerId;
             string incomingRaw = payload.rawMessage ?? "";
+            string incomingEvidence = GetDeathEvidence(incomingRaw);
             BossHuntBossSnapshot updatedRecord = null;
 
             lock (_sync)
@@ -926,6 +927,7 @@ namespace DragonBoyManager
                     string oldKiller = targetRecord.Killer ?? "";
                     int oldKillerId = targetRecord.KillerId;
                     string oldRaw = targetRecord.RawDeath ?? "";
+                    string oldEvidence = targetRecord.DeathEvidence ?? "";
 
                     targetRecord.Alive = false;
                     targetRecord.Presence = BossPresenceState.Dead;
@@ -938,6 +940,7 @@ namespace DragonBoyManager
                         targetRecord.KillerId = killerId;
                     if (ShouldReplaceDeathRaw(targetRecord.RawDeath, incomingRaw))
                         targetRecord.RawDeath = incomingRaw;
+                    targetRecord.DeathEvidence = MergeDeathEvidence(targetRecord.DeathEvidence, incomingEvidence);
 
                     targetRecord.LastSourceAccountId = account.ID;
                     AddSourceAccount(targetRecord, account.ID);
@@ -945,7 +948,8 @@ namespace DragonBoyManager
                     bool enriched =
                         !string.Equals(oldKiller, targetRecord.Killer ?? "", StringComparison.Ordinal) ||
                         oldKillerId != targetRecord.KillerId ||
-                        !string.Equals(oldRaw, targetRecord.RawDeath ?? "", StringComparison.Ordinal);
+                        !string.Equals(oldRaw, targetRecord.RawDeath ?? "", StringComparison.Ordinal) ||
+                        !string.Equals(oldEvidence, targetRecord.DeathEvidence ?? "", StringComparison.Ordinal);
 
                     if (newEvent)
                     {
@@ -958,8 +962,10 @@ namespace DragonBoyManager
                     }
                     else if (enriched)
                     {
+                        AddBossEventLocked("DEATH_ENRICH", targetRecord, observedUtc, account.ID, targetRecord.Killer, incomingRaw);
                         AddTimelineLocked("BOSS_DEATH_ENRICH", account.ID,
                             DescribeBossInstance(targetRecord) +
+                            " | evidence=" + targetRecord.DeathEvidence +
                             " | killer=" + targetRecord.Killer +
                             (targetRecord.KillerId >= 0 ? " (#" + targetRecord.KillerId + ")" : "") +
                             " | " + targetRecord.RawDeath);
@@ -985,6 +991,7 @@ namespace DragonBoyManager
                         Killer = killer,
                         KillerId = killerId,
                         RawDeath = incomingRaw,
+                        DeathEvidence = incomingEvidence,
                         LastSourceAccountId = account.ID
                     };
                     AddSourceAccount(record, account.ID);
@@ -994,14 +1001,36 @@ namespace DragonBoyManager
                         record.BossName + " | killer=" + killer + " | " + incomingRaw);
                     updatedRecord = CloneBoss(record);
                 }
+
+                bool deathBelongsToCurrentSession =
+                    IsRunningState(_state) &&
+                    payload.sessionId == _sessionId &&
+                    payload.assignmentGeneration == _assignmentGeneration &&
+                    BossMatches(payload.bossName, _bossName);
+
+                if (!matchesCurrent && _sessionTargetBoss == null && deathBelongsToCurrentSession && updatedRecord != null)
+                {
+                    _sessionTargetBoss = CloneBoss(updatedRecord);
+                    matchesCurrent = true;
+                    AddTimelineLocked("DEATH_BEFORE_TARGET_LOCK", account.ID,
+                        "boss=" + updatedRecord.BossName + ";evidence=" + updatedRecord.DeathEvidence +
+                        ";raw=" + (incomingRaw ?? ""));
+                }
+
+                if (matchesCurrent)
+                {
+                    _lastUnparsedDeath = "";
+                    _lastUnparsedDeathUtc = DateTime.MinValue;
+                }
             }
 
             string effectiveKiller = updatedRecord == null ? killer : (updatedRecord.Killer ?? "");
             int effectiveKillerId = updatedRecord == null ? killerId : updatedRecord.KillerId;
             string effectiveRaw = updatedRecord == null ? incomingRaw : (updatedRecord.RawDeath ?? "");
+            string effectiveEvidence = updatedRecord == null ? incomingEvidence : (updatedRecord.DeathEvidence ?? "");
 
             BossHuntDiagnostics.Log("MANAGER", "BOSS_DEATH", 0, account.ID, payload.bossName, "GLOBAL",
-                "killer=" + effectiveKiller + ";killerId=" + effectiveKillerId + ";at=" + observedUtc.ToString("o") +
+                "killer=" + effectiveKiller + ";killerId=" + effectiveKillerId + ";evidence=" + effectiveEvidence + ";at=" + observedUtc.ToString("o") +
                 ";map=" + payload.mapId + ";zone=" + payload.zone +
                 ";currentTarget=" + matchesCurrent + ";raw=" + effectiveRaw);
 
@@ -1859,6 +1888,36 @@ namespace DragonBoyManager
             bool currentIsIdFallback = current.StartsWith("#", StringComparison.Ordinal);
             bool incomingIsIdFallback = incoming.StartsWith("#", StringComparison.Ordinal);
             return currentIsIdFallback && !incomingIsIdFallback;
+        }
+
+        private static string GetDeathEvidence(string raw)
+        {
+            raw = (raw ?? "").Trim();
+            if (raw.StartsWith("combat:", StringComparison.OrdinalIgnoreCase))
+                return "COMBAT_-60";
+            if (raw.StartsWith("fallback:", StringComparison.OrdinalIgnoreCase))
+                return "FALLBACK";
+            if (raw.Length > 0)
+                return "ANNOUNCEMENT";
+            return "UNKNOWN";
+        }
+
+        private static string MergeDeathEvidence(string current, string incoming)
+        {
+            current = (current ?? "").Trim();
+            incoming = (incoming ?? "").Trim();
+            if (incoming.Length == 0 || incoming == "UNKNOWN")
+                return current.Length == 0 ? incoming : current;
+            if (current.Length == 0 || current == "UNKNOWN")
+                return incoming;
+
+            string[] tokens = current.Split(',');
+            for (int i = 0; i < tokens.Length; i++)
+            {
+                if (tokens[i].Trim().Equals(incoming, StringComparison.OrdinalIgnoreCase))
+                    return current;
+            }
+            return current + "," + incoming;
         }
 
         private static bool ShouldReplaceDeathRaw(string current, string incoming)
