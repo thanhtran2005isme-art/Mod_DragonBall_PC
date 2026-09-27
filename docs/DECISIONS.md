@@ -372,3 +372,13 @@ Dữ liệu này đến từ `117 TELEMETRY` + `118 HEARTBEAT`, không suy ngư�
 - Parse thành công ghi `DEATH_PARSED` hoặc `SPAWN_PARSED`.
 - Message có dấu hiệu death nhưng parser không nhận được ghi `DEATH_UNPARSED`.
 - Log rotation hiện có giới hạn dung lượng, nên raw diagnostic được phép bật thường trực.
+
+## D-034 — Scan exhaustion yêu cầu coverage hoàn chỉnh
+
+**Trạng thái:** active — 2026-09-27
+
+- `scanCycle` chỉ cho biết worker đã quay vòng danh sách assignment; không chứng minh toàn bộ zone đã được clear.
+- Chỉ cho phép `SCAN_EXHAUSTED` khi `uniqueCoverage >= totalZones` và `totalZones > 0`.
+- Zone fail không được tính là clear coverage.
+- Nếu coverage chưa đủ, session tiếp tục scan và status phải cho thấy coverage hiện tại.
+- Raw announcement liên quan boss được forward lên Manager timeline để audit death/killer parser trực tiếp.
