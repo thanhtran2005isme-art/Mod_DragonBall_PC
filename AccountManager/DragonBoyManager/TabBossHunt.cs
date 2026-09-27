@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Media;
 using System.Text;
 using System.Windows.Forms;
 
@@ -15,15 +16,26 @@ namespace DragonBoyManager
         private readonly Button buttonStart = new Button();
         private readonly Button buttonStop = new Button();
         private readonly Button buttonLog = new Button();
+        private readonly CheckBox checkSelectedOnly = new CheckBox();
+        private readonly CheckBox checkSound = new CheckBox();
         private readonly Label labelBoss = new Label();
         private readonly Label labelStartZone = new Label();
         private readonly Label labelConnected = new Label();
+        private readonly Label labelHealth = new Label();
         private readonly Label labelState = new Label();
         private readonly Label labelResult = new Label();
         private readonly DataGridView grid = new DataGridView();
+        private readonly TabControl detailTabs = new TabControl();
+        private readonly TabPage tabBossInfo = new TabPage();
+        private readonly TabPage tabEvents = new TabPage();
+        private readonly TabPage tabTimeline = new TabPage();
+        private readonly TextBox eventsText = new TextBox();
         private readonly TextBox timeline = new TextBox();
         private readonly Timer timer = new Timer();
         private int catalogRevision = -1;
+        private int lastSoundSessionId = -1;
+        private BossHuntState lastSoundState = BossHuntState.Idle;
+        private long lastDeathSoundTicks;
 
         public TabBossHunt()
         {
@@ -67,6 +79,11 @@ namespace DragonBoyManager
             buttonStart.Text = vi ? "BẮT ĐẦU DÒ" : "START SCAN";
             buttonStop.Text = vi ? "DỪNG" : "STOP";
             buttonLog.Text = vi ? "LOG" : "LOG";
+            checkSelectedOnly.Text = vi ? "Chỉ acc đã chọn" : "Selected only";
+            checkSound.Text = vi ? "Âm" : "Sound";
+            tabBossInfo.Text = vi ? "BOSS" : "BOSS";
+            tabEvents.Text = vi ? "SỰ KIỆN" : "EVENTS";
+            tabTimeline.Text = vi ? "TIMELINE" : "TIMELINE";
 
             string[] headers = vi
                 ? new string[] { "ID", "Tài khoản", "Worker", "Map / Khu", "Được giao", "Đã dò", "Vòng", "Hiệu suất", "HP", "Trạng thái" }
@@ -83,6 +100,8 @@ namespace DragonBoyManager
             labelBoss.SetBounds(14, 18, 86, 24);
             comboBoss.SetBounds(100, 15, 175, 26);
             comboBoss.DropDownStyle = ComboBoxStyle.DropDown;
+            comboBoss.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
+            comboBoss.AutoCompleteSource = AutoCompleteSource.ListItems;
             comboBoss.Text = "Super Broly";
             comboBoss.TextChanged += delegate { ApplySnapshot(BossHuntCoordinator.Instance.GetSnapshot()); };
             comboBoss.DropDown += delegate { RefreshBossCatalog(); };
@@ -114,11 +133,17 @@ namespace DragonBoyManager
                 }
             };
 
-            labelConnected.SetBounds(14, 52, 245, 24);
-            labelState.SetBounds(270, 52, 450, 24);
+            checkSelectedOnly.SetBounds(14, 50, 130, 24);
+            checkSelectedOnly.AutoSize = false;
+            labelConnected.SetBounds(150, 52, 170, 24);
+            labelHealth.SetBounds(325, 52, 230, 24);
+            checkSound.SetBounds(565, 50, 70, 24);
+            checkSound.Checked = true;
+
+            labelState.SetBounds(14, 74, 710, 22);
             labelState.Font = new Font(labelState.Font, FontStyle.Bold);
 
-            grid.SetBounds(14, 82, 710, 135);
+            grid.SetBounds(14, 98, 710, 119);
             grid.AllowUserToAddRows = false;
             grid.AllowUserToDeleteRows = false;
             grid.AllowUserToResizeRows = false;
@@ -139,6 +164,7 @@ namespace DragonBoyManager
             grid.RowTemplate.Height = 28;
             grid.ScrollBars = ScrollBars.Vertical;
             grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            grid.CellDoubleClick += grid_CellDoubleClick;
 
             float[] fillWeights = new float[] { 5F, 14F, 9F, 18F, 14F, 14F, 6F, 11F, 7F, 20F };
             int[] minimumWidths = new int[] { 32, 72, 52, 92, 72, 72, 38, 68, 44, 100 };
@@ -152,20 +178,32 @@ namespace DragonBoyManager
                 });
             }
 
-            GroupBox resultBox = new GroupBox();
-            resultBox.Text = "Boss";
-            resultBox.ForeColor = Color.White;
-            resultBox.SetBounds(14, 223, 710, 82);
+            detailTabs.SetBounds(14, 223, 710, 162);
+            detailTabs.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+
+            tabBossInfo.BackColor = Color.FromArgb(64, 64, 64);
+            tabBossInfo.ForeColor = Color.White;
             labelResult.Dock = DockStyle.Fill;
             labelResult.Padding = new Padding(8, 4, 8, 4);
             labelResult.AutoEllipsis = true;
             labelResult.Font = new Font("Segoe UI", 8.25F, FontStyle.Regular);
-            resultBox.Controls.Add(labelResult);
+            tabBossInfo.Controls.Add(labelResult);
 
-            GroupBox timelineBox = new GroupBox();
-            timelineBox.Text = "Timeline";
-            timelineBox.ForeColor = Color.White;
-            timelineBox.SetBounds(14, 311, 710, 74);
+            tabEvents.BackColor = Color.FromArgb(64, 64, 64);
+            tabEvents.ForeColor = Color.White;
+            eventsText.Dock = DockStyle.Fill;
+            eventsText.Multiline = true;
+            eventsText.ReadOnly = true;
+            eventsText.ScrollBars = ScrollBars.Vertical;
+            eventsText.WordWrap = false;
+            eventsText.BackColor = Color.FromArgb(45, 45, 45);
+            eventsText.ForeColor = Color.White;
+            eventsText.BorderStyle = BorderStyle.None;
+            eventsText.Font = new Font("Consolas", 8F, FontStyle.Regular);
+            tabEvents.Controls.Add(eventsText);
+
+            tabTimeline.BackColor = Color.FromArgb(64, 64, 64);
+            tabTimeline.ForeColor = Color.White;
             timeline.Dock = DockStyle.Fill;
             timeline.Multiline = true;
             timeline.ReadOnly = true;
@@ -175,7 +213,11 @@ namespace DragonBoyManager
             timeline.ForeColor = Color.White;
             timeline.BorderStyle = BorderStyle.None;
             timeline.Font = new Font("Consolas", 8F, FontStyle.Regular);
-            timelineBox.Controls.Add(timeline);
+            tabTimeline.Controls.Add(timeline);
+
+            detailTabs.TabPages.Add(tabBossInfo);
+            detailTabs.TabPages.Add(tabEvents);
+            detailTabs.TabPages.Add(tabTimeline);
 
             Controls.Add(labelBoss);
             Controls.Add(comboBoss);
@@ -184,11 +226,13 @@ namespace DragonBoyManager
             Controls.Add(buttonStart);
             Controls.Add(buttonStop);
             Controls.Add(buttonLog);
+            Controls.Add(checkSelectedOnly);
+            Controls.Add(checkSound);
             Controls.Add(labelConnected);
+            Controls.Add(labelHealth);
             Controls.Add(labelState);
             Controls.Add(grid);
-            Controls.Add(resultBox);
-            Controls.Add(timelineBox);
+            Controls.Add(detailTabs);
         }
 
         private void buttonStart_Click(object sender, EventArgs e)
@@ -200,8 +244,25 @@ namespace DragonBoyManager
             BossHuntCatalog.RememberBoss(comboBoss.Text);
             RefreshBossCatalog();
 
+            List<Account> requestedAccounts = null;
+            if (checkSelectedOnly.Checked)
+            {
+                requestedAccounts = TabData._instance == null ? new List<Account>() : TabData._instance.GetAccountsSelected();
+                if (requestedAccounts.Count == 0)
+                {
+                    MessageBox.Show(
+                        MainController.language == 0
+                            ? "Hãy chọn ít nhất một tài khoản ở tab ACCOUNT trước khi bắt đầu."
+                            : "Select at least one account in the ACCOUNT tab before starting.",
+                        MainController.language == 0 ? "Săn Boss" : "Boss Hunt",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                    return;
+                }
+            }
+
             string error;
-            if (!BossHuntCoordinator.Instance.Start(comboBoss.Text, (int)numericStartZone.Value, out error))
+            if (!BossHuntCoordinator.Instance.Start(comboBoss.Text, (int)numericStartZone.Value, requestedAccounts, out error))
                 MessageBox.Show(error, MainController.language == 0 ? "Săn Boss" : "Boss Hunt", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
@@ -245,6 +306,9 @@ namespace DragonBoyManager
                     ? "-"
                     : "W" + (worker.WorkerIndex + 1) + "/" + Math.Max(1, worker.WorkerCount);
                 string status = worker.Status ?? "";
+                string heartbeat = GetHeartbeatStatus(worker);
+                if (!string.IsNullOrEmpty(heartbeat))
+                    status = heartbeat + (string.IsNullOrEmpty(status) ? "" : " | " + status);
                 if (!string.IsNullOrEmpty(worker.DuplicateWarning))
                     status = "⚠ " + worker.DuplicateWarning + " | " + status;
                 if (!string.IsNullOrEmpty(worker.LastAction) && status.IndexOf(worker.LastAction, StringComparison.OrdinalIgnoreCase) < 0)
@@ -291,8 +355,11 @@ namespace DragonBoyManager
             }
 
             labelState.Text = GetStateText(snapshot);
+            labelHealth.Text = GetHealthText(snapshot);
             UpdateBossInfo(snapshot);
+            UpdateBossEvents(snapshot);
             UpdateTimeline(snapshot);
+            UpdateSounds(snapshot);
         }
 
         private void UpdateBossInfo(BossHuntSnapshot snapshot)
@@ -311,9 +378,11 @@ namespace DragonBoyManager
             if (boss == null)
             {
                 labelResult.Text =
-                    "Boss: " + (string.IsNullOrEmpty(selectedBoss) ? "-" : selectedBoss) + " | " + (vi ? "UNKNOWN" : "UNKNOWN") + Environment.NewLine +
-                    (vi ? "Chưa có announcement hợp lệ trong Manager." : "No valid announcement in Manager.") + Environment.NewLine +
-                    (vi ? "Coverage: " : "Coverage: ") + snapshot.UniqueCoverageCount + "/" + (snapshot.CoverageTotalZones > 0 ? snapshot.CoverageTotalZones.ToString() : "?");
+                    "Boss: " + (string.IsNullOrEmpty(selectedBoss) ? "-" : selectedBoss) + " | UNKNOWN" + Environment.NewLine +
+                    (vi ? "Chưa có dữ liệu spawn/death hợp lệ cho boss này." : "No valid spawn/death data for this boss.") + Environment.NewLine +
+                    "Coverage: " + snapshot.UniqueCoverageCount + "/" +
+                    (snapshot.CoverageTotalZones > 0 ? snapshot.CoverageTotalZones.ToString() : "?") + Environment.NewLine +
+                    GetUnparsedWarning(snapshot, vi);
                 return;
             }
 
@@ -331,16 +400,80 @@ namespace DragonBoyManager
             string life = GetBossLifetimeText(boss);
             string finder = GetFinderText(snapshot);
             string raw = !string.IsNullOrEmpty(boss.RawDeath) && boss.Presence == BossPresenceState.Dead ? boss.RawDeath : boss.RawSpawn;
-            raw = Truncate(raw, 118);
+            raw = Truncate(raw, 150);
+            string evidence = FormatEvidence(boss.DeathEvidence, vi);
+            string targetLock = boss.BossName + " @ " + map + (boss.Zone >= 0 ? " / K" + boss.Zone : "");
 
             labelResult.Text =
                 "Boss: " + boss.BossName + " | " + presence + " | " + (vi ? "Tuổi cache: " : "Cache age: ") + age +
-                " | Coverage " + snapshot.UniqueCoverageCount + "/" + (snapshot.CoverageTotalZones > 0 ? snapshot.CoverageTotalZones.ToString() : "?") + Environment.NewLine +
-                (vi ? "Xuất hiện: " : "Spawn: ") + spawn + " | " + map + (boss.Zone >= 0 ? " K" + boss.Zone : "") +
-                " | " + (vi ? "Nguồn: " : "Source: ") + sources + Environment.NewLine +
+                " | Coverage " + snapshot.UniqueCoverageCount + "/" +
+                (snapshot.CoverageTotalZones > 0 ? snapshot.CoverageTotalZones.ToString() : "?") + Environment.NewLine +
+                (vi ? "Target lock: " : "Target lock: ") + targetLock +
+                " | " + (vi ? "Xuất hiện: " : "Spawn: ") + spawn + Environment.NewLine +
                 (vi ? "Chết: " : "Death: ") + death + " | " + (vi ? "Sống: " : "Lifetime: ") + life +
-                " | " + (vi ? "Người hạ: " : "Killer: ") + killer + " | Finder: " + finder + Environment.NewLine +
-                "RAW: " + (string.IsNullOrEmpty(raw) ? "-" : raw);
+                " | " + (vi ? "Người hạ: " : "Killer: ") + killer +
+                " | " + (vi ? "Xác nhận: " : "Evidence: ") + evidence + Environment.NewLine +
+                (vi ? "Nguồn: " : "Sources: ") + sources + " | Finder: " + finder + Environment.NewLine +
+                GetUnparsedWarning(snapshot, vi) +
+                (string.IsNullOrEmpty(raw) ? "" : (GetUnparsedWarning(snapshot, vi).Length > 0 ? Environment.NewLine : "") + "RAW: " + raw);
+        }
+
+        private void UpdateBossEvents(BossHuntSnapshot snapshot)
+        {
+            if (snapshot.RecentBossEvents == null || snapshot.RecentBossEvents.Count == 0)
+            {
+                eventsText.Text = MainController.language == 0 ? "Chưa có sự kiện boss." : "No boss events yet.";
+                return;
+            }
+
+            StringBuilder builder = new StringBuilder();
+            int start = Math.Max(0, snapshot.RecentBossEvents.Count - 18);
+            for (int i = start; i < snapshot.RecentBossEvents.Count; i++)
+            {
+                BossHuntBossEventSnapshot item = snapshot.RecentBossEvents[i];
+                builder.Append(item.ObservedAtUtc == DateTime.MinValue ? "--:--:--.---" : item.ObservedAtUtc.ToLocalTime().ToString("HH:mm:ss.fff"));
+                builder.Append(" ");
+                builder.Append(item.EventType ?? "");
+                builder.Append(" | ");
+                builder.Append(item.BossName ?? "");
+                if (item.MapId >= 0)
+                {
+                    builder.Append(" | ");
+                    builder.Append(string.IsNullOrEmpty(item.MapName) ? ("#" + item.MapId) : item.MapName);
+                    if (item.Zone >= 0)
+                    {
+                        builder.Append(" K");
+                        builder.Append(item.Zone);
+                    }
+                }
+                if (!string.IsNullOrEmpty(item.Killer))
+                {
+                    builder.Append(" | killer=");
+                    builder.Append(item.Killer);
+                    if (item.KillerId >= 0)
+                    {
+                        builder.Append("(#");
+                        builder.Append(item.KillerId);
+                        builder.Append(")");
+                    }
+                }
+                if (!string.IsNullOrEmpty(item.DeathEvidence))
+                {
+                    builder.Append(" | ");
+                    builder.Append(FormatEvidence(item.DeathEvidence, MainController.language == 0));
+                }
+                if (item.SourceAccountId > 0)
+                {
+                    builder.Append(" | acc#");
+                    builder.Append(item.SourceAccountId);
+                }
+                if (i < snapshot.RecentBossEvents.Count - 1)
+                    builder.Append(Environment.NewLine);
+            }
+
+            eventsText.Text = builder.ToString();
+            eventsText.SelectionStart = eventsText.TextLength;
+            eventsText.ScrollToCaret();
         }
 
         private void UpdateTimeline(BossHuntSnapshot snapshot)
@@ -383,8 +516,11 @@ namespace DragonBoyManager
             string boss = string.IsNullOrEmpty(snapshot.BossName) ? "-" : snapshot.BossName;
             string coverage = " | Coverage " + snapshot.UniqueCoverageCount + "/" +
                               (snapshot.CoverageTotalZones > 0 ? snapshot.CoverageTotalZones.ToString() : "?");
+            string elapsed = snapshot.SessionStartedAtUtc == DateTime.MinValue
+                ? ""
+                : " | " + FormatDuration(DateTime.UtcNow.Subtract(snapshot.SessionStartedAtUtc));
             string suffix = snapshot.SessionId > 0
-                ? " | S#" + snapshot.SessionId + " G" + snapshot.AssignmentGeneration + coverage
+                ? " | S#" + snapshot.SessionId + " G" + snapshot.AssignmentGeneration + elapsed + coverage
                 : "";
 
             if (MainController.language == 0)
@@ -394,7 +530,9 @@ namespace DragonBoyManager
                     case BossHuntState.Scanning: return "Trạng thái: Đang dò " + boss + suffix;
                     case BossHuntState.Rallying: return "Trạng thái: Đã thấy boss - đang tập trung" + suffix;
                     case BossHuntState.Fighting: return "Trạng thái: Đang đánh " + boss + suffix;
-                    case BossHuntState.Stopped: return "Trạng thái: Đã dừng" + suffix;
+                    case BossHuntState.Stopped:
+                        return "Trạng thái: Đã dừng" + suffix +
+                               (string.IsNullOrEmpty(snapshot.StopReason) ? "" : " | Lý do: " + snapshot.StopReason);
                     default: return "Trạng thái: Chưa chạy";
                 }
             }
@@ -404,7 +542,9 @@ namespace DragonBoyManager
                 case BossHuntState.Scanning: return "Status: Scanning " + boss + suffix;
                 case BossHuntState.Rallying: return "Status: Boss found - rallying" + suffix;
                 case BossHuntState.Fighting: return "Status: Fighting " + boss + suffix;
-                case BossHuntState.Stopped: return "Status: Stopped" + suffix;
+                case BossHuntState.Stopped:
+                    return "Status: Stopped" + suffix +
+                           (string.IsNullOrEmpty(snapshot.StopReason) ? "" : " | Reason: " + snapshot.StopReason);
                 default: return "Status: Idle";
             }
         }
@@ -604,6 +744,117 @@ namespace DragonBoyManager
         private static string NormalizeBossName(string value)
         {
             return (value ?? "").Trim().Trim('[', ']', ':', '-', '.', ' ');
+        }
+
+        private static string GetHealthText(BossHuntSnapshot snapshot)
+        {
+            bool vi = MainController.language == 0;
+            string heartbeat = snapshot.WorstHeartbeatAgeSeconds < 0.0
+                ? "-"
+                : snapshot.WorstHeartbeatAgeSeconds.ToString("0.0") + "s";
+            return (vi ? "Worker khỏe: " : "Healthy: ") +
+                   snapshot.HealthyWorkerCount + "/" + snapshot.SessionWorkerCount +
+                   " | HB max: " + heartbeat;
+        }
+
+        private static string GetHeartbeatStatus(BossHuntWorkerSnapshot worker)
+        {
+            if (worker == null || worker.LastHeartbeatUtc == DateTime.MinValue)
+                return "";
+            double age = DateTime.UtcNow.Subtract(worker.LastHeartbeatUtc).TotalSeconds;
+            if (age < 0.0)
+                age = 0.0;
+            if (worker.Unresponsive || age > 8.0)
+                return "HB LOST " + age.ToString("0.0") + "s";
+            if (age >= 5.0)
+                return "HB CHẬM " + age.ToString("0.0") + "s";
+            return "HB " + age.ToString("0.0") + "s";
+        }
+
+        private static string FormatEvidence(string evidence, bool vi)
+        {
+            evidence = (evidence ?? "").Trim();
+            if (evidence.Length == 0)
+                return vi ? "Chưa rõ" : "Unknown";
+            return evidence
+                .Replace("ANNOUNCEMENT", vi ? "Thông báo" : "Announcement")
+                .Replace("COMBAT_-60", "Combat -60")
+                .Replace("FALLBACK", vi ? "Fallback HP/event" : "Fallback HP/event")
+                .Replace("UNKNOWN", vi ? "Chưa rõ" : "Unknown")
+                .Replace(",", " + ");
+        }
+
+        private static string GetUnparsedWarning(BossHuntSnapshot snapshot, bool vi)
+        {
+            if (snapshot == null || string.IsNullOrEmpty(snapshot.LastUnparsedDeath))
+                return "";
+            string age = snapshot.LastUnparsedDeathUtc == DateTime.MinValue ? "-" : FormatAge(snapshot.LastUnparsedDeathUtc);
+            return (vi ? "⚠ Death chưa parse (" : "⚠ Unparsed death (") + age + "): " +
+                   Truncate(snapshot.LastUnparsedDeath, 125);
+        }
+
+        private void UpdateSounds(BossHuntSnapshot snapshot)
+        {
+            if (snapshot == null)
+                return;
+
+            if (snapshot.SessionId != lastSoundSessionId)
+            {
+                lastSoundSessionId = snapshot.SessionId;
+                lastSoundState = BossHuntState.Idle;
+                lastDeathSoundTicks = 0L;
+            }
+
+            if (checkSound.Checked)
+            {
+                if (snapshot.State == BossHuntState.Rallying && lastSoundState == BossHuntState.Scanning)
+                    SystemSounds.Asterisk.Play();
+
+                BossHuntBossSnapshot boss = snapshot.TargetBoss;
+                long deathTicks = boss == null || boss.DiedAtUtc == DateTime.MinValue ? 0L : boss.DiedAtUtc.Ticks;
+                if (boss != null && boss.Presence == BossPresenceState.Dead && deathTicks > 0L && deathTicks != lastDeathSoundTicks)
+                {
+                    SystemSounds.Exclamation.Play();
+                    lastDeathSoundTicks = deathTicks;
+                }
+            }
+
+            lastSoundState = snapshot.State;
+        }
+
+        private void grid_CellDoubleClick(object sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex < 0 || e.RowIndex >= grid.Rows.Count || TabData._instance == null)
+                return;
+
+            object value = grid.Rows[e.RowIndex].Cells[0].Value;
+            int accountId;
+            if (value == null || !int.TryParse(value.ToString(), out accountId))
+                return;
+
+            List<Account> accounts = TabData._instance.GetAccounts();
+            for (int i = 0; i < accounts.Count; i++)
+            {
+                Account account = accounts[i];
+                if (account == null || account.ID != accountId)
+                    continue;
+
+                IntPtr hWnd;
+                if (MainController.ExistedWindow(account, out hWnd))
+                {
+                    MainController.ShowWindowAsync(hWnd, 9);
+                    MainController.SetForegroundWindow(hWnd);
+                }
+                else
+                {
+                    MessageBox.Show(
+                        MainController.language == 0 ? "Không tìm thấy cửa sổ game của tài khoản này." : "Game window was not found for this account.",
+                        MainController.language == 0 ? "Săn Boss" : "Boss Hunt",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                }
+                return;
+            }
         }
 
         private void RefreshConnectedCount()
