@@ -74,6 +74,7 @@ namespace DragonBoyManager
         public int KillerId = -1;
         public string RawSpawn = "";
         public string RawDeath = "";
+        public string DeathEvidence = "";
         public int LastSourceAccountId = -1;
         public List<int> SourceAccounts = new List<int>();
     }
@@ -90,6 +91,7 @@ namespace DragonBoyManager
         public int KillerId = -1;
         public int SourceAccountId = -1;
         public string RawMessage = "";
+        public string DeathEvidence = "";
     }
 
     public sealed class BossHuntTimelineEntry
@@ -115,7 +117,12 @@ namespace DragonBoyManager
         public string FinderUsername = "";
         public int UniqueCoverageCount;
         public int CoverageTotalZones;
+        public int HealthyWorkerCount;
+        public int SessionWorkerCount;
+        public double WorstHeartbeatAgeSeconds = -1.0;
         public string StopReason = "";
+        public string LastUnparsedDeath = "";
+        public DateTime LastUnparsedDeathUtc = DateTime.MinValue;
         public BossHuntBossSnapshot TargetBoss;
         public List<BossHuntWorkerSnapshot> Workers = new List<BossHuntWorkerSnapshot>();
         public List<BossHuntBossEventSnapshot> RecentBossEvents = new List<BossHuntBossEventSnapshot>();
@@ -195,6 +202,7 @@ namespace DragonBoyManager
         private readonly object _sync = new object();
         private readonly Dictionary<int, BossHuntWorkerSnapshot> _workers = new Dictionary<int, BossHuntWorkerSnapshot>();
         private readonly List<Account> _sessionAccounts = new List<Account>();
+        private readonly List<int> _requestedAccountIds = new List<int>();
         private readonly Dictionary<string, BossHuntBossSnapshot> _bossRecords = new Dictionary<string, BossHuntBossSnapshot>(StringComparer.OrdinalIgnoreCase);
         private readonly List<BossHuntBossEventSnapshot> _bossEvents = new List<BossHuntBossEventSnapshot>();
         private readonly Dictionary<string, BossHuntZoneLedgerEntry> _zoneLedger = new Dictionary<string, BossHuntZoneLedgerEntry>();
@@ -216,6 +224,8 @@ namespace DragonBoyManager
         private int _foundZone = -1;
         private int _finderAccountId = -1;
         private string _stopReason = "";
+        private string _lastUnparsedDeath = "";
+        private DateTime _lastUnparsedDeathUtc = DateTime.MinValue;
 
         public static BossHuntCoordinator Instance
         {
@@ -250,6 +260,16 @@ namespace DragonBoyManager
 
             List<BossHuntPayload> syncPayloads = new List<BossHuntPayload>();
             List<BossHuntPayload> invalidatePayloads = new List<BossHuntPayload>();
+            List<Account> reassign = null;
+            int reassignSessionId = 0;
+            int reassignGeneration = 0;
+            string reassignBoss = "";
+            int reassignStartZone = 0;
+            BossHuntBossSnapshot reassignKnownBoss = null;
+            BossHuntPayload rejoinStart = null;
+            BossHuntPayload rejoinRally = null;
+            bool shouldPublish = false;
+
             lock (_sync)
             {
                 DateTime now = DateTime.UtcNow;
@@ -269,11 +289,70 @@ namespace DragonBoyManager
                         {
                             bossName = boss.BossName,
                             killer = boss.Killer,
+                            killerId = boss.KillerId,
                             rawMessage = boss.RawDeath,
                             observedAtTicks = boss.DiedAtUtc.Ticks,
                             eventName = "DEATH_SYNC"
                         });
                     }
+                }
+
+                if (IsRunningState(_state) && _requestedAccountIds.Contains(account.ID))
+                {
+                    AddSessionAccountLocked(account);
+
+                    if (_state == BossHuntState.Scanning)
+                    {
+                        reassign = GetHealthySessionAccountsLocked();
+                        if (!ContainsAccountId(reassign, account.ID))
+                            reassign.Add(account);
+                        reassign.Sort(delegate(Account a, Account b) { return a.ID.CompareTo(b.ID); });
+
+                        _assignmentGeneration++;
+                        reassignSessionId = _sessionId;
+                        reassignGeneration = _assignmentGeneration;
+                        reassignBoss = _bossName;
+                        reassignStartZone = _startZone;
+                        PrepareAssignmentsLocked(reassign, true);
+                        reassignKnownBoss = CloneBoss(_sessionTargetBoss ?? FindLatestBossLocked(_bossName, true));
+                        AddTimelineLocked("WORKER_REJOIN", account.ID,
+                            "phase=Scanning;generation=" + _assignmentGeneration + ";workers=" + reassign.Count);
+                    }
+                    else
+                    {
+                        BossHuntWorkerSnapshot worker = EnsureWorkerLocked(account);
+                        NormalizeSessionWorkerIndexesLocked();
+                        worker.Ready = false;
+                        worker.Failed = false;
+                        worker.Unresponsive = false;
+                        worker.AssignmentGeneration = _assignmentGeneration;
+                        worker.LastHeartbeatUtc = now;
+                        worker.LastEventUtc = now;
+                        worker.LastAction = "REJOIN";
+                        worker.Status = MainController.language == 0 ? "Kết nối lại - đang tới boss" : "Rejoined - rallying";
+
+                        BossHuntBossSnapshot target = _sessionTargetBoss ?? FindLatestBossLocked(_bossName, true);
+                        rejoinStart = new BossHuntPayload
+                        {
+                            sessionId = _sessionId,
+                            assignmentGeneration = _assignmentGeneration,
+                            bossName = _bossName,
+                            targetBossName = target == null ? _bossName : target.BossName,
+                            startZone = _startZone,
+                            workerIndex = worker.WorkerIndex,
+                            workerCount = Math.Max(1, worker.WorkerCount),
+                            accountId = account.ID,
+                            mapId = target != null && target.MapId >= 0 ? target.MapId : _foundMapId,
+                            mapName = target != null && target.MapId >= 0 ? target.MapName : _foundMapName,
+                            zone = target != null && target.Zone >= 0 ? target.Zone : _foundZone,
+                            observedAtTicks = target == null || target.SpawnedAtUtc == DateTime.MinValue ? 0L : target.SpawnedAtUtc.Ticks
+                        };
+                        rejoinRally = CreatePayload();
+                        rejoinRally.targetBossName = rejoinStart.targetBossName;
+                        AddTimelineLocked("WORKER_REJOIN", account.ID,
+                            "phase=" + _state + ";map=" + rejoinRally.mapId + ";zone=" + rejoinRally.zone);
+                    }
+                    shouldPublish = true;
                 }
             }
 
@@ -281,9 +360,25 @@ namespace DragonBoyManager
                 Send(account, CmdBossSync, syncPayloads[i]);
             for (int i = 0; i < invalidatePayloads.Count; i++)
                 Send(account, CmdBossInvalidate, invalidatePayloads[i]);
+
+            if (reassign != null && reassign.Count > 0)
+                SendScanAssignments(reassign, reassignSessionId, reassignGeneration, reassignBoss, reassignStartZone, reassignKnownBoss);
+            else if (rejoinStart != null && rejoinRally != null)
+            {
+                Send(account, CmdStartScan, rejoinStart);
+                Send(account, CmdRally, rejoinRally);
+            }
+
+            if (shouldPublish)
+                Publish();
         }
 
         public bool Start(string bossName, int startZone, out string error)
+        {
+            return Start(bossName, startZone, null, out error);
+        }
+
+        public bool Start(string bossName, int startZone, List<Account> requestedAccounts, out string error)
         {
             error = "";
             bossName = (bossName ?? "").Trim();
@@ -293,10 +388,31 @@ namespace DragonBoyManager
                 return false;
             }
 
-            List<Account> accounts = GetConnectedAccounts();
+            List<Account> requested = new List<Account>();
+            if (requestedAccounts == null)
+                requested.AddRange(GetConnectedAccounts());
+            else
+            {
+                for (int i = 0; i < requestedAccounts.Count; i++)
+                {
+                    Account item = requestedAccounts[i];
+                    if (item != null && !ContainsAccountId(requested, item.ID))
+                        requested.Add(item);
+                }
+            }
+
+            List<Account> accounts = new List<Account>();
+            for (int i = 0; i < requested.Count; i++)
+            {
+                if (IsConnected(requested[i]))
+                    accounts.Add(requested[i]);
+            }
+
             if (accounts.Count == 0)
             {
-                error = MainController.language == 0 ? "Không có tài khoản nào đang kết nối." : "No connected account.";
+                error = MainController.language == 0
+                    ? "Không có tài khoản được chọn nào đang kết nối."
+                    : "No requested account is connected.";
                 return false;
             }
 
@@ -331,11 +447,20 @@ namespace DragonBoyManager
                 _foundZone = -1;
                 _finderAccountId = -1;
                 _stopReason = "";
+                _lastUnparsedDeath = "";
+                _lastUnparsedDeathUtc = DateTime.MinValue;
                 _workers.Clear();
                 _sessionAccounts.Clear();
+                _requestedAccountIds.Clear();
                 _zoneLedger.Clear();
                 _activeZoneByAccount.Clear();
                 _timeline.Clear();
+
+                for (int i = 0; i < requested.Count; i++)
+                {
+                    if (!_requestedAccountIds.Contains(requested[i].ID))
+                        _requestedAccountIds.Add(requested[i].ID);
+                }
 
                 DateTime now = DateTime.UtcNow;
                 for (int i = 0; i < accounts.Count; i++)
@@ -355,7 +480,9 @@ namespace DragonBoyManager
                     };
                 }
                 _sessionAccounts.AddRange(accounts);
-                AddTimelineLocked("SESSION_START", -1, "boss=" + bossName + ";workers=" + accounts.Count + ";generation=" + generation);
+                AddTimelineLocked("SESSION_START", -1,
+                    "boss=" + bossName + ";workers=" + accounts.Count + ";requested=" + _requestedAccountIds.Count +
+                    ";generation=" + generation);
                 knownBoss = CloneBoss(FindLatestBossLocked(bossName, true));
                 _sessionTargetBoss = CloneBoss(knownBoss);
                 if (_sessionTargetBoss != null)
@@ -363,7 +490,8 @@ namespace DragonBoyManager
             }
 
             BossHuntDiagnostics.Log("MANAGER", "SESSION_START", sessionId, -1, bossName, BossHuntState.Scanning.ToString(),
-                "generation=" + generation + ";workers=" + accounts.Count + ";startZone=" + Math.Max(0, startZone));
+                "generation=" + generation + ";workers=" + accounts.Count + ";requested=" + requested.Count +
+                ";startZone=" + Math.Max(0, startZone));
             SendScanAssignments(accounts, sessionId, generation, bossName, Math.Max(0, startZone), knownBoss);
             Publish();
             return true;
@@ -647,7 +775,12 @@ namespace DragonBoyManager
                     FinderUsername = GetWorkerUsernameLocked(_finderAccountId),
                     UniqueCoverageCount = GetUniqueCoverageCountLocked(),
                     CoverageTotalZones = GetCoverageTotalZonesLocked(),
+                    HealthyWorkerCount = GetHealthySessionAccountsLocked().Count,
+                    SessionWorkerCount = _requestedAccountIds.Count > 0 ? _requestedAccountIds.Count : _sessionAccounts.Count,
+                    WorstHeartbeatAgeSeconds = GetWorstHeartbeatAgeSecondsLocked(),
                     StopReason = _stopReason,
+                    LastUnparsedDeath = _lastUnparsedDeath,
+                    LastUnparsedDeathUtc = _lastUnparsedDeathUtc,
                     TargetBoss = CloneBoss(_sessionTargetBoss ?? FindLatestBossLocked(_bossName, false))
                 };
 
@@ -720,6 +853,7 @@ namespace DragonBoyManager
                     record.KillerId = -1;
                     record.RawSpawn = payload.rawMessage ?? "";
                     record.RawDeath = "";
+                    record.DeathEvidence = "";
                     record.LastSourceAccountId = account.ID;
                     shouldBroadcast = DateTime.UtcNow.Subtract(record.SpawnedAtUtc).TotalMinutes <= BossLocationFreshMinutes;
 
@@ -1047,6 +1181,17 @@ namespace DragonBoyManager
                     string raw = payload.detail ?? "";
                     if (!string.IsNullOrEmpty(raw))
                         AddTimelineLocked("ANNOUNCEMENT_RAW", account.ID, raw);
+                    changed = true;
+                }
+                else if (eventName == "DEATH_UNPARSED")
+                {
+                    _lastUnparsedDeath = payload.detail ?? "";
+                    _lastUnparsedDeathUtc = DateTime.UtcNow;
+                    worker.Status = MainController.language == 0
+                        ? "Cảnh báo: có thông báo death chưa parse được"
+                        : "Warning: unparsed death announcement";
+                    AddTimelineLocked("DEATH_UNPARSED", account.ID, _lastUnparsedDeath);
+                    BossHuntDiagnostics.Log("MANAGER", "DEATH_UNPARSED", _sessionId, account.ID, _bossName, _state.ToString(), _lastUnparsedDeath);
                     changed = true;
                 }
 
@@ -1422,6 +1567,70 @@ namespace DragonBoyManager
             }
         }
 
+        private static bool ContainsAccountId(List<Account> accounts, int accountId)
+        {
+            if (accounts == null)
+                return false;
+            for (int i = 0; i < accounts.Count; i++)
+            {
+                if (accounts[i] != null && accounts[i].ID == accountId)
+                    return true;
+            }
+            return false;
+        }
+
+        private void AddSessionAccountLocked(Account account)
+        {
+            if (account == null || ContainsAccountId(_sessionAccounts, account.ID))
+                return;
+            _sessionAccounts.Add(account);
+            _sessionAccounts.Sort(delegate(Account a, Account b) { return a.ID.CompareTo(b.ID); });
+        }
+
+        private BossHuntWorkerSnapshot EnsureWorkerLocked(Account account)
+        {
+            BossHuntWorkerSnapshot worker;
+            if (!_workers.TryGetValue(account.ID, out worker))
+            {
+                worker = new BossHuntWorkerSnapshot
+                {
+                    AccountId = account.ID,
+                    Username = account.Username ?? "",
+                    ScanStartedAtUtc = DateTime.UtcNow
+                };
+                _workers[account.ID] = worker;
+            }
+            return worker;
+        }
+
+        private void NormalizeSessionWorkerIndexesLocked()
+        {
+            _sessionAccounts.Sort(delegate(Account a, Account b) { return a.ID.CompareTo(b.ID); });
+            for (int i = 0; i < _sessionAccounts.Count; i++)
+            {
+                BossHuntWorkerSnapshot worker = EnsureWorkerLocked(_sessionAccounts[i]);
+                worker.WorkerIndex = i;
+                worker.WorkerCount = _sessionAccounts.Count;
+            }
+        }
+
+        private double GetWorstHeartbeatAgeSecondsLocked()
+        {
+            double worst = -1.0;
+            DateTime now = DateTime.UtcNow;
+            foreach (BossHuntWorkerSnapshot worker in _workers.Values)
+            {
+                if (worker.LastHeartbeatUtc == DateTime.MinValue)
+                    continue;
+                double age = now.Subtract(worker.LastHeartbeatUtc).TotalSeconds;
+                if (age < 0.0)
+                    age = 0.0;
+                if (age > worst)
+                    worst = age;
+            }
+            return worst;
+        }
+
         private List<Account> GetHealthySessionAccountsLocked()
         {
             List<Account> result = new List<Account>();
@@ -1578,7 +1787,8 @@ namespace DragonBoyManager
                 Killer = killer ?? "",
                 KillerId = boss == null ? -1 : boss.KillerId,
                 SourceAccountId = sourceAccountId,
-                RawMessage = raw ?? ""
+                RawMessage = raw ?? "",
+                DeathEvidence = boss == null ? "" : boss.DeathEvidence
             });
             if (_bossEvents.Count > 200)
                 _bossEvents.RemoveAt(0);
@@ -1776,6 +1986,7 @@ namespace DragonBoyManager
                 KillerId = source.KillerId,
                 RawSpawn = source.RawSpawn,
                 RawDeath = source.RawDeath,
+                DeathEvidence = source.DeathEvidence,
                 LastSourceAccountId = source.LastSourceAccountId
             };
             clone.SourceAccounts.AddRange(source.SourceAccounts);
@@ -1795,7 +2006,8 @@ namespace DragonBoyManager
                 Killer = source.Killer,
                 KillerId = source.KillerId,
                 SourceAccountId = source.SourceAccountId,
-                RawMessage = source.RawMessage
+                RawMessage = source.RawMessage,
+                DeathEvidence = source.DeathEvidence
             };
         }
 
