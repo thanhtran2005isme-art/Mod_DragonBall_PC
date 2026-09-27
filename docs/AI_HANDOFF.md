@@ -313,6 +313,7 @@ Nếu nội dung cũ dài ra, chuyển nó sang `docs/history/YYYY-MM.md` thay v
   - chỉ chuyển STALE + STOP, không tự ghi DEAD/killer.
 - Snapshot/panel thêm `MissingZones` và `MinimumHealthyScanCycle`.
 - Game chỉ forward `DEATH_UNPARSED` nếu death-like announcement có nhắc đúng active target; boss khác chỉ log ignored.
-- Code commits: `a18ac89`, `fe834a7`, `091be43`.
+- Code commits: `a18ac89`, `fe834a7`, `091be43`, `f2a63d5`, `ca5018d`.
+- Bổ sung targeted parser cho format `X diệt được <Boss> mọi người đều ngưỡng mộ`; chỉ nhận nếu victim khớp active target.
 - Cần rebuild full solution + runtime retest case 50/51 để xác nhận.
 
