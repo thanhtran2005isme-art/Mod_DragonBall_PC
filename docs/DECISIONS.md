@@ -192,3 +192,26 @@ Không được quét map hiện tại khi chưa biết vị trí boss. Không h
 - Worker dư chuyển `Standby`, không đổi khu và không scan trùng.
 - Standby không phải FAILED: vẫn giữ session, vẫn nhận RALLY và tham gia đánh khi có finder.
 - Announced zone chỉ được ưu tiên bởi worker mà zone đó thuộc partition của nó.
+
+
+## D-017 — Scan zone dùng entity grace động, không dùng dwell 900 ms cố định
+
+**Trạng thái:** active — 2026-09-27
+
+- `FindTargetBoss()` vẫn chạy trước logic dwell ở mỗi tick.
+- Min dwell mỗi zone: 2000 ms.
+- Entity stable window: 800 ms.
+- Zone thường max dwell: 5000 ms.
+- Announced zone max dwell: 7000 ms.
+- Entity snapshot hiện dựa vào count của `gclass88_5` và `GClass158.list_3`; thay đổi count reset stable window.
+- Max dwell đảm bảo scanner không đứng vô hạn ở zone rỗng/lag.
+
+## D-018 — Boss Hunt có structured protocol log xuyên Game/Manager
+
+**Trạng thái:** active — 2026-09-27
+
+- File: `Data/Errors/BossHuntProtocol.log`.
+- Format trường: `source/event/session/account/boss/state/mapId/map/zone/detail` ở Game; Manager dùng cùng prefix và detail tương ứng.
+- Chỉ log transition/action/event; không log mỗi frame.
+- Các nhóm bắt buộc: socket connect/handshake/disconnect, session/assignment, Xmap, zone-list, zone request/arrival, entity change, FOUND, RALLY, READY, FAILED, DEAD, STOP.
+- Runtime bug Boss Hunt nên kèm file log này trước khi thay thuật toán.

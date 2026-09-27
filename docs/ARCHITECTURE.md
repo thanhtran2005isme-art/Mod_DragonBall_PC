@@ -95,8 +95,8 @@ Game client / BossZoneScanner
   -> nếu workerIndex >= số khu khả dụng: Standby, không scan trùng
   -> nếu server báo zone: chỉ worker sở hữu zone đó theo partition ưu tiên zone đó
   -> nếu chưa thấy target: worker i quét fallback start+i, start+i+N, start+i+2N, ...
-  -> mỗi khu chờ entity load
-  -> resolve đúng boss từ GClass158.list_3
+  -> mỗi khu dùng entity grace động: min 2s, stable window 0.8s, max 5s; announced zone max 7s
+  -> target vẫn được resolve mỗi tick từ GClass158.list_3, FOUND ngay khi xuất hiện
        |
        +-- chưa thấy -> khu được phân tiếp theo
        |
@@ -288,3 +288,25 @@ Khi bắt đầu scan trên map mới:
 4. quá 10 giây chưa có response mới thì worker báo `ZONE_LIST_TIMEOUT`.
 
 Sau khi biết số khu thật, partition worker dùng số khu khả dụng. Worker có `workerIndex >= availableZoneCount` chuyển sang `Standby`; không modulo về khu đầu. Standby vẫn active để nhận `RALLY` khi worker khác tìm thấy boss.
+
+
+## 11. Boss Hunt runtime diagnostics và entity grace
+
+Pha scan không còn dùng dwell cố định 900 ms.
+
+Khi worker vào đúng zone:
+
+- snapshot số entity trong `GClass144.gclass88_5` và số boss trong `GClass158.list_3`;
+- target vẫn được tìm ở đầu mỗi tick, nên nếu boss xuất hiện thì `FOUND` ngay;
+- không rời khu trước 2 giây;
+- sau mốc 2 giây, nếu entity count > 0 và snapshot không đổi trong ít nhất 800 ms thì khu được xem là đủ ổn định để chuyển tiếp;
+- nếu entity vẫn rỗng/dao động, chờ tối đa 5 giây;
+- zone được announcement chỉ đích danh được chờ tối đa 7 giây.
+
+Structured diagnostic:
+
+```text
+Data/Errors/BossHuntProtocol.log
+```
+
+Mỗi dòng dùng trường `source/event/session/account/boss/state/map/zone/detail`. Game ghi các event route, zone-list, zone request/arrival, entity change, target, rally và terminal event. Socket Game ghi connect/handshake/reconnect. Manager ghi session, assignment, client event, rally và disconnect. Chỉ event/action mới được ghi; không log mỗi frame.

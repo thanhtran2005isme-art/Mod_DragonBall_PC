@@ -111,7 +111,9 @@ f02197f Thêm săn boss đa tài khoản trên Manager
 - mỗi TCP connection mới từ Game luôn handshake lại `accountId`; client tự retry kết nối mỗi giây khi Manager chưa sẵn sàng; callback socket cũ không được phép đánh dấu socket mới là disconnected;
 - sau khi tới map scan, scanner **không dùng lại `int_63` cũ**: ghi baseline reference, request zone-list mới và chỉ lập kế hoạch khu khi server thay bằng mảng mới trên đúng map hiện tại; quá 10 giây không có response mới -> `ZONE_LIST_TIMEOUT`;
 - khi số worker lớn hơn số khu khả dụng, worker dư chuyển sang `Standby` thay vì modulo quay lại khu đã có worker khác; worker Standby vẫn giữ session và vẫn nhận `RALLY` khi có finder;
-- announced zone chỉ được ưu tiên bởi worker sở hữu zone đó theo partition, tránh mọi account cùng scan một khu.
+- announced zone chỉ được ưu tiên bởi worker sở hữu zone đó theo partition, tránh mọi account cùng scan một khu;
+- dwell mỗi khu không còn cố định 900 ms: target vẫn được check mỗi tick; nếu chưa thấy thì chờ tối thiểu 2 giây, chỉ rời sớm sau min khi entity snapshot đã ổn định 800 ms; khu thường có trần 5 giây, khu được announcement chỉ đích danh có trần 7 giây;
+- thêm structured log `Data/Errors/BossHuntProtocol.log` ở Game + Manager cho các event socket/session/route/zone/entity/FOUND/RALLY/READY/FAILED/DEAD; không log mỗi frame.
 
 File mới chính:
 
@@ -185,6 +187,7 @@ Log ghi sequence ATTACK/probe, HP response, MISS, MOB DIE, drop owner, SM/TN, st
 ## 5. Commit gần đây đáng chú ý
 
 ```text
+3a94b2e Thêm entity grace động và log protocol săn boss   [feature branch]
 5546cde Chờ zone-list mới và đưa worker dư về dự phòng   [feature branch]
 2250625 Sửa cắt tiền tố thông báo VIP cho cache boss   [feature branch]
 8d108a9 Đóng khung TCP và handshake lại khi reconnect   [feature branch]
@@ -206,7 +209,7 @@ bfdc638 Bắt KOL trực tiếp từ packet 22 thực tế
 
 ## 6. Rủi ro/lỗi đã biết
 
-- Boss Hunt đã harden P0 và P1: route/cache/TCP/reconnect + fresh zone-list + Standby worker dư. Commit `5546cde` đã qua bước MSBuild full solution; vẫn cần runtime test thật `announcement -> route -> fresh zone-list -> partition -> FOUND -> rally -> READY`, đặc biệt map có ít khu hơn số account.
+- Boss Hunt đã harden P0/P1/P2: route/cache/TCP/reconnect + fresh zone-list + Standby worker dư + entity grace động + protocol log. Commit `3a94b2e` đã qua MSBuild full solution; vẫn cần runtime test thật và dùng `Data/Errors/BossHuntProtocol.log` làm bằng chứng khi có lỗi.
 - Full solution local từng fail ở PostBuild copy của một số project dù source compile được; gameplay thường nên build riêng.
 - DLL `Assembly-CSharp.dll` có thể bị game/manager lock.
 - `GameAssembly` là .NET Framework 3.5, dễ lỗi nếu dùng API mới.

@@ -5,6 +5,11 @@ Không dùng file này để giải thích kiến trúc dài; chi tiết nằm t
 
 ## 2026-09-27
 
+- Hardening P2 Boss Hunt: thay dwell 900 ms bằng entity grace động (min 2s, stable 0.8s, max 5s; announced zone max 7s).
+- Thêm structured `Data/Errors/BossHuntProtocol.log` xuyên Game/Manager cho socket, route, zone, entity và state transition.
+- Commit `3a94b2e` đã qua bước MSBuild full solution.
+
+
 - Hardening P1 Boss Hunt: chờ zone-list mới theo đúng map, timeout nếu không có fresh response, không dùng dữ liệu `int_63` stale.
 - Worker dư so với số khu chuyển `Standby` thay vì modulo scan trùng; Standby vẫn nhận RALLY.
 - Manager hiển thị trạng thái tải zone-list và worker dự phòng.
