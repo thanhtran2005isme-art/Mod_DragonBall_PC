@@ -5,6 +5,8 @@ Không dùng file này để giải thích kiến trúc dài; chi tiết nằm t
 
 ## 2026-09-27
 
+- Chặn Manager văng khi mở game: harden `OpenAccount`, socket accept/read/disconnect callbacks, bỏ `Application.Exit()` khỏi lỗi listener runtime và thêm `ManagerRuntime.log`. Commit `2694b4c` full workflow SUCCESS.
+
 - Medium Boss Hunt hardening: central zone partition do Manager quyết định qua `105 ZONE_ASSIGNMENT`, loại bỏ client-side partition cuối cùng.
 - Thêm log rotation 5 MB x 3 archive, cleanup 14 ngày và viewer log trực tiếp trong Manager.
 - Chuyển boss dropdown sang runtime catalog `Data/BossHuntBosses.txt`; tự ghi nhớ boss nhập tay/announcement.

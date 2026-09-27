@@ -234,6 +234,8 @@ bfdc638 Bắt KOL trực tiếp từ packet 22 thực tế
 
 - Boss Hunt đã harden P0/P1/P2 + critical + nhóm lỗi mức cao: lifecycle/timestamps/raw/source/status stale, assigned/scanned/coverage/cycle/dwell/entity/zone-fail/rally/HP/finder/timeline và per-process absolute log. `fe5379d`, `5f03c50`, `836f4fa` đều full workflow SUCCESS. Vẫn phải runtime test 1→2→3 account trước khi bỏ Draft/merge.
 - Nhóm lỗi mức trung bình đã xử lý: Manager central zone partition (`105 ZONE_ASSIGNMENT`) lấy min `maxZone` chung của các worker đã báo capacity; log rotation 5 MB x 3 archive + cleanup 14 ngày; viewer log trực tiếp trong Manager; boss catalog động ở `Output/Data/BossHuntBosses.txt` và tự học boss từ announcement/target nhập tay; dashboard có throughput `khu/phút`, tổng fail và timeout. Heartbeat và duplicate warning đã được xử lý từ vòng critical/high trước đó. `26db73a` và `dd7a97d` full workflow SUCCESS.
+- Crash hardening Manager: `OpenAccount()` không để exception thoát ra async UI handler; `SocketServer.AcceptCallback()` có outer guard; listener lỗi thoáng qua không còn gọi `Application.Exit()`; account được đưa vào `waitingAccounts` trước `process.Start()`; thêm `Data/Errors/ManagerRuntime.log` với nguồn `OPEN_ACCOUNT_*`, `SOCKET_*`, `UI_THREAD_EXCEPTION`, `APPDOMAIN_UNHANDLED`. Commit `2694b4c` full workflow SUCCESS.
+
 
 - Full solution local từng fail ở PostBuild copy của một số project dù source compile được; gameplay thường nên build riêng.
 - DLL `Assembly-CSharp.dll` có thể bị game/manager lock.
