@@ -394,3 +394,15 @@ Dữ liệu này đến từ `117 TELEMETRY` + `118 HEARTBEAT`, không suy ngư�
 - Với 17 khu / 3 account -> 6 + 6 + 5.
 - Nếu account nhiều hơn khu, account dư nhận assignment rỗng và Standby.
 - Không có overlap trong cùng assignment generation.
+
+## D-036 — Session săn boss khóa vào một spawn instance
+
+**Trạng thái:** active — 2026-09-27
+
+- Selector người dùng như `Super Broly` chỉ dùng để chọn family.
+- Khi Start có spawn hợp lệ, session khóa concrete boss name + map + zone + spawn observation.
+- Nếu chưa có spawn lúc Start, spawn matching đầu tiên bind target.
+- Spawn mới cùng family trong khi session đang chạy chỉ được cache/history; không đổi route, không đổi entity target.
+- Game bỏ qua manager sync khác locked instance cho mục đích routing.
+- Local entity/death matching dùng concrete locked target, tránh sibling spawn chết làm dừng nhầm session.
+- Sau khi target hiện tại DEAD/STOP, phiên tiếp theo mới được chọn spawn mới nhất còn sống.
