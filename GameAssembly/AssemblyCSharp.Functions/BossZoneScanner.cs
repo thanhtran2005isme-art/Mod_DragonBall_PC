@@ -392,6 +392,25 @@ namespace AssemblyCSharp.Functions
             _targetMapName = payload.mapName ?? "";
             _targetZone = payload.zone;
             _bossName = (payload.bossName ?? _bossName).Trim();
+
+            string concreteTarget = string.IsNullOrEmpty(payload.targetBossName)
+                ? _bossName
+                : payload.targetBossName.Trim();
+            LockSessionTarget(
+                concreteTarget,
+                payload.mapId,
+                payload.zone,
+                payload.observedAtTicks);
+            if (payload.mapId >= 0)
+            {
+                GClass156.ApplyBossLocationSync(
+                    concreteTarget,
+                    payload.mapName,
+                    payload.mapId,
+                    payload.zone,
+                    payload.observedAtTicks);
+            }
+
             _state = ScannerState.Rallying;
             _readyReported = false;
             _rallyStartedAt = GClass203.smethod_18();
@@ -902,6 +921,20 @@ namespace AssemblyCSharp.Functions
             _lastFocusAt = now;
         }
 
+        private static string ResolveBossEntityName(GClass78 boss)
+        {
+            if (boss == null)
+                return "";
+            try
+            {
+                return GClass158.smethod_0().method_0(boss, false) ?? "";
+            }
+            catch
+            {
+                return boss.string_3 ?? "";
+            }
+        }
+
         private GClass78 FindTargetBoss()
         {
             for (int i = 0; i < GClass158.list_3.Count; i++)
@@ -910,15 +943,7 @@ namespace AssemblyCSharp.Functions
                 if (boss == null || boss.bool_53 || boss.bool_54 || boss.int_13 >= 0)
                     continue;
 
-                string actualName;
-                try
-                {
-                    actualName = GClass158.smethod_0().method_0(boss, false);
-                }
-                catch
-                {
-                    actualName = boss.string_3 ?? "";
-                }
+                string actualName = ResolveBossEntityName(boss);
 
                 string targetName = _sessionTargetLocked && !string.IsNullOrEmpty(_sessionTargetBossName)
                     ? _sessionTargetBossName
@@ -1719,7 +1744,27 @@ namespace AssemblyCSharp.Functions
                 GClass78 currentTarget = FindTargetBoss();
                 payload.targetHp = currentTarget == null ? -1 : currentTarget.int_25;
                 payload.detail = detail ?? "";
-                Trace("TX_EVENT", "cmd=" + cmd + ";detail=" + (detail ?? ""));
+
+                if (cmd == CmdFound && currentTarget != null)
+                {
+                    string concreteName = _sessionTargetLocked && !string.IsNullOrEmpty(_sessionTargetBossName)
+                        ? _sessionTargetBossName
+                        : ResolveBossEntityName(currentTarget);
+                    payload.targetBossName = concreteName;
+                    payload.observedAtTicks = _sessionTargetObservedAtTicks > 0L
+                        ? _sessionTargetObservedAtTicks
+                        : DateTime.UtcNow.Ticks;
+                    Trace("TX_FOUND",
+                        "target=" + concreteName +
+                        ";map=" + payload.mapId +
+                        ";zone=" + payload.zone +
+                        ";hp=" + payload.targetHp);
+                }
+                else
+                {
+                    Trace("TX_EVENT", "cmd=" + cmd + ";detail=" + (detail ?? ""));
+                }
+
                 GClass150.smethod_0().method_2(new vMessage
                 {
                     cmd = cmd,
