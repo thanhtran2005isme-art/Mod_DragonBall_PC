@@ -847,6 +847,17 @@ namespace AssemblyCSharp.Functions
             BossHuntDiagnostics.Log("GAME_ANNOUNCEMENT", "RAW", _active ? _sessionId : 0,
                 _active ? _bossName : "", _state.ToString(), message);
 
+            if (_active)
+            {
+                bool relevantRaw =
+                    message.StartsWith("BOSS ", StringComparison.OrdinalIgnoreCase) ||
+                    GClass156.LooksLikeBossDeathAnnouncement(message) ||
+                    (!string.IsNullOrEmpty(_bossName) &&
+                     message.IndexOf(_bossName, StringComparison.OrdinalIgnoreCase) >= 0);
+                if (relevantRaw)
+                    SendTelemetry("ANNOUNCEMENT_RAW", message);
+            }
+
             string deadBoss;
             string killer;
             if (GClass156.TryParseBossDeathAnnouncement(message, out deadBoss, out killer))
