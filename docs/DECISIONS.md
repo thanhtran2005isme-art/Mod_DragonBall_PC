@@ -443,3 +443,17 @@ Dữ liệu này đến từ `117 TELEMETRY` + `118 HEARTBEAT`, không suy ngư�
 - Parser hỗ trợ cả dạng victim-first (`BOSS X ... bởi Y`) và killer-first có marker BOSS (`Y ... BOSS X`).
 - Không suy killer từ HP/entity disappearance.
 
+## D-040 — Boss Hunt dùng requested worker scope và death evidence hiển thị rõ
+
+**Trạng thái:** active — 2026-09-27
+
+- Death của phiên hiện tại được phép kết thúc session ngay cả khi chưa kịp `TARGET_LOCK`, nhưng chỉ khi `sessionId + assignmentGeneration` đúng phiên đang chạy và tên boss khớp target family. Death global/session 0 không được dùng để dừng nhầm phiên.
+- Canonical boss record giữ `DeathEvidence`: `ANNOUNCEMENT`, `COMBAT_-60`, `FALLBACK`; nhiều nguồn được merge, không ghi đè mất nguồn mạnh hơn.
+- Nếu Game nhận thông báo nghi là death nhưng parser không hiểu, gửi telemetry `DEATH_UNPARSED` lên Manager để panel hiển thị raw ngay.
+- Start session có requested-worker scope. Chế độ mặc định lấy toàn bộ account đang connected; UI có thể truyền danh sách account đang được chọn ở tab ACCOUNT.
+- Requested account được giữ qua disconnect. Reconnect khi Scanning làm tăng generation và chia lại khu; reconnect khi Rallying/Fighting được bootstrap bằng START_SCAN rồi RALLY để quay lại target hiện tại.
+- Worker được chọn nhưng đang offline vẫn có placeholder `Chờ kết nối` trên panel.
+- Panel 765x480 không thêm dày cột; dùng summary + tabs `BOSS / SỰ KIỆN / TIMELINE`, hiển thị StopReason, healthy/requested worker, heartbeat max, target lock, death evidence và unparsed warning.
+- Double-click worker focus/restore cửa sổ game tương ứng. Boss dropdown bật autocomplete; âm báo có toggle; log viewer lọc theo session/account/event/boss và hỗ trợ copy.
+- Runtime multi-account/reconnect vẫn là gate trước khi bỏ Draft.
+
