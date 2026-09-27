@@ -22,6 +22,7 @@ namespace AssemblyCSharp.Functions
         private sealed class BossHuntPayload
         {
             public int sessionId;
+            public int assignmentGeneration;
             public string bossName;
             public int startZone;
             public int workerIndex;
@@ -31,6 +32,14 @@ namespace AssemblyCSharp.Functions
             public int zone;
             public int accountId;
             public string detail;
+            public string eventName;
+            public string rawMessage;
+            public string killer;
+            public long observedAtTicks;
+            public int entityCount;
+            public int bossCount;
+            public int targetHp = -1;
+            public int scanCycle;
         }
 
         private sealed class PendingCommand
@@ -42,13 +51,20 @@ namespace AssemblyCSharp.Functions
         private const int CmdStartScan = 100;
         private const int CmdStop = 101;
         private const int CmdRally = 102;
+        private const int CmdBossSync = 103;
+        private const int CmdBossInvalidate = 104;
 
         private const int CmdZone = 110;
         private const int CmdFound = 111;
         private const int CmdDead = 112;
         private const int CmdReady = 113;
         private const int CmdFailed = 114;
+        private const int CmdBossSpawn = 115;
+        private const int CmdBossDeath = 116;
+        private const int CmdTelemetry = 117;
+        private const int CmdHeartbeat = 118;
 
+        private const long HeartbeatIntervalMs = 2000L;
         private const long ScanRouteTimeoutMs = 90000L;
         private const long RouteRetryDelayMs = 1200L;
         private const long RouteStallTimeoutMs = 30000L;
@@ -71,6 +87,7 @@ namespace AssemblyCSharp.Functions
 
         private bool _active;
         private int _sessionId;
+        private int _assignmentGeneration;
         private string _bossName = "";
         private int _startZone;
         private int _workerIndex;
@@ -112,6 +129,8 @@ namespace AssemblyCSharp.Functions
         private int _lastEntityCount = -1;
         private int _lastBossCount = -1;
         private long _lastEntityChangeAt;
+        private long _lastHeartbeatAt;
+        private int _scanCycle;
         private ScannerState _state = ScannerState.Idle;
 
         public static BossZoneScanner Instance
@@ -125,7 +144,7 @@ namespace AssemblyCSharp.Functions
 
         public void HandleManagerMessage(int cmd, byte[] data)
         {
-            if (cmd != CmdStartScan && cmd != CmdStop && cmd != CmdRally)
+            if (cmd != CmdStartScan && cmd != CmdStop && cmd != CmdRally && cmd != CmdBossSync && cmd != CmdBossInvalidate)
                 return;
 
             BossHuntPayload payload = Deserialize(data);
@@ -154,6 +173,7 @@ namespace AssemblyCSharp.Functions
                     return;
 
                 long now = GClass203.smethod_18();
+                SendHeartbeatIfDue(now);
                 if (_state == ScannerState.WaitingLocation)
                     UpdateWaitingLocation(now);
                 else if (_state == ScannerState.RoutingToScanMap)
@@ -186,8 +206,23 @@ namespace AssemblyCSharp.Functions
                 if (pending == null || pending.payload == null)
                     continue;
 
+                if (pending.cmd == CmdBossSync)
+                {
+                    ApplyBossSync(pending.payload);
+                    continue;
+                }
+
+                if (pending.cmd == CmdBossInvalidate)
+                {
+                    GClass156.InvalidateBossLocation(pending.payload.bossName);
+                    continue;
+                }
+
                 if (pending.cmd == CmdStartScan)
                 {
+                    if (_active && pending.payload.sessionId == _sessionId &&
+                        pending.payload.assignmentGeneration < _assignmentGeneration)
+                        continue;
                     StartScan(pending.payload);
                     continue;
                 }
@@ -197,11 +232,15 @@ namespace AssemblyCSharp.Functions
 
                 if (pending.cmd == CmdStop)
                 {
-                    StopInternal();
+                    if (pending.payload.assignmentGeneration >= _assignmentGeneration)
+                    {
+                        _assignmentGeneration = pending.payload.assignmentGeneration;
+                        StopInternal();
+                    }
                     continue;
                 }
 
-                if (pending.cmd == CmdRally)
+                if (pending.cmd == CmdRally && pending.payload.assignmentGeneration == _assignmentGeneration)
                     StartRally(pending.payload);
             }
         }
@@ -216,6 +255,7 @@ namespace AssemblyCSharp.Functions
 
             _active = true;
             _sessionId = payload.sessionId;
+            _assignmentGeneration = Math.Max(1, payload.assignmentGeneration);
             _bossName = (payload.bossName ?? "").Trim();
             _startZone = Math.Max(0, payload.startZone);
             _workerIndex = Math.Max(0, payload.workerIndex);
@@ -253,12 +293,14 @@ namespace AssemblyCSharp.Functions
             _lastEntityCount = -1;
             _lastBossCount = -1;
             _lastEntityChangeAt = 0L;
+            _lastHeartbeatAt = 0L;
+            _scanCycle = 1;
             _rallyStartedAt = 0L;
             _rallyZoneAttempts = 0;
             _rallyZoneArrivedAt = 0L;
             _targetMissingSince = 0L;
             ClearAnnouncements();
-            Trace("START_SCAN", "worker=" + _workerIndex + "/" + _workerCount + ";startZone=" + _startZone);
+            Trace("START_SCAN", "generation=" + _assignmentGeneration + ";worker=" + _workerIndex + "/" + _workerCount + ";startZone=" + _startZone);
 
             GClass78 currentTarget = FindTargetBoss();
             if (currentTarget != null)
@@ -267,12 +309,10 @@ namespace AssemblyCSharp.Functions
                 return;
             }
 
-            int knownMapId;
-            string knownMapName;
-            int knownZone;
-            if (TryResolveKnownBossLocation(out knownMapId, out knownMapName, out knownZone))
+            if (payload.mapId >= 0)
             {
-                SetScanLocation(knownMapId, knownMapName, knownZone, _startedAt);
+                GClass156.ApplyBossLocationSync(_bossName, payload.mapName, payload.mapId, payload.zone, payload.observedAtTicks);
+                SetScanLocation(payload.mapId, payload.mapName, payload.zone, _startedAt);
                 return;
             }
 
@@ -303,16 +343,7 @@ namespace AssemblyCSharp.Functions
         {
             GClass78 currentTarget = FindTargetBoss();
             if (currentTarget != null)
-            {
                 SetScanLocation(GClass20.int_37, GClass20.string_1, GClass20.int_39, now);
-                return;
-            }
-
-            int knownMapId;
-            string knownMapName;
-            int knownZone;
-            if (TryResolveKnownBossLocation(out knownMapId, out knownMapName, out knownZone))
-                SetScanLocation(knownMapId, knownMapName, knownZone, now);
         }
 
         private void UpdateScanRoute(long now)
@@ -460,6 +491,7 @@ namespace AssemblyCSharp.Functions
 
             _usingAnnouncedZone = IsZoneAssignedToWorker(_announcedZone);
             _desiredZone = _usingAnnouncedZone ? _announcedZone : first;
+            _scanCycle = 1;
             _zonePlanReady = true;
             Trace("ZONE_PLAN", "maxZone=" + _maxZone + ";first=" + first + ";desired=" + _desiredZone + ";announced=" + _announcedZone + ";announcedOwned=" + _usingAnnouncedZone);
             SendEvent(CmdZone, "SCANNING");
@@ -552,6 +584,7 @@ namespace AssemblyCSharp.Functions
                     _arrivedAt = now;
                     _zoneAttempts = 0;
                     BeginEntityObservation(now);
+                    SendTelemetry("ZONE_ENTER", "announced=" + _usingAnnouncedZone);
                     SendEvent(CmdZone, "SCANNING");
                 }
                 else
@@ -560,6 +593,7 @@ namespace AssemblyCSharp.Functions
                 if (ShouldAdvanceFromCurrentZone(now))
                 {
                     Trace("ZONE_DWELL_DONE", "elapsedMs=" + (now - _arrivedAt) + ";entities=" + _lastEntityCount + ";bosses=" + _lastBossCount);
+                    SendTelemetry("ZONE_CLEAR", "dwellMs=" + (now - _arrivedAt));
                     AdvanceScanZone();
                     _arrivedZone = -1;
                     _arrivedAt = 0L;
@@ -577,6 +611,7 @@ namespace AssemblyCSharp.Functions
             if (_zoneAttempts >= 2)
             {
                 Trace("ZONE_CHANGE_FAILED", "targetZone=" + _desiredZone + ";attempts=" + _zoneAttempts);
+                SendTelemetry("ZONE_FAILED", "attempts=" + _zoneAttempts);
                 AdvanceScanZone();
                 _zoneAttempts = 0;
                 return;
@@ -747,7 +782,26 @@ namespace AssemblyCSharp.Functions
 
         public void ObserveAnnouncement(string message)
         {
-            if (!_active || string.IsNullOrEmpty(message))
+            if (string.IsNullOrEmpty(message))
+                return;
+
+            string deadBoss;
+            string killer;
+            if (GClass156.TryParseBossDeathAnnouncement(message, out deadBoss, out killer))
+            {
+                SendBossObservation(CmdBossDeath, deadBoss, -1, "", -1, killer, message, DateTime.UtcNow.Ticks);
+            }
+            else
+            {
+                string spawnBoss;
+                string mapName;
+                int mapId;
+                int zone;
+                if (GClass156.TryParseBossAnnouncement(message, out spawnBoss, out mapName, out mapId, out zone))
+                    SendBossObservation(CmdBossSpawn, spawnBoss, mapId, mapName, zone, "", message, DateTime.UtcNow.Ticks);
+            }
+
+            if (!_active)
                 return;
 
             lock (_announcementLock)
@@ -789,8 +843,7 @@ namespace AssemblyCSharp.Functions
                     if (GClass156.TryParseBossAnnouncement(message, out announcedBoss, out announcedMap, out announcedMapId, out announcedZone) &&
                         BossNameMatches(announcedBoss, _bossName))
                     {
-                        Trace("ANNOUNCEMENT_SPAWN", "mapId=" + announcedMapId + ";map=" + announcedMap + ";zone=" + announcedZone);
-                        SetScanLocation(announcedMapId, announcedMap, announcedZone, GClass203.smethod_18());
+                        Trace("ANNOUNCEMENT_SPAWN_LOCAL", "mapId=" + announcedMapId + ";map=" + announcedMap + ";zone=" + announcedZone + ";waitingManagerSync=true");
                     }
                 }
             }
@@ -878,7 +931,13 @@ namespace AssemblyCSharp.Functions
             }
 
             int next = _desiredZone + _workerCount;
-            _desiredZone = next > _maxZone ? first : next;
+            if (next > _maxZone)
+            {
+                _desiredZone = first;
+                _scanCycle++;
+            }
+            else
+                _desiredZone = next;
             _zoneAttempts = 0;
             _lastZoneCommandAt = 0L;
         }
@@ -998,23 +1057,135 @@ namespace AssemblyCSharp.Functions
             StopInternal();
         }
 
-        private void SendEvent(int cmd, string detail)
+        public void SendKnownBossLocations()
+        {
+            try
+            {
+                List<GClass156> bosses = GClass156.GetBossLocationSnapshot();
+                for (int i = 0; i < bosses.Count; i++)
+                {
+                    GClass156 boss = bosses[i];
+                    if (boss == null || boss.int_0 < 0)
+                        continue;
+                    SendBossObservation(CmdBossSpawn, boss.string_0, boss.int_0, boss.string_1, boss.int_1, "", "CACHE_SYNC",
+                        boss.dateTime_0.ToUniversalTime().Ticks);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        private void ApplyBossSync(BossHuntPayload payload)
+        {
+            if (payload == null || string.IsNullOrEmpty(payload.bossName) || payload.mapId < 0)
+                return;
+
+            GClass156.ApplyBossLocationSync(payload.bossName, payload.mapName, payload.mapId, payload.zone, payload.observedAtTicks);
+            Trace("MANAGER_BOSS_SYNC", "boss=" + payload.bossName + ";map=" + payload.mapId + ";zone=" + payload.zone);
+
+            if (!_active || !BossNameMatches(payload.bossName, _bossName))
+                return;
+            if (_state != ScannerState.WaitingLocation && _state != ScannerState.RoutingToScanMap && _state != ScannerState.Scanning)
+                return;
+
+            if (_scanMapId == payload.mapId && _announcedZone == payload.zone && _state != ScannerState.WaitingLocation)
+                return;
+
+            SetScanLocation(payload.mapId, payload.mapName, payload.zone, GClass203.smethod_18());
+        }
+
+        private void SendHeartbeatIfDue(long now)
+        {
+            if (!_active || now - _lastHeartbeatAt < HeartbeatIntervalMs)
+                return;
+
+            GClass78 target = FindTargetBoss();
+            BossHuntPayload payload = CreateClientPayload();
+            payload.eventName = "HEARTBEAT";
+            payload.detail = _state.ToString();
+            payload.targetHp = target == null ? -1 : target.int_25;
+            GClass150.smethod_0().method_2(new vMessage
+            {
+                cmd = CmdHeartbeat,
+                data = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(payload))
+            });
+            _lastHeartbeatAt = now;
+        }
+
+        private void SendTelemetry(string eventName, string detail)
+        {
+            try
+            {
+                BossHuntPayload payload = CreateClientPayload();
+                payload.eventName = eventName ?? "";
+                payload.detail = detail ?? "";
+                payload.entityCount = _lastEntityCount;
+                payload.bossCount = _lastBossCount;
+                payload.scanCycle = _scanCycle;
+                GClass150.smethod_0().method_2(new vMessage
+                {
+                    cmd = CmdTelemetry,
+                    data = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(payload))
+                });
+            }
+            catch
+            {
+            }
+        }
+
+        private void SendBossObservation(int cmd, string bossName, int mapId, string mapName, int zone, string killer, string rawMessage, long observedAtTicks)
         {
             try
             {
                 BossHuntPayload payload = new BossHuntPayload
                 {
-                    sessionId = _sessionId,
-                    bossName = _bossName,
-                    startZone = _startZone,
-                    workerIndex = _workerIndex,
-                    workerCount = _workerCount,
-                    mapId = GClass20.int_37,
-                    mapName = GClass20.string_1,
-                    zone = GClass20.int_39,
+                    sessionId = _active ? _sessionId : 0,
+                    assignmentGeneration = _active ? _assignmentGeneration : 0,
+                    bossName = bossName ?? "",
+                    mapId = mapId,
+                    mapName = mapName ?? "",
+                    zone = zone,
                     accountId = GClass150.int_0,
-                    detail = detail ?? ""
+                    killer = killer ?? "",
+                    rawMessage = rawMessage ?? "",
+                    observedAtTicks = observedAtTicks
                 };
+                GClass150.smethod_0().method_2(new vMessage
+                {
+                    cmd = cmd,
+                    data = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(payload))
+                });
+            }
+            catch
+            {
+            }
+        }
+
+        private BossHuntPayload CreateClientPayload()
+        {
+            return new BossHuntPayload
+            {
+                sessionId = _sessionId,
+                assignmentGeneration = _assignmentGeneration,
+                bossName = _bossName,
+                startZone = _startZone,
+                workerIndex = _workerIndex,
+                workerCount = _workerCount,
+                mapId = GClass20.int_37,
+                mapName = GClass20.string_1,
+                zone = GClass20.int_39,
+                accountId = GClass150.int_0,
+                scanCycle = _scanCycle
+            };
+        }
+
+        private void SendEvent(int cmd, string detail)
+        {
+            try
+            {
+                BossHuntPayload payload = CreateClientPayload();
+                payload.detail = detail ?? "";
                 Trace("TX_EVENT", "cmd=" + cmd + ";detail=" + (detail ?? ""));
                 GClass150.smethod_0().method_2(new vMessage
                 {
@@ -1085,6 +1256,9 @@ namespace AssemblyCSharp.Functions
             _rallyRouteLastProgressAt = 0L;
             ClearAnnouncements();
             _lastFocusAt = 0L;
+            _lastHeartbeatAt = 0L;
+            _scanCycle = 0;
+            _assignmentGeneration = 0;
         }
 
         private static BossHuntPayload Deserialize(byte[] data)
@@ -1114,7 +1288,7 @@ namespace AssemblyCSharp.Functions
             if (actual.Length == target.Length)
                 return true;
             char next = actual[target.Length];
-            return char.IsWhiteSpace(next) || char.IsDigit(next) || next == '-' || next == '(' || next == '[';
+            return char.IsWhiteSpace(next) || next == '-' || next == '(' || next == '[';
         }
 
         private static string NormalizeBossName(string value)

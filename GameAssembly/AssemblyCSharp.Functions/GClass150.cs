@@ -125,6 +125,7 @@ namespace AssemblyCSharp.Functions
 				});
 				bool_2 = true;
 				BossHuntDiagnostics.Log("GAME_SOCKET", "HANDSHAKE_SENT", 0, "", "SOCKET", "account=" + int_0);
+				BossZoneScanner.Instance.SendKnownBossLocations();
 
 				if (oldSocket != null && oldSocket != newSocket)
 				{
@@ -169,7 +170,7 @@ namespace AssemblyCSharp.Functions
 				vMessage vMessage2 = JsonConvert.DeserializeObject<vMessage>(string_0);
 				if (vMessage2 != null)
 				{
-					if (vMessage2.cmd >= 100 && vMessage2.cmd <= 102)
+					if (vMessage2.cmd >= 100 && vMessage2.cmd <= 104)
 					{
 						BossHuntDiagnostics.Log("GAME_SOCKET", "RX_CMD", 0, "", "SOCKET", "cmd=" + vMessage2.cmd);
 						BossZoneScanner.Instance.HandleManagerMessage(vMessage2.cmd, vMessage2.data);

@@ -125,6 +125,7 @@ namespace DragonBoyManager
 						}
 
 						BossHuntDiagnostics.Log("MANAGER_SOCKET", "HANDSHAKE", 0, state.account.ID, "", "SOCKET", "");
+						BossHuntCoordinator.Instance.HandleConnected(state.account);
 						if (MainController.instance != null)
 							MainController.instance.REFRESH = true;
 					}
@@ -166,6 +167,10 @@ namespace DragonBoyManager
 				case BossHuntCoordinator.CmdDead:
 				case BossHuntCoordinator.CmdReady:
 				case BossHuntCoordinator.CmdFailed:
+				case BossHuntCoordinator.CmdBossSpawn:
+				case BossHuntCoordinator.CmdBossDeath:
+				case BossHuntCoordinator.CmdTelemetry:
+				case BossHuntCoordinator.CmdHeartbeat:
 					BossHuntCoordinator.Instance.HandleClientMessage(state.account, msg.cmd, msg.data);
 					break;
 				}

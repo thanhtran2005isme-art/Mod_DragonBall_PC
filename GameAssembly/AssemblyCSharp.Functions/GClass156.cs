@@ -354,6 +354,47 @@ namespace AssemblyCSharp.Functions
             return boss != null;
         }
 
+        public static List<GClass156> GetBossLocationSnapshot()
+        {
+            List<GClass156> result = new List<GClass156>();
+            lock (bossLocationLock)
+            {
+                foreach (GClass156 item in bossLocationCache.Values)
+                {
+                    if (item == null)
+                        continue;
+                    GClass156 copy = new GClass156(item.string_0, item.string_1);
+                    copy.int_0 = item.int_0;
+                    copy.int_1 = item.int_1;
+                    copy.dateTime_0 = item.dateTime_0;
+                    result.Add(copy);
+                }
+            }
+            return result;
+        }
+
+        public static void ApplyBossLocationSync(string bossName, string mapName, int mapId, int zone, long observedAtUtcTicks)
+        {
+            if (string.IsNullOrEmpty(bossName) || mapId < 0)
+                return;
+
+            GClass156 item = new GClass156(bossName.Trim(), mapName ?? "");
+            item.int_0 = mapId;
+            item.int_1 = zone;
+            if (observedAtUtcTicks > 0L)
+            {
+                try
+                {
+                    item.dateTime_0 = new DateTime(observedAtUtcTicks, DateTimeKind.Utc).ToLocalTime();
+                }
+                catch
+                {
+                    item.dateTime_0 = DateTime.Now;
+                }
+            }
+            CacheBossLocation(item);
+        }
+
         public static void InvalidateBossLocation(string bossName)
         {
             string normalized = NormalizeBossLocationName(bossName);
@@ -405,12 +446,19 @@ namespace AssemblyCSharp.Functions
             if (actual.Length == target.Length)
                 return true;
             char next = actual[target.Length];
-            return char.IsWhiteSpace(next) || char.IsDigit(next) || next == '-' || next == '(' || next == '[';
+            return char.IsWhiteSpace(next) || next == '-' || next == '(' || next == '[';
         }
 
         public static bool TryParseBossDeathAnnouncement(string chatVip, out string bossName)
         {
+            string killer;
+            return TryParseBossDeathAnnouncement(chatVip, out bossName, out killer);
+        }
+
+        public static bool TryParseBossDeathAnnouncement(string chatVip, out string bossName, out string killer)
+        {
             bossName = "";
+            killer = "";
             if (string.IsNullOrEmpty(chatVip))
                 return false;
 
@@ -420,6 +468,33 @@ namespace AssemblyCSharp.Functions
             if (text.StartsWith("BOSS ", StringComparison.OrdinalIgnoreCase))
                 text = text.Substring(5).Trim();
 
+            string[] killerMarkers = new string[]
+            {
+                " vừa bị tiêu diệt bởi ", " đã bị tiêu diệt bởi ", " bị tiêu diệt bởi ",
+                " vừa bị hạ bởi ", " đã bị hạ bởi ", " bị hạ bởi ",
+                " defeated by ", " killed by "
+            };
+
+            string lower = text.ToLowerInvariant();
+            int killerCut = -1;
+            string killerMarker = "";
+            for (int i = 0; i < killerMarkers.Length; i++)
+            {
+                int index = lower.IndexOf(killerMarkers[i], StringComparison.Ordinal);
+                if (index >= 0 && (killerCut < 0 || index < killerCut))
+                {
+                    killerCut = index;
+                    killerMarker = killerMarkers[i];
+                }
+            }
+
+            if (killerCut >= 0)
+            {
+                bossName = NormalizeBossLocationName(text.Substring(0, killerCut));
+                killer = text.Substring(killerCut + killerMarker.Length).Trim().Trim('.', '!', ':', '-', ' ');
+                return bossName.Length > 0;
+            }
+
             string[] markers = new string[]
             {
                 " vừa bị tiêu diệt", " đã bị tiêu diệt", " bị tiêu diệt",
@@ -427,10 +502,9 @@ namespace AssemblyCSharp.Functions
                 " vừa bị hạ", " đã bị hạ", " bị hạ",
                 " has been defeated", " was defeated",
                 " has been killed", " was killed",
-                " is dead", " defeated by", " killed by"
+                " is dead"
             };
 
-            string lower = text.ToLowerInvariant();
             int cut = -1;
             for (int i = 0; i < markers.Length; i++)
             {
