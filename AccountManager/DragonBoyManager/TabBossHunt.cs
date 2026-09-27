@@ -23,6 +23,7 @@ namespace DragonBoyManager
         private readonly DataGridView grid = new DataGridView();
         private readonly TextBox timeline = new TextBox();
         private readonly Timer timer = new Timer();
+        private int catalogRevision = -1;
 
         public TabBossHunt()
         {
@@ -37,6 +38,8 @@ namespace DragonBoyManager
             timer.Interval = 500;
             timer.Tick += delegate
             {
+                if (catalogRevision != BossHuntCatalog.Revision)
+                    RefreshBossCatalog();
                 RefreshConnectedCount();
                 ApplySnapshot(BossHuntCoordinator.Instance.GetSnapshot());
             };
@@ -420,6 +423,7 @@ namespace DragonBoyManager
                 comboBoss.EndUpdate();
             }
             comboBoss.Text = current;
+            catalogRevision = BossHuntCatalog.Revision;
         }
 
         private static string GetPerformanceText(BossHuntWorkerSnapshot worker)
