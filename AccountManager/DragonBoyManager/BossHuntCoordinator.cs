@@ -71,6 +71,7 @@ namespace DragonBoyManager
         public DateTime SpawnedAtUtc = DateTime.MinValue;
         public DateTime DiedAtUtc = DateTime.MinValue;
         public string Killer = "";
+        public int KillerId = -1;
         public string RawSpawn = "";
         public string RawDeath = "";
         public int LastSourceAccountId = -1;
@@ -86,6 +87,7 @@ namespace DragonBoyManager
         public int Zone = -1;
         public DateTime ObservedAtUtc = DateTime.MinValue;
         public string Killer = "";
+        public int KillerId = -1;
         public int SourceAccountId = -1;
         public string RawMessage = "";
     }
@@ -137,6 +139,7 @@ namespace DragonBoyManager
         public string eventName;
         public string rawMessage;
         public string killer;
+        public int killerId = -1;
         public long observedAtTicks;
         public int entityCount;
         public int bossCount;
@@ -701,6 +704,7 @@ namespace DragonBoyManager
                     record.SpawnedAtUtc = observedUtc;
                     record.DiedAtUtc = DateTime.MinValue;
                     record.Killer = "";
+                    record.KillerId = -1;
                     record.RawSpawn = payload.rawMessage ?? "";
                     record.RawDeath = "";
                     record.LastSourceAccountId = account.ID;
@@ -749,6 +753,7 @@ namespace DragonBoyManager
             DateTime observedUtc = ReadObservedUtc(payload.observedAtTicks);
             bool matchesCurrent = false;
             string killer = payload.killer ?? "";
+            int killerId = payload.killerId;
             BossHuntBossSnapshot updatedRecord = null;
 
             lock (_sync)
@@ -757,7 +762,8 @@ namespace DragonBoyManager
 
                 if (_sessionTargetBoss != null &&
                     IsRunningState(_state) &&
-                    DeathNameMatchesInstance(payload.bossName, _sessionTargetBoss.BossName))
+                    DeathNameMatchesInstance(payload.bossName, _sessionTargetBoss.BossName) &&
+                    DeathLocationMatchesInstance(payload, _sessionTargetBoss))
                 {
                     targetRecord = FindRecordForInstanceLocked(_sessionTargetBoss);
                 }
@@ -774,6 +780,8 @@ namespace DragonBoyManager
                         targetRecord.DiedAtUtc = observedUtc;
                     if (string.IsNullOrEmpty(targetRecord.Killer) && !string.IsNullOrEmpty(killer))
                         targetRecord.Killer = killer;
+                    if (targetRecord.KillerId < 0 && killerId >= 0)
+                        targetRecord.KillerId = killerId;
                     if (string.IsNullOrEmpty(targetRecord.RawDeath) && !string.IsNullOrEmpty(payload.rawMessage))
                         targetRecord.RawDeath = payload.rawMessage;
                     targetRecord.LastSourceAccountId = account.ID;
@@ -783,7 +791,10 @@ namespace DragonBoyManager
                     {
                         AddBossEventLocked("DEATH", targetRecord, targetRecord.DiedAtUtc, account.ID, targetRecord.Killer, targetRecord.RawDeath);
                         AddTimelineLocked("BOSS_DEATH", account.ID,
-                            DescribeBossInstance(targetRecord) + " | killer=" + targetRecord.Killer + " | " + targetRecord.RawDeath);
+                            DescribeBossInstance(targetRecord) +
+                            " | killer=" + targetRecord.Killer +
+                            (targetRecord.KillerId >= 0 ? " (#" + targetRecord.KillerId + ")" : "") +
+                            " | " + targetRecord.RawDeath);
                     }
 
                     updatedRecord = CloneBoss(targetRecord);
@@ -804,6 +815,7 @@ namespace DragonBoyManager
                         Presence = BossPresenceState.Dead,
                         DiedAtUtc = observedUtc,
                         Killer = killer,
+                        KillerId = killerId,
                         RawDeath = payload.rawMessage ?? "",
                         LastSourceAccountId = account.ID
                     };
@@ -817,7 +829,8 @@ namespace DragonBoyManager
             }
 
             BossHuntDiagnostics.Log("MANAGER", "BOSS_DEATH", 0, account.ID, payload.bossName, "GLOBAL",
-                "killer=" + killer + ";at=" + observedUtc.ToString("o") +
+                "killer=" + killer + ";killerId=" + killerId + ";at=" + observedUtc.ToString("o") +
+                ";map=" + payload.mapId + ";zone=" + payload.zone +
                 ";currentTarget=" + matchesCurrent);
 
             BossHuntPayload invalidate = new BossHuntPayload
@@ -825,6 +838,7 @@ namespace DragonBoyManager
                 bossName = updatedRecord == null ? payload.bossName : updatedRecord.BossName,
                 observedAtTicks = observedUtc.Ticks,
                 killer = killer,
+                killerId = killerId,
                 rawMessage = payload.rawMessage ?? "",
                 eventName = "DEATH_SYNC"
             };
@@ -834,7 +848,8 @@ namespace DragonBoyManager
             {
                 string reason = MainController.language == 0 ? "Boss mục tiêu đã chết" : "Target boss died";
                 if (!string.IsNullOrEmpty(killer))
-                    reason += (MainController.language == 0 ? " - Người hạ: " : " - Killer: ") + killer;
+                    reason += (MainController.language == 0 ? " - Người hạ: " : " - Killer: ") + killer +
+                              (killerId >= 0 ? " (#" + killerId + ")" : "");
                 Stop(reason);
             }
             else
@@ -1521,6 +1536,7 @@ namespace DragonBoyManager
                 Zone = boss.Zone,
                 ObservedAtUtc = atUtc,
                 Killer = killer ?? "",
+                KillerId = boss == null ? -1 : boss.KillerId,
                 SourceAccountId = sourceAccountId,
                 RawMessage = raw ?? ""
             });
@@ -1588,14 +1604,31 @@ namespace DragonBoyManager
             if (deathName.Equals(instanceName, StringComparison.OrdinalIgnoreCase))
                 return true;
 
-            if (instanceName.StartsWith(deathName, StringComparison.OrdinalIgnoreCase) &&
-                instanceName.Length > deathName.Length)
-            {
-                char next = instanceName[deathName.Length];
-                return char.IsWhiteSpace(next) || next == '-' || next == '(' || next == '[';
-            }
+            if (StartsWithBossBoundary(instanceName, deathName))
+                return true;
+            if (StartsWithBossBoundary(deathName, instanceName))
+                return true;
 
             return false;
+        }
+
+        private static bool StartsWithBossBoundary(string value, string prefix)
+        {
+            if (!value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) || value.Length <= prefix.Length)
+                return false;
+            char next = value[prefix.Length];
+            return char.IsWhiteSpace(next) || next == '-' || next == '(' || next == '[';
+        }
+
+        private static bool DeathLocationMatchesInstance(BossHuntPayload payload, BossHuntBossSnapshot instance)
+        {
+            if (payload == null || instance == null)
+                return false;
+            if (payload.mapId >= 0 && instance.MapId >= 0 && payload.mapId != instance.MapId)
+                return false;
+            if (payload.zone >= 0 && instance.Zone >= 0 && payload.zone != instance.Zone)
+                return false;
+            return true;
         }
 
         private static string DescribeBossInstance(BossHuntBossSnapshot boss)
@@ -1648,6 +1681,7 @@ namespace DragonBoyManager
                 SpawnedAtUtc = source.SpawnedAtUtc,
                 DiedAtUtc = source.DiedAtUtc,
                 Killer = source.Killer,
+                KillerId = source.KillerId,
                 RawSpawn = source.RawSpawn,
                 RawDeath = source.RawDeath,
                 LastSourceAccountId = source.LastSourceAccountId
@@ -1667,6 +1701,7 @@ namespace DragonBoyManager
                 Zone = source.Zone,
                 ObservedAtUtc = source.ObservedAtUtc,
                 Killer = source.Killer,
+                KillerId = source.KillerId,
                 SourceAccountId = source.SourceAccountId,
                 RawMessage = source.RawMessage
             };
