@@ -51,11 +51,19 @@ namespace AssemblyCSharp.Functions
 
 		private const int MaxFrameSize = 1048576;
 
+		private const int CmdHandshakeAck = 99;
+
+		private const int HandshakeRetryCount = 10;
+
+		private const int HandshakeRetryDelayMs = 400;
+
 		private readonly object sendLock = new object();
 
 		private readonly object connectLock = new object();
 
 		private bool connecting;
+
+		private volatile bool handshakeAcked;
 
 		public static Socket socket_0;
 
@@ -122,17 +130,38 @@ namespace AssemblyCSharp.Functions
 				Socket oldSocket = socket_0;
 				socket_0 = newSocket;
 				bool_2 = false;
+				handshakeAcked = false;
 
 				ReceiveState state = new ReceiveState(newSocket);
 				newSocket.BeginReceive(state.buffer, 0, state.buffer.Length, SocketFlags.None, method_3, state);
 
-				method_5(new vMessage
+				for (int attempt = 1; attempt <= HandshakeRetryCount && !handshakeAcked; attempt++)
 				{
-					cmd = 0,
-					data = Encoding.ASCII.GetBytes(int_0.ToString())
-				});
+					method_5(new vMessage
+					{
+						cmd = 0,
+						data = Encoding.ASCII.GetBytes(int_0.ToString())
+					});
+					BossHuntDiagnostics.Log("GAME_SOCKET", "HANDSHAKE_TX", 0, "", "SOCKET",
+						"account=" + int_0 + ";attempt=" + attempt);
+
+					int waited = 0;
+					while (!handshakeAcked && waited < HandshakeRetryDelayMs)
+					{
+						Thread.Sleep(50);
+						waited += 50;
+					}
+				}
+
+				if (!handshakeAcked)
+				{
+					BossHuntDiagnostics.Log("GAME_SOCKET", "HANDSHAKE_ACK_TIMEOUT", 0, "", "SOCKET",
+						"account=" + int_0 + ";attempts=" + HandshakeRetryCount);
+					throw new IOException("Manager handshake acknowledgement timeout.");
+				}
+
 				bool_2 = true;
-				BossHuntDiagnostics.Log("GAME_SOCKET", "HANDSHAKE_SENT", 0, "", "SOCKET", "account=" + int_0);
+				BossHuntDiagnostics.Log("GAME_SOCKET", "HANDSHAKE_READY", 0, "", "SOCKET", "account=" + int_0);
 				BossZoneScanner.Instance.SendKnownBossLocations();
 
 				if (oldSocket != null && oldSocket != newSocket)
@@ -173,20 +202,58 @@ namespace AssemblyCSharp.Functions
 
 		private void method_1(string string_0)
 		{
-			if (bool_0)
+			if (!bool_0)
+				return;
+
+			vMessage vMessage2 = JsonConvert.DeserializeObject<vMessage>(string_0);
+			if (vMessage2 == null)
+				return;
+
+			if (vMessage2.cmd == CmdHandshakeAck)
 			{
-				vMessage vMessage2 = JsonConvert.DeserializeObject<vMessage>(string_0);
-				if (vMessage2 != null)
+				int ackAccountId = -1;
+				try
 				{
-					if (vMessage2.cmd >= 100 && vMessage2.cmd <= 105)
-					{
-						BossHuntDiagnostics.Log("GAME_SOCKET", "RX_CMD", 0, "", "SOCKET", "cmd=" + vMessage2.cmd);
-						BossZoneScanner.Instance.HandleManagerMessage(vMessage2.cmd, vMessage2.data);
-					}
-					else
-						GClass171.smethod_0().method_23(vMessage2);
+					ackAccountId = int.Parse(Encoding.ASCII.GetString(vMessage2.data));
 				}
+				catch
+				{
+				}
+
+				if (ackAccountId == int_0)
+				{
+					handshakeAcked = true;
+					bool_2 = true;
+					BossHuntDiagnostics.Log("GAME_SOCKET", "HANDSHAKE_ACK", 0, "", "SOCKET",
+						"account=" + int_0);
+				}
+				else
+				{
+					BossHuntDiagnostics.Log("GAME_SOCKET", "HANDSHAKE_ACK_MISMATCH", 0, "", "SOCKET",
+						"expected=" + int_0 + ";actual=" + ackAccountId);
+				}
+				return;
 			}
+
+			if (vMessage2.cmd == 0)
+			{
+				BossHuntDiagnostics.Log("GAME_SOCKET", "LEGACY_HANDSHAKE_REQUEST", 0, "", "SOCKET", "");
+				method_2(new vMessage
+				{
+					cmd = 0,
+					data = Encoding.ASCII.GetBytes(int_0.ToString())
+				});
+				return;
+			}
+
+			if (vMessage2.cmd >= 100 && vMessage2.cmd <= 105)
+			{
+				BossHuntDiagnostics.Log("GAME_SOCKET", "RX_CMD", 0, "", "SOCKET", "cmd=" + vMessage2.cmd);
+				BossZoneScanner.Instance.HandleManagerMessage(vMessage2.cmd, vMessage2.data);
+				return;
+			}
+
+			GClass171.smethod_0().method_23(vMessage2);
 		}
 
 		public void method_2(object obj)
@@ -322,6 +389,7 @@ namespace AssemblyCSharp.Functions
 
 			socket_0 = null;
 			bool_2 = false;
+			handshakeAcked = false;
 			BossHuntDiagnostics.Log("GAME_SOCKET", "DISCONNECTED", 0, "", "SOCKET", "");
 			if (bool_0)
 				method_0(GClass172.int_0);
