@@ -44,7 +44,7 @@ namespace DragonBoyManager
             }
             catch
             {
-                return Path.Combine("Data", "Errors", "BossHuntProtocol.Manager.fallback.log");
+                return Path.Combine(Path.GetTempPath(), "BossHuntProtocol.Manager.fallback.log");
             }
         }
 

@@ -57,7 +57,7 @@ namespace AssemblyCSharp.Functions
             }
             catch
             {
-                return Path.Combine(Path.Combine("Data", "Errors"), "BossHuntProtocol.Game.fallback.log");
+                return Path.Combine(Path.GetTempPath(), "BossHuntProtocol.Game.fallback.log");
             }
         }
 
