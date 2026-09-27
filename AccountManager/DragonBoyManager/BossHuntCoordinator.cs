@@ -192,21 +192,38 @@ namespace DragonBoyManager
                 return;
 
             List<BossHuntPayload> syncPayloads = new List<BossHuntPayload>();
+            List<BossHuntPayload> invalidatePayloads = new List<BossHuntPayload>();
             lock (_sync)
             {
                 DateTime now = DateTime.UtcNow;
                 foreach (BossHuntBossSnapshot boss in _bossRecords.Values)
                 {
-                    if (!boss.Alive || boss.MapId < 0 || boss.SpawnedAtUtc == DateTime.MinValue)
-                        continue;
-                    if (now.Subtract(boss.SpawnedAtUtc).TotalMinutes > BossLocationFreshMinutes)
-                        continue;
-                    syncPayloads.Add(CreateBossSyncPayload(boss));
+                    if (boss.Alive)
+                    {
+                        if (boss.MapId < 0 || boss.SpawnedAtUtc == DateTime.MinValue)
+                            continue;
+                        if (now.Subtract(boss.SpawnedAtUtc).TotalMinutes > BossLocationFreshMinutes)
+                            continue;
+                        syncPayloads.Add(CreateBossSyncPayload(boss));
+                    }
+                    else if (boss.DiedAtUtc != DateTime.MinValue)
+                    {
+                        invalidatePayloads.Add(new BossHuntPayload
+                        {
+                            bossName = boss.BossName,
+                            killer = boss.Killer,
+                            rawMessage = boss.RawDeath,
+                            observedAtTicks = boss.DiedAtUtc.Ticks,
+                            eventName = "DEATH_SYNC"
+                        });
+                    }
                 }
             }
 
             for (int i = 0; i < syncPayloads.Count; i++)
                 Send(account, CmdBossSync, syncPayloads[i]);
+            for (int i = 0; i < invalidatePayloads.Count; i++)
+                Send(account, CmdBossInvalidate, invalidatePayloads[i]);
         }
 
         public bool Start(string bossName, int startZone, out string error)
@@ -572,10 +589,15 @@ namespace DragonBoyManager
 
                 AddSourceAccount(record, account.ID);
 
-                bool newer = record.SpawnedAtUtc == DateTime.MinValue || observedUtc >= record.SpawnedAtUtc;
-                bool newEvent = !record.Alive || record.MapId != payload.mapId || record.Zone != payload.zone ||
-                                record.SpawnedAtUtc == DateTime.MinValue ||
-                                Math.Abs(observedUtc.Subtract(record.SpawnedAtUtc).TotalSeconds) > 5.0;
+                bool olderThanKnownDeath = !record.Alive &&
+                                           record.DiedAtUtc != DateTime.MinValue &&
+                                           observedUtc <= record.DiedAtUtc;
+                bool newer = !olderThanKnownDeath &&
+                             (record.SpawnedAtUtc == DateTime.MinValue || observedUtc >= record.SpawnedAtUtc);
+                bool newEvent = !olderThanKnownDeath &&
+                                (!record.Alive || record.MapId != payload.mapId || record.Zone != payload.zone ||
+                                 record.SpawnedAtUtc == DateTime.MinValue ||
+                                 Math.Abs(observedUtc.Subtract(record.SpawnedAtUtc).TotalSeconds) > 5.0);
 
                 if (newer)
                 {
