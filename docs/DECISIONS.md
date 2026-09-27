@@ -457,3 +457,22 @@ Dữ liệu này đến từ `117 TELEMETRY` + `118 HEARTBEAT`, không suy ngư�
 - Double-click worker focus/restore cửa sổ game tương ứng. Boss dropdown bật autocomplete; âm báo có toggle; log viewer lọc theo session/account/event/boss và hỗ trợ copy.
 - Runtime multi-account/reconnect vẫn là gate trước khi bỏ Draft.
 
+## D-041 — Coverage gần hoàn chỉnh không được quét vô hạn
+
+**Trạng thái:** active — 2026-09-27
+
+Runtime ghi nhận case Boss Hunt quét đến vòng 6 nhưng coverage kẹt 50/51, khiến điều kiện cũ `coverage == total` không bao giờ cho phép chuyển STALE.
+
+Quy tắc mới:
+
+- `51/51`: giữ behavior cũ, từ vòng 3 có thể `SCAN_EXHAUSTED -> STALE + STOP` nếu boss đã spawn >=45s và không FOUND.
+- Coverage thiếu tối đa 1 khu:
+  - không được suy boss là DEAD;
+  - từ vòng 5 chỉ được coi là stalled nếu khu thiếu đã có ít nhất 3 lần `ZONE_FAILED`;
+  - tới vòng 6 vẫn thiếu đúng 1 khu thì cho phép `SCAN_STALLED_NEAR_COMPLETE -> STALE + STOP` kể cả failure counter chưa đủ, để tránh vòng lặp vô hạn.
+- Stop reason phải ghi coverage, khu thiếu và vòng quét; death/killer vẫn để "chưa xác nhận".
+- Manager giữ failure count theo từng zone trong current assignment generation.
+- Panel hiển thị `Missing K...` và minimum healthy scan cycle.
+
+Ngoài ra `DEATH_UNPARSED` chỉ được gửi lên Manager nếu raw death-like message thực sự nhắc tới boss target hiện tại; thông báo death của boss khác chỉ log `DEATH_UNPARSED_IGNORED`.
+
