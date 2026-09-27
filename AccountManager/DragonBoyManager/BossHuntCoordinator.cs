@@ -454,19 +454,32 @@ namespace DragonBoyManager
             if (cmd == CmdDead)
             {
                 bool valid;
+                string concreteBossName = "";
                 lock (_sync)
                 {
                     valid = IsCurrentLocked(payload) && BossMatches(payload.bossName, _bossName);
                     if (valid)
+                    {
                         TouchWorkerLocked(account, payload);
+                        if (_sessionTargetBoss != null && !string.IsNullOrEmpty(_sessionTargetBoss.BossName))
+                            concreteBossName = _sessionTargetBoss.BossName;
+                    }
                 }
 
                 if (valid)
                 {
-                    string reason = MainController.language == 0 ? "Boss mục tiêu đã chết" : "Target boss died";
-                    if (!string.IsNullOrEmpty(payload.detail))
-                        reason += ": " + payload.detail;
-                    Stop(reason);
+                    if (!string.IsNullOrEmpty(concreteBossName))
+                    {
+                        payload.bossName = concreteBossName;
+                        payload.targetBossName = concreteBossName;
+                    }
+                    payload.killer = "";
+                    payload.killerId = -1;
+                    payload.observedAtTicks = DateTime.UtcNow.Ticks;
+                    payload.rawMessage = string.IsNullOrEmpty(payload.detail)
+                        ? "fallback:CmdDead"
+                        : "fallback:CmdDead;" + payload.detail;
+                    HandleBossDeath(account, payload);
                 }
                 return;
             }
@@ -752,16 +765,18 @@ namespace DragonBoyManager
             BossHuntCatalog.RememberBoss(payload.bossName);
             DateTime observedUtc = ReadObservedUtc(payload.observedAtTicks);
             bool matchesCurrent = false;
-            string killer = payload.killer ?? "";
+            string killer = (payload.killer ?? "").Trim();
             int killerId = payload.killerId;
+            string incomingRaw = payload.rawMessage ?? "";
             BossHuntBossSnapshot updatedRecord = null;
 
             lock (_sync)
             {
                 BossHuntBossSnapshot targetRecord = null;
 
+                // Session target remains the strongest binding even after the session was already stopped
+                // by another death signal. This lets announcement and combat evidence enrich one record.
                 if (_sessionTargetBoss != null &&
-                    IsRunningState(_state) &&
                     DeathNameMatchesInstance(payload.bossName, _sessionTargetBoss.BossName) &&
                     DeathLocationMatchesInstance(payload, _sessionTargetBoss))
                 {
@@ -769,28 +784,47 @@ namespace DragonBoyManager
                 }
 
                 if (targetRecord == null)
-                    targetRecord = FindBestAliveRecordForDeathLocked(payload.bossName);
+                    targetRecord = FindBestRecordForDeathLocked(payload.bossName, payload.mapId, payload.zone);
 
                 if (targetRecord != null)
                 {
                     bool newEvent = targetRecord.Alive || targetRecord.DiedAtUtc == DateTime.MinValue;
+                    string oldKiller = targetRecord.Killer ?? "";
+                    int oldKillerId = targetRecord.KillerId;
+                    string oldRaw = targetRecord.RawDeath ?? "";
+
                     targetRecord.Alive = false;
                     targetRecord.Presence = BossPresenceState.Dead;
                     if (targetRecord.DiedAtUtc == DateTime.MinValue || observedUtc < targetRecord.DiedAtUtc)
                         targetRecord.DiedAtUtc = observedUtc;
-                    if (string.IsNullOrEmpty(targetRecord.Killer) && !string.IsNullOrEmpty(killer))
+
+                    if (ShouldReplaceKiller(targetRecord.Killer, killer))
                         targetRecord.Killer = killer;
                     if (targetRecord.KillerId < 0 && killerId >= 0)
                         targetRecord.KillerId = killerId;
-                    if (string.IsNullOrEmpty(targetRecord.RawDeath) && !string.IsNullOrEmpty(payload.rawMessage))
-                        targetRecord.RawDeath = payload.rawMessage;
+                    if (ShouldReplaceDeathRaw(targetRecord.RawDeath, incomingRaw))
+                        targetRecord.RawDeath = incomingRaw;
+
                     targetRecord.LastSourceAccountId = account.ID;
                     AddSourceAccount(targetRecord, account.ID);
+
+                    bool enriched =
+                        !string.Equals(oldKiller, targetRecord.Killer ?? "", StringComparison.Ordinal) ||
+                        oldKillerId != targetRecord.KillerId ||
+                        !string.Equals(oldRaw, targetRecord.RawDeath ?? "", StringComparison.Ordinal);
 
                     if (newEvent)
                     {
                         AddBossEventLocked("DEATH", targetRecord, targetRecord.DiedAtUtc, account.ID, targetRecord.Killer, targetRecord.RawDeath);
                         AddTimelineLocked("BOSS_DEATH", account.ID,
+                            DescribeBossInstance(targetRecord) +
+                            " | killer=" + targetRecord.Killer +
+                            (targetRecord.KillerId >= 0 ? " (#" + targetRecord.KillerId + ")" : "") +
+                            " | " + targetRecord.RawDeath);
+                    }
+                    else if (enriched)
+                    {
+                        AddTimelineLocked("BOSS_DEATH_ENRICH", account.ID,
                             DescribeBossInstance(targetRecord) +
                             " | killer=" + targetRecord.Killer +
                             (targetRecord.KillerId >= 0 ? " (#" + targetRecord.KillerId + ")" : "") +
@@ -816,30 +850,36 @@ namespace DragonBoyManager
                         DiedAtUtc = observedUtc,
                         Killer = killer,
                         KillerId = killerId,
-                        RawDeath = payload.rawMessage ?? "",
+                        RawDeath = incomingRaw,
                         LastSourceAccountId = account.ID
                     };
                     AddSourceAccount(record, account.ID);
                     _bossRecords[key] = record;
-                    AddBossEventLocked("DEATH", record, observedUtc, account.ID, killer, payload.rawMessage);
+                    AddBossEventLocked("DEATH", record, observedUtc, account.ID, killer, incomingRaw);
                     AddTimelineLocked("BOSS_DEATH_UNBOUND", account.ID,
-                        record.BossName + " | killer=" + killer + " | " + (payload.rawMessage ?? ""));
+                        record.BossName + " | killer=" + killer + " | " + incomingRaw);
                     updatedRecord = CloneBoss(record);
                 }
             }
 
+            string effectiveKiller = updatedRecord == null ? killer : (updatedRecord.Killer ?? "");
+            int effectiveKillerId = updatedRecord == null ? killerId : updatedRecord.KillerId;
+            string effectiveRaw = updatedRecord == null ? incomingRaw : (updatedRecord.RawDeath ?? "");
+
             BossHuntDiagnostics.Log("MANAGER", "BOSS_DEATH", 0, account.ID, payload.bossName, "GLOBAL",
-                "killer=" + killer + ";killerId=" + killerId + ";at=" + observedUtc.ToString("o") +
+                "killer=" + effectiveKiller + ";killerId=" + effectiveKillerId + ";at=" + observedUtc.ToString("o") +
                 ";map=" + payload.mapId + ";zone=" + payload.zone +
-                ";currentTarget=" + matchesCurrent);
+                ";currentTarget=" + matchesCurrent + ";raw=" + effectiveRaw);
 
             BossHuntPayload invalidate = new BossHuntPayload
             {
                 bossName = updatedRecord == null ? payload.bossName : updatedRecord.BossName,
-                observedAtTicks = observedUtc.Ticks,
-                killer = killer,
-                killerId = killerId,
-                rawMessage = payload.rawMessage ?? "",
+                observedAtTicks = updatedRecord != null && updatedRecord.DiedAtUtc != DateTime.MinValue
+                    ? updatedRecord.DiedAtUtc.Ticks
+                    : observedUtc.Ticks,
+                killer = effectiveKiller,
+                killerId = effectiveKillerId,
+                rawMessage = effectiveRaw,
                 eventName = "DEATH_SYNC"
             };
             Broadcast(GetConnectedAccounts(), CmdBossInvalidate, invalidate);
@@ -847,9 +887,9 @@ namespace DragonBoyManager
             if (matchesCurrent)
             {
                 string reason = MainController.language == 0 ? "Boss mục tiêu đã chết" : "Target boss died";
-                if (!string.IsNullOrEmpty(killer))
-                    reason += (MainController.language == 0 ? " - Người hạ: " : " - Killer: ") + killer +
-                              (killerId >= 0 ? " (#" + killerId + ")" : "");
+                if (!string.IsNullOrEmpty(effectiveKiller))
+                    reason += (MainController.language == 0 ? " - Người hạ: " : " - Killer: ") + effectiveKiller +
+                              (effectiveKillerId >= 0 ? " (#" + effectiveKillerId + ")" : "");
                 Stop(reason);
             }
             else
@@ -1565,17 +1605,69 @@ namespace DragonBoyManager
             return null;
         }
 
-        private BossHuntBossSnapshot FindBestAliveRecordForDeathLocked(string deathBossName)
+        private BossHuntBossSnapshot FindBestRecordForDeathLocked(string deathBossName, int mapId, int zone)
         {
-            BossHuntBossSnapshot best = null;
+            BossHuntBossSnapshot bestAlive = null;
+            BossHuntBossSnapshot bestDead = null;
+
             foreach (BossHuntBossSnapshot record in _bossRecords.Values)
             {
-                if (!record.Alive || !DeathNameMatchesInstance(deathBossName, record.BossName))
+                if (!DeathNameMatchesInstance(deathBossName, record.BossName))
                     continue;
-                if (best == null || record.SpawnedAtUtc > best.SpawnedAtUtc)
-                    best = record;
+                if (mapId >= 0 && record.MapId >= 0 && mapId != record.MapId)
+                    continue;
+                if (zone >= 0 && record.Zone >= 0 && zone != record.Zone)
+                    continue;
+
+                if (record.Alive)
+                {
+                    if (bestAlive == null || record.SpawnedAtUtc > bestAlive.SpawnedAtUtc)
+                        bestAlive = record;
+                    continue;
+                }
+
+                DateTime candidate = record.DiedAtUtc != DateTime.MinValue ? record.DiedAtUtc : record.SpawnedAtUtc;
+                DateTime bestTime = bestDead == null
+                    ? DateTime.MinValue
+                    : (bestDead.DiedAtUtc != DateTime.MinValue ? bestDead.DiedAtUtc : bestDead.SpawnedAtUtc);
+                if (bestDead == null || candidate > bestTime)
+                    bestDead = record;
             }
-            return best;
+
+            return bestAlive ?? bestDead;
+        }
+
+        private static bool ShouldReplaceKiller(string current, string incoming)
+        {
+            current = (current ?? "").Trim();
+            incoming = (incoming ?? "").Trim();
+            if (incoming.Length == 0)
+                return false;
+            if (current.Length == 0)
+                return true;
+
+            bool currentIsIdFallback = current.StartsWith("#", StringComparison.Ordinal);
+            bool incomingIsIdFallback = incoming.StartsWith("#", StringComparison.Ordinal);
+            return currentIsIdFallback && !incomingIsIdFallback;
+        }
+
+        private static bool ShouldReplaceDeathRaw(string current, string incoming)
+        {
+            current = current ?? "";
+            incoming = incoming ?? "";
+            if (incoming.Length == 0)
+                return false;
+            if (current.Length == 0)
+                return true;
+
+            bool currentSynthetic =
+                current.StartsWith("combat:", StringComparison.OrdinalIgnoreCase) ||
+                current.StartsWith("fallback:", StringComparison.OrdinalIgnoreCase);
+            bool incomingSynthetic =
+                incoming.StartsWith("combat:", StringComparison.OrdinalIgnoreCase) ||
+                incoming.StartsWith("fallback:", StringComparison.OrdinalIgnoreCase);
+
+            return currentSynthetic && !incomingSynthetic;
         }
 
         private static bool SameBossInstance(BossHuntBossSnapshot a, BossHuntBossSnapshot b)
