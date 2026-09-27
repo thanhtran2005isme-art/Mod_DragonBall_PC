@@ -1041,14 +1041,7 @@ namespace AssemblyCSharp.Functions
         {
             if (_maxZone < 0)
                 return 0;
-            int effectiveStart = GetEffectiveStartZone();
-            int count = _maxZone - effectiveStart + 1;
-            if (count <= 0)
-            {
-                effectiveStart = 0;
-                count = _maxZone + 1;
-            }
-            return Math.Max(0, count);
+            return _maxZone + 1;
         }
 
         private int GetFirstAssignedZone()
