@@ -73,7 +73,33 @@ public class GClass12 : GInterface3
 			int bracket = value.IndexOf(']');
 			if (bracket >= 0 && bracket + 1 < value.Length)
 				value = value.Substring(bracket + 1);
-			return value.Trim().TrimStart('#', '	public void onConnectOK(bool isMain1)
+			return value.Trim().TrimStart('#', (char)36);
+		}
+	}
+
+	private static string BossHuntResolveCharacterName(int characterId)
+	{
+		try
+		{
+			GClass78 character = characterId == GClass78.smethod_1().int_13
+				? GClass78.smethod_1()
+				: GClass144.smethod_14(characterId);
+			if (character == null)
+				return "";
+
+			string value = character.string_3 ?? "";
+			int bracket = value.IndexOf(']');
+			if (bracket >= 0 && bracket + 1 < value.Length)
+				value = value.Substring(bracket + 1);
+			return value.Trim().TrimStart('#', (char)36);
+		}
+		catch
+		{
+			return "";
+		}
+	}
+
+	public void onConnectOK(bool isMain1)
 	{
 		bool_4 = isMain1;
 		GClass203.smethod_28();
