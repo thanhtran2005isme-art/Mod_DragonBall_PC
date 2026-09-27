@@ -170,7 +170,7 @@ namespace AssemblyCSharp.Functions
 				vMessage vMessage2 = JsonConvert.DeserializeObject<vMessage>(string_0);
 				if (vMessage2 != null)
 				{
-					if (vMessage2.cmd >= 100 && vMessage2.cmd <= 104)
+					if (vMessage2.cmd >= 100 && vMessage2.cmd <= 105)
 					{
 						BossHuntDiagnostics.Log("GAME_SOCKET", "RX_CMD", 0, "", "SOCKET", "cmd=" + vMessage2.cmd);
 						BossZoneScanner.Instance.HandleManagerMessage(vMessage2.cmd, vMessage2.data);

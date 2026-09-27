@@ -41,6 +41,7 @@ namespace AssemblyCSharp.Functions
             public int targetHp = -1;
             public int scanCycle;
             public int totalZones;
+            public int maxZone = -1;
             public string assignedZones;
         }
 
@@ -55,6 +56,7 @@ namespace AssemblyCSharp.Functions
         private const int CmdRally = 102;
         private const int CmdBossSync = 103;
         private const int CmdBossInvalidate = 104;
+        private const int CmdZoneAssignment = 105;
 
         private const int CmdZone = 110;
         private const int CmdFound = 111;
@@ -86,6 +88,7 @@ namespace AssemblyCSharp.Functions
         private readonly Queue<PendingCommand> _pendingCommands = new Queue<PendingCommand>();
         private readonly object _announcementLock = new object();
         private readonly Queue<string> _pendingAnnouncements = new Queue<string>();
+        private readonly List<int> _assignedZones = new List<int>();
 
         private bool _active;
         private int _sessionId;
@@ -128,6 +131,8 @@ namespace AssemblyCSharp.Functions
         private long _zoneListWaitStartedAt;
         private bool _zoneListFresh;
         private bool _zonePlanReady;
+        private bool _zoneCapacityReported;
+        private int _assignedZonePosition;
         private int _lastEntityCount = -1;
         private int _lastBossCount = -1;
         private long _lastEntityChangeAt;
@@ -146,7 +151,7 @@ namespace AssemblyCSharp.Functions
 
         public void HandleManagerMessage(int cmd, byte[] data)
         {
-            if (cmd != CmdStartScan && cmd != CmdStop && cmd != CmdRally && cmd != CmdBossSync && cmd != CmdBossInvalidate)
+            if (cmd != CmdStartScan && cmd != CmdStop && cmd != CmdRally && cmd != CmdBossSync && cmd != CmdBossInvalidate && cmd != CmdZoneAssignment)
                 return;
 
             BossHuntPayload payload = Deserialize(data);
@@ -217,6 +222,14 @@ namespace AssemblyCSharp.Functions
                 if (pending.cmd == CmdBossInvalidate)
                 {
                     GClass156.InvalidateBossLocation(pending.payload.bossName);
+                    continue;
+                }
+
+                if (pending.cmd == CmdZoneAssignment)
+                {
+                    if (_active && pending.payload.sessionId == _sessionId &&
+                        pending.payload.assignmentGeneration == _assignmentGeneration)
+                        ApplyZoneAssignment(pending.payload);
                     continue;
                 }
 
@@ -292,6 +305,9 @@ namespace AssemblyCSharp.Functions
             _zoneListWaitStartedAt = 0L;
             _zoneListFresh = false;
             _zonePlanReady = false;
+            _zoneCapacityReported = false;
+            _assignedZones.Clear();
+            _assignedZonePosition = 0;
             _lastEntityCount = -1;
             _lastBossCount = -1;
             _lastEntityChangeAt = 0L;
@@ -451,6 +467,9 @@ namespace AssemblyCSharp.Functions
             _zoneListWaitStartedAt = now;
             _zoneListFresh = false;
             _zonePlanReady = false;
+            _zoneCapacityReported = false;
+            _assignedZones.Clear();
+            _assignedZonePosition = 0;
             _lastEntityCount = -1;
             _lastBossCount = -1;
             _lastEntityChangeAt = 0L;
@@ -471,41 +490,64 @@ namespace AssemblyCSharp.Functions
             }
         }
 
-        private bool PrepareZonePlan()
+        private bool EnsureCentralZonePlan()
         {
-            int availableZoneCount = GetAvailableZoneCount();
-            if (availableZoneCount <= 0 || _workerIndex >= availableZoneCount)
+            if (_zonePlanReady)
+                return true;
+
+            if (!_zoneCapacityReported)
             {
-                _state = ScannerState.Standby;
-                _desiredZone = -1;
-                _usingAnnouncedZone = false;
-                Trace("STANDBY", "availableZones=" + Math.Max(0, availableZoneCount));
-                SendZonePlanTelemetry(Math.Max(0, availableZoneCount), "");
-                SendEvent(CmdZone, "STANDBY|" + Math.Max(0, availableZoneCount));
-                return false;
+                int availableZoneCount = GetAvailableZoneCount();
+                SendZoneCapacityTelemetry(Math.Max(0, availableZoneCount), _maxZone);
+                _zoneCapacityReported = true;
+                Trace("ZONE_CAPACITY", "maxZone=" + _maxZone + ";available=" + availableZoneCount);
+                SendEvent(CmdZone, "WAITING_ASSIGNMENT");
+            }
+            return false;
+        }
+
+        private void ApplyZoneAssignment(BossHuntPayload payload)
+        {
+            _assignedZones.Clear();
+            _assignedZonePosition = 0;
+            _workerIndex = Math.Max(0, payload.workerIndex);
+            _workerCount = Math.Max(1, payload.workerCount);
+            _startZone = Math.Max(0, payload.startZone);
+
+            string raw = payload.assignedZones ?? "";
+            string[] parts = raw.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+            for (int i = 0; i < parts.Length; i++)
+            {
+                string token = parts[i].Trim();
+                if (token.StartsWith("K", StringComparison.OrdinalIgnoreCase))
+                    token = token.Substring(1);
+                int zone;
+                if (int.TryParse(token, out zone) && zone >= 0 && (_maxZone < 0 || zone <= _maxZone) && !_assignedZones.Contains(zone))
+                    _assignedZones.Add(zone);
             }
 
-            int first = GetFirstAssignedZone();
-            if (first < 0)
-            {
-                _state = ScannerState.Standby;
-                _desiredZone = -1;
-                _usingAnnouncedZone = false;
-                Trace("STANDBY", "availableZones=" + Math.Max(0, availableZoneCount));
-                SendZonePlanTelemetry(Math.Max(0, availableZoneCount), "");
-                SendEvent(CmdZone, "STANDBY|" + Math.Max(0, availableZoneCount));
-                return false;
-            }
-
-            _usingAnnouncedZone = IsZoneAssignedToWorker(_announcedZone);
-            _desiredZone = _usingAnnouncedZone ? _announcedZone : first;
-            _scanCycle = 1;
             _zonePlanReady = true;
-            string assigned = BuildAssignedZonesText();
-            Trace("ZONE_PLAN", "maxZone=" + _maxZone + ";first=" + first + ";desired=" + _desiredZone + ";announced=" + _announcedZone + ";announcedOwned=" + _usingAnnouncedZone + ";assigned=" + assigned);
-            SendZonePlanTelemetry(availableZoneCount, assigned);
+            _scanCycle = 1;
+            if (_assignedZones.Count == 0)
+            {
+                _state = ScannerState.Standby;
+                _desiredZone = -1;
+                _usingAnnouncedZone = false;
+                Trace("CENTRAL_ZONE_PLAN", "standby;total=" + payload.totalZones);
+                SendEvent(CmdZone, "STANDBY|" + payload.totalZones);
+                return;
+            }
+
+            int announcedIndex = _assignedZones.IndexOf(_announcedZone);
+            _usingAnnouncedZone = announcedIndex >= 0;
+            _assignedZonePosition = _usingAnnouncedZone ? announcedIndex : 0;
+            _desiredZone = _assignedZones[_assignedZonePosition];
+            _state = ScannerState.Scanning;
+            _zoneAttempts = 0;
+            _lastZoneCommandAt = 0L;
+            Trace("CENTRAL_ZONE_PLAN", "assigned=" + BuildAssignedZonesText() + ";desired=" + _desiredZone + ";announcedOwned=" + _usingAnnouncedZone);
+            SendTelemetry("ZONE_PLAN", "assigned=" + BuildAssignedZonesText() + ";total=" + payload.totalZones);
             SendEvent(CmdZone, "SCANNING");
-            return true;
         }
 
         private bool TryResolveKnownBossLocation(out int mapId, out string mapName, out int zone)
@@ -582,7 +624,7 @@ namespace AssemblyCSharp.Functions
             }
 
             _maxZone = detectedMax;
-            if (!_zonePlanReady && !PrepareZonePlan())
+            if (!EnsureCentralZonePlan())
                 return;
 
             NormalizeDesiredZone();
@@ -938,24 +980,27 @@ namespace AssemblyCSharp.Functions
 
         private void MoveToNextAssignedZone()
         {
-            int first = GetFirstAssignedZone();
-            if (first < 0)
+            if (_assignedZones.Count == 0)
             {
                 _state = ScannerState.Standby;
                 _desiredZone = -1;
                 _usingAnnouncedZone = false;
-                SendEvent(CmdZone, "STANDBY|" + Math.Max(0, GetAvailableZoneCount()));
+                SendEvent(CmdZone, "STANDBY|0");
                 return;
             }
 
-            int next = _desiredZone + _workerCount;
-            if (next > _maxZone)
+            int currentIndex = _assignedZones.IndexOf(_desiredZone);
+            if (currentIndex < 0)
+                currentIndex = _assignedZonePosition;
+            int nextIndex = currentIndex + 1;
+            if (nextIndex >= _assignedZones.Count)
             {
-                _desiredZone = first;
+                nextIndex = 0;
                 _scanCycle++;
             }
-            else
-                _desiredZone = next;
+
+            _assignedZonePosition = nextIndex;
+            _desiredZone = _assignedZones[_assignedZonePosition];
             _zoneAttempts = 0;
             _lastZoneCommandAt = 0L;
         }
@@ -984,35 +1029,30 @@ namespace AssemblyCSharp.Functions
 
         private int GetFirstAssignedZone()
         {
-            int count = GetAvailableZoneCount();
-            if (count <= 0 || _workerIndex >= count)
-                return -1;
-            return GetEffectiveStartZone() + _workerIndex;
+            return _assignedZones.Count == 0 ? -1 : _assignedZones[0];
         }
 
         private bool IsZoneAssignedToWorker(int zone)
         {
-            if (zone < 0 || _workerCount <= 0)
-                return false;
-
-            int count = GetAvailableZoneCount();
-            if (count <= 0 || _workerIndex >= count)
-                return false;
-
-            int effectiveStart = GetEffectiveStartZone();
-            int offset = zone - effectiveStart;
-            if (offset < 0 || offset >= count)
-                return false;
-
-            return offset % _workerCount == _workerIndex;
+            return zone >= 0 && _assignedZones.Contains(zone);
         }
 
         private void NormalizeDesiredZone()
         {
-            if (_maxZone < 0)
+            if (_assignedZones.Count == 0)
+            {
+                _desiredZone = -1;
                 return;
-            if (_desiredZone < 0 || _desiredZone > _maxZone)
-                _desiredZone = GetFirstAssignedZone();
+            }
+
+            int index = _assignedZones.IndexOf(_desiredZone);
+            if (index < 0)
+            {
+                _assignedZonePosition = 0;
+                _desiredZone = _assignedZones[0];
+            }
+            else
+                _assignedZonePosition = index;
         }
 
         private int GetDetectedMaxZone()
@@ -1135,30 +1175,26 @@ namespace AssemblyCSharp.Functions
 
         private string BuildAssignedZonesText()
         {
-            int first = GetFirstAssignedZone();
-            if (first < 0 || _workerCount <= 0)
-                return "";
-
             StringBuilder builder = new StringBuilder();
-            for (int zone = first; zone <= _maxZone; zone += _workerCount)
+            for (int i = 0; i < _assignedZones.Count; i++)
             {
                 if (builder.Length > 0)
                     builder.Append(",");
                 builder.Append("K");
-                builder.Append(zone);
+                builder.Append(_assignedZones[i]);
             }
             return builder.ToString();
         }
 
-        private void SendZonePlanTelemetry(int totalZones, string assignedZones)
+        private void SendZoneCapacityTelemetry(int totalZones, int maxZone)
         {
             try
             {
                 BossHuntPayload payload = CreateClientPayload();
-                payload.eventName = "ZONE_PLAN";
+                payload.eventName = "ZONE_CAPACITY";
                 payload.totalZones = totalZones;
-                payload.assignedZones = assignedZones ?? "";
-                payload.detail = "assigned=" + payload.assignedZones + ";total=" + totalZones;
+                payload.maxZone = maxZone;
+                payload.detail = "maxZone=" + maxZone + ";total=" + totalZones;
                 GClass150.smethod_0().method_2(new vMessage
                 {
                     cmd = CmdTelemetry,

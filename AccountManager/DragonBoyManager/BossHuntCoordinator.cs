@@ -42,6 +42,11 @@ namespace DragonBoyManager
         public int ScanCycle;
         public string AssignedZones = "";
         public int TotalZones;
+        public bool ZoneCapacityReported;
+        public int ReportedMaxZone = -1;
+        public DateTime ScanStartedAtUtc = DateTime.MinValue;
+        public int ZoneClearCount;
+        public int FailureCount;
         public int EntityCount = -1;
         public int BossCount = -1;
         public int TargetHp = -1;
@@ -96,6 +101,7 @@ namespace DragonBoyManager
     {
         public int SessionId;
         public int AssignmentGeneration;
+        public DateTime SessionStartedAtUtc = DateTime.MinValue;
         public string BossName = "";
         public int StartZone;
         public BossHuntState State;
@@ -135,7 +141,14 @@ namespace DragonBoyManager
         public int targetHp = -1;
         public int scanCycle;
         public int totalZones;
+        public int maxZone = -1;
         public string assignedZones;
+    }
+
+    internal sealed class PendingZoneAssignment
+    {
+        public Account Account;
+        public BossHuntPayload Payload;
     }
 
     internal sealed class BossHuntZoneLedgerEntry
@@ -156,6 +169,7 @@ namespace DragonBoyManager
         public const int CmdRally = 102;
         public const int CmdBossSync = 103;
         public const int CmdBossInvalidate = 104;
+        public const int CmdZoneAssignment = 105;
 
         public const int CmdZone = 110;
         public const int CmdFound = 111;
@@ -184,6 +198,8 @@ namespace DragonBoyManager
         private int _sessionSeed;
         private int _sessionId;
         private int _assignmentGeneration;
+        private int _zonePlanIssuedGeneration;
+        private DateTime _sessionStartedAtUtc = DateTime.MinValue;
         private string _bossName = "";
         private int _startZone;
         private BossHuntState _state = BossHuntState.Idle;
@@ -295,6 +311,8 @@ namespace DragonBoyManager
                     _sessionSeed = 1;
                 _sessionId = _sessionSeed;
                 _assignmentGeneration = 1;
+                _zonePlanIssuedGeneration = 0;
+                _sessionStartedAtUtc = DateTime.UtcNow;
                 sessionId = _sessionId;
                 generation = _assignmentGeneration;
                 _bossName = bossName;
@@ -324,7 +342,8 @@ namespace DragonBoyManager
                         AssignmentGeneration = generation,
                         Status = MainController.language == 0 ? "Chuẩn bị dò" : "Preparing",
                         LastHeartbeatUtc = now,
-                        LastEventUtc = now
+                        LastEventUtc = now,
+                        ScanStartedAtUtc = now
                     };
                 }
                 _sessionAccounts.AddRange(accounts);
@@ -456,6 +475,8 @@ namespace DragonBoyManager
                         string detail = payload.detail ?? "";
                         if (detail == "WAITING_LOCATION")
                             worker.Status = MainController.language == 0 ? "Chờ vị trí boss" : "Waiting for boss location";
+                        else if (detail == "WAITING_ASSIGNMENT")
+                            worker.Status = MainController.language == 0 ? "Chờ Manager chia khu" : "Waiting for Manager zone plan";
                         else if (detail == "ZONE_LIST_WAIT")
                             worker.Status = MainController.language == 0 ? "Đang tải danh sách khu" : "Loading zone list";
                         else if (detail.StartsWith("STANDBY|", StringComparison.Ordinal))
@@ -586,6 +607,7 @@ namespace DragonBoyManager
                 {
                     SessionId = _sessionId,
                     AssignmentGeneration = _assignmentGeneration,
+                    SessionStartedAtUtc = _sessionStartedAtUtc,
                     BossName = _bossName,
                     StartZone = _startZone,
                     State = _state,
@@ -797,6 +819,7 @@ namespace DragonBoyManager
         private void HandleTelemetry(Account account, BossHuntPayload payload)
         {
             bool changed = false;
+            List<PendingZoneAssignment> centralAssignments = null;
             lock (_sync)
             {
                 if (!IsCurrentLocked(payload))
@@ -819,7 +842,17 @@ namespace DragonBoyManager
                 string eventName = payload.eventName ?? "";
                 worker.LastAction = eventName;
 
-                if (eventName == "ZONE_PLAN")
+                if (eventName == "ZONE_CAPACITY")
+                {
+                    worker.ZoneCapacityReported = true;
+                    worker.ReportedMaxZone = payload.maxZone;
+                    worker.TotalZones = payload.totalZones;
+                    worker.Status = MainController.language == 0 ? "Đã báo số khu - chờ chia" : "Zone capacity reported";
+                    AddTimelineLocked("ZONE_CAPACITY", account.ID, "maxZone=" + payload.maxZone + ";count=" + payload.totalZones);
+                    centralAssignments = BuildCentralZoneAssignmentsIfReadyLocked();
+                    changed = true;
+                }
+                else if (eventName == "ZONE_PLAN")
                 {
                     worker.AssignedZones = payload.assignedZones ?? "";
                     worker.TotalZones = payload.totalZones;
@@ -843,6 +876,7 @@ namespace DragonBoyManager
                 else if (eventName == "ZONE_FAILED")
                 {
                     worker.ZoneFailureCount++;
+                    worker.FailureCount++;
                     worker.LastZoneFailure = "K" + payload.zone + " " + (payload.detail ?? "");
                     AppendZoneHistory(worker, "G" + payload.assignmentGeneration + " K" + payload.zone + " FAIL");
                     AddTimelineLocked("ZONE_FAILED", account.ID, worker.LastZoneFailure);
@@ -887,6 +921,12 @@ namespace DragonBoyManager
                 }
             }
 
+            if (centralAssignments != null)
+            {
+                for (int i = 0; i < centralAssignments.Count; i++)
+                    Send(centralAssignments[i].Account, CmdZoneAssignment, centralAssignments[i].Payload);
+            }
+
             if (changed)
                 Publish();
         }
@@ -913,6 +953,7 @@ namespace DragonBoyManager
                     worker.Ready = false;
                     worker.Failed = true;
                     worker.Unresponsive = false;
+                    worker.FailureCount++;
                     worker.Status = (MainController.language == 0 ? "Lỗi: " : "Failed: ") +
                                     (string.IsNullOrEmpty(payload.detail) ? "UNKNOWN" : payload.detail);
                     worker.LastAction = "FAILED";
@@ -1043,6 +1084,7 @@ namespace DragonBoyManager
                     worker.Unresponsive = true;
                     worker.Failed = true;
                     worker.Ready = false;
+                    worker.FailureCount++;
                     worker.Status = MainController.language == 0 ? "Không phản hồi >8s" : "No heartbeat >8s";
                     worker.LastEventUtc = now;
                     worker.LastAction = "WATCHDOG_TIMEOUT";
@@ -1150,6 +1192,7 @@ namespace DragonBoyManager
         {
             _sessionAccounts.Clear();
             _sessionAccounts.AddRange(accounts);
+            _zonePlanIssuedGeneration = 0;
             _zoneLedger.Clear();
             _activeZoneByAccount.Clear();
 
@@ -1178,6 +1221,10 @@ namespace DragonBoyManager
                 worker.ScanCycle = 0;
                 worker.AssignedZones = "";
                 worker.TotalZones = 0;
+                worker.ZoneCapacityReported = false;
+                worker.ReportedMaxZone = -1;
+                if (worker.ScanStartedAtUtc == DateTime.MinValue)
+                    worker.ScanStartedAtUtc = now;
                 worker.EntityCount = -1;
                 worker.BossCount = -1;
                 worker.TargetHp = -1;
@@ -1298,6 +1345,7 @@ namespace DragonBoyManager
                 entry.ActiveAccountId = -1;
             entry.LastScannedByAccountId = worker.AccountId;
             entry.LastClearUtc = DateTime.UtcNow;
+            worker.ZoneClearCount++;
             worker.ZoneEnteredAtUtc = DateTime.MinValue;
             _activeZoneByAccount.Remove(worker.AccountId);
 
@@ -1447,6 +1495,11 @@ namespace DragonBoyManager
                 ScanCycle = source.ScanCycle,
                 AssignedZones = source.AssignedZones,
                 TotalZones = source.TotalZones,
+                ZoneCapacityReported = source.ZoneCapacityReported,
+                ReportedMaxZone = source.ReportedMaxZone,
+                ScanStartedAtUtc = source.ScanStartedAtUtc,
+                ZoneClearCount = source.ZoneClearCount,
+                FailureCount = source.FailureCount,
                 EntityCount = source.EntityCount,
                 BossCount = source.BossCount,
                 TargetHp = source.TargetHp,
@@ -1459,6 +1512,89 @@ namespace DragonBoyManager
             clone.ScannedZones.AddRange(source.ScannedZones);
             clone.ZoneHistory.AddRange(source.ZoneHistory);
             return clone;
+        }
+
+        private List<PendingZoneAssignment> BuildCentralZoneAssignmentsIfReadyLocked()
+        {
+            if (_state != BossHuntState.Scanning || _zonePlanIssuedGeneration == _assignmentGeneration)
+                return null;
+
+            List<Account> healthy = new List<Account>();
+            int canonicalMaxZone = int.MaxValue;
+            for (int i = 0; i < _sessionAccounts.Count; i++)
+            {
+                Account account = _sessionAccounts[i];
+                BossHuntWorkerSnapshot worker;
+                if (!IsConnected(account) || !_workers.TryGetValue(account.ID, out worker) || worker.Failed || worker.Unresponsive)
+                    continue;
+                if (!worker.ZoneCapacityReported || worker.ReportedMaxZone < 0)
+                    return null;
+
+                healthy.Add(account);
+                if (worker.ReportedMaxZone < canonicalMaxZone)
+                    canonicalMaxZone = worker.ReportedMaxZone;
+            }
+
+            if (healthy.Count == 0 || canonicalMaxZone == int.MaxValue)
+                return null;
+
+            int effectiveStart = _startZone <= canonicalMaxZone ? _startZone : 0;
+            int totalZones = canonicalMaxZone - effectiveStart + 1;
+            if (totalZones <= 0)
+                return null;
+
+            List<PendingZoneAssignment> result = new List<PendingZoneAssignment>();
+            for (int i = 0; i < healthy.Count; i++)
+            {
+                Account account = healthy[i];
+                BossHuntWorkerSnapshot worker = _workers[account.ID];
+                worker.WorkerIndex = i;
+                worker.WorkerCount = healthy.Count;
+                worker.TotalZones = totalZones;
+                worker.AssignedZones = BuildAssignedZones(effectiveStart, canonicalMaxZone, i, healthy.Count);
+                worker.Status = string.IsNullOrEmpty(worker.AssignedZones)
+                    ? (MainController.language == 0 ? "Dự phòng - không có khu" : "Standby - no assigned zone")
+                    : (MainController.language == 0 ? "Đã nhận phân khu" : "Zone plan received");
+
+                BossHuntPayload assignment = new BossHuntPayload
+                {
+                    sessionId = _sessionId,
+                    assignmentGeneration = _assignmentGeneration,
+                    bossName = _bossName,
+                    startZone = effectiveStart,
+                    workerIndex = i,
+                    workerCount = healthy.Count,
+                    accountId = account.ID,
+                    totalZones = totalZones,
+                    maxZone = canonicalMaxZone,
+                    assignedZones = worker.AssignedZones
+                };
+                result.Add(new PendingZoneAssignment { Account = account, Payload = assignment });
+                AddTimelineLocked("ZONE_PLAN", account.ID,
+                    "canonicalMax=" + canonicalMaxZone + ";assigned=" + worker.AssignedZones + ";total=" + totalZones);
+            }
+
+            _zonePlanIssuedGeneration = _assignmentGeneration;
+            BossHuntDiagnostics.Log("MANAGER", "CENTRAL_ZONE_PLAN", _sessionId, -1, _bossName, _state.ToString(),
+                "generation=" + _assignmentGeneration + ";workers=" + healthy.Count +
+                ";start=" + effectiveStart + ";max=" + canonicalMaxZone + ";total=" + totalZones);
+            return result;
+        }
+
+        private static string BuildAssignedZones(int startZone, int maxZone, int workerIndex, int workerCount)
+        {
+            if (workerCount <= 0 || workerIndex < 0)
+                return "";
+
+            StringBuilder builder = new StringBuilder();
+            for (int zone = startZone + workerIndex; zone <= maxZone; zone += workerCount)
+            {
+                if (builder.Length > 0)
+                    builder.Append(",");
+                builder.Append("K");
+                builder.Append(zone);
+            }
+            return builder.ToString();
         }
 
         private static BossPresenceState GetPresence(BossHuntBossSnapshot boss)
