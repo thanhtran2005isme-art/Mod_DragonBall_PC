@@ -50,14 +50,14 @@ namespace AssemblyCSharp.Functions
             try
             {
                 string root = AppDomain.CurrentDomain.BaseDirectory ?? "";
-                string directory = Path.Combine(root, "Data", "Errors");
+                string directory = Path.Combine(Path.Combine(root, "Data"), "Errors");
                 Directory.CreateDirectory(directory);
                 int pid = Process.GetCurrentProcess().Id;
                 return Path.Combine(directory, "BossHuntProtocol.Game.pid" + pid + ".log");
             }
             catch
             {
-                return Path.Combine("Data", "Errors", "BossHuntProtocol.Game.fallback.log");
+                return Path.Combine(Path.Combine("Data", "Errors"), "BossHuntProtocol.Game.fallback.log");
             }
         }
 
