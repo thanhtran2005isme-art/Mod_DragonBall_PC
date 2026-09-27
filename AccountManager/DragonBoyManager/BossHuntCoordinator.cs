@@ -640,14 +640,21 @@ namespace DragonBoyManager
                 bool olderThanKnownDeath = !record.Alive &&
                                            record.DiedAtUtc != DateTime.MinValue &&
                                            observedUtc <= record.DiedAtUtc;
-                bool newer = !olderThanKnownDeath &&
-                             (record.SpawnedAtUtc == DateTime.MinValue || observedUtc >= record.SpawnedAtUtc);
-                bool newEvent = !olderThanKnownDeath &&
-                                (!record.Alive || record.MapId != payload.mapId || record.Zone != payload.zone ||
-                                 record.SpawnedAtUtc == DateTime.MinValue ||
-                                 Math.Abs(observedUtc.Subtract(record.SpawnedAtUtc).TotalSeconds) > 5.0);
+                bool sameLiveEvent = record.Alive &&
+                                     record.MapId == payload.mapId &&
+                                     record.Zone == payload.zone;
+                bool newEvent = !olderThanKnownDeath && !sameLiveEvent;
 
-                if (newer)
+                if (!olderThanKnownDeath && sameLiveEvent)
+                {
+                    if (record.SpawnedAtUtc == DateTime.MinValue || observedUtc < record.SpawnedAtUtc)
+                        record.SpawnedAtUtc = observedUtc;
+                    if (string.IsNullOrEmpty(record.RawSpawn) && !string.IsNullOrEmpty(payload.rawMessage))
+                        record.RawSpawn = payload.rawMessage;
+                    record.LastSourceAccountId = account.ID;
+                    shouldBroadcast = DateTime.UtcNow.Subtract(record.SpawnedAtUtc).TotalMinutes <= BossLocationFreshMinutes;
+                }
+                else if (newEvent)
                 {
                     record.BossName = NormalizeBossName(payload.bossName);
                     record.MapId = payload.mapId;
@@ -661,11 +668,8 @@ namespace DragonBoyManager
                     record.RawDeath = "";
                     record.LastSourceAccountId = account.ID;
                     shouldBroadcast = DateTime.UtcNow.Subtract(record.SpawnedAtUtc).TotalMinutes <= BossLocationFreshMinutes;
-                }
 
-                if (newEvent)
-                {
-                    AddBossEventLocked("SPAWN", record, observedUtc, account.ID, "", payload.rawMessage);
+                    AddBossEventLocked("SPAWN", record, record.SpawnedAtUtc, account.ID, "", payload.rawMessage);
                     if (_sessionId > 0 && BossMatches(record.BossName, _bossName))
                         AddTimelineLocked("BOSS_SPAWN", account.ID, record.MapName + " K" + record.Zone + " | " + (payload.rawMessage ?? ""));
                 }
@@ -698,19 +702,21 @@ namespace DragonBoyManager
                     if (!BossMatches(record.BossName, payload.bossName) && !BossMatches(payload.bossName, record.BossName))
                         continue;
 
-                    bool newEvent = record.Alive || record.DiedAtUtc == DateTime.MinValue ||
-                                    Math.Abs(observedUtc.Subtract(record.DiedAtUtc).TotalSeconds) > 5.0;
+                    bool newEvent = record.Alive || record.DiedAtUtc == DateTime.MinValue;
                     record.Alive = false;
-                    record.DiedAtUtc = observedUtc;
-                    record.Killer = killer;
-                    record.RawDeath = payload.rawMessage ?? "";
+                    if (record.DiedAtUtc == DateTime.MinValue || observedUtc < record.DiedAtUtc)
+                        record.DiedAtUtc = observedUtc;
+                    if (string.IsNullOrEmpty(record.Killer) && !string.IsNullOrEmpty(killer))
+                        record.Killer = killer;
+                    if (string.IsNullOrEmpty(record.RawDeath) && !string.IsNullOrEmpty(payload.rawMessage))
+                        record.RawDeath = payload.rawMessage;
                     record.LastSourceAccountId = account.ID;
                     AddSourceAccount(record, account.ID);
                     if (newEvent)
                     {
-                        AddBossEventLocked("DEATH", record, observedUtc, account.ID, killer, payload.rawMessage);
+                        AddBossEventLocked("DEATH", record, record.DiedAtUtc, account.ID, record.Killer, record.RawDeath);
                         if (_sessionId > 0 && BossMatches(record.BossName, _bossName))
-                            AddTimelineLocked("BOSS_DEATH", account.ID, "killer=" + killer + " | " + (payload.rawMessage ?? ""));
+                            AddTimelineLocked("BOSS_DEATH", account.ID, "killer=" + record.Killer + " | " + record.RawDeath);
                     }
                     updatedAny = true;
                 }
