@@ -897,7 +897,10 @@ namespace AssemblyCSharp.Functions
                     actualName = boss.string_3 ?? "";
                 }
 
-                if (BossNameMatches(actualName, _bossName))
+                string targetName = _sessionTargetLocked && !string.IsNullOrEmpty(_sessionTargetBossName)
+                    ? _sessionTargetBossName
+                    : _bossName;
+                if (BossNameMatches(actualName, targetName))
                     return boss;
             }
             return null;
@@ -974,7 +977,10 @@ namespace AssemblyCSharp.Functions
                 if (!_active)
                     continue;
 
-                if (DeathAnnouncementMatches(message, _bossName))
+                string deathTarget = _sessionTargetLocked && !string.IsNullOrEmpty(_sessionTargetBossName)
+                    ? _sessionTargetBossName
+                    : _bossName;
+                if (DeathAnnouncementMatches(message, deathTarget))
                 {
                     Trace("ANNOUNCEMENT_DEATH", message);
                     ReportDead(message);
@@ -990,7 +996,12 @@ namespace AssemblyCSharp.Functions
                     if (GClass156.TryParseBossAnnouncement(message, out announcedBoss, out announcedMap, out announcedMapId, out announcedZone) &&
                         BossNameMatches(announcedBoss, _bossName))
                     {
-                        Trace("ANNOUNCEMENT_SPAWN_LOCAL", "mapId=" + announcedMapId + ";map=" + announcedMap + ";zone=" + announcedZone + ";waitingManagerSync=true");
+                        string lockedText = _sessionTargetLocked
+                            ? _sessionTargetBossName + "@" + _sessionTargetMapId + "/K" + _sessionTargetZone
+                            : "-";
+                        Trace("ANNOUNCEMENT_SPAWN_LOCAL",
+                            "mapId=" + announcedMapId + ";map=" + announcedMap + ";zone=" + announcedZone +
+                            ";locked=" + lockedText + ";waitingManagerSync=true");
                     }
                 }
             }
