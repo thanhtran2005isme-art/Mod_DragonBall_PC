@@ -240,6 +240,8 @@ bfdc638 Bắt KOL trực tiếp từ packet 22 thực tế
 - Runtime compatibility fix: Unity/.NET runtime của Game không load được `System.IO.InvalidDataException` dù CI net35 compile được. Điều này làm `GClass150` chết ngay sau CONNECTED trước HANDSHAKE_TX. Hai chỗ framing trong `GClass150.cs` đã đổi sang `IOException`; commit `41e5484` full workflow SUCCESS. Không dùng `InvalidDataException` trong GameAssembly mới.
 - Lifecycle death hardening: death parser nhận thêm mẫu `bị <killer> tiêu diệt/hạ gục/đánh bại`, direct `... bởi <killer>` và English equivalents; mọi announcement được log raw + parsed/unparsed. `ZONE_PLAN` telemetry giờ giữ `assignedZones/totalZones`. Nếu boss đã spawn >=45s và mọi worker khỏe đã tới scan cycle >=3 mà vẫn không FOUND, Manager đánh dấu record `STALE`, invalidate location và dừng phiên với lý do `death/killer chưa xác nhận` thay vì quét vô hạn. Commit `0fa2a2e` full workflow SUCCESS.
 - Coverage correction: scan exhaustion không còn dựa riêng vào `scanCycle`; bắt buộc `uniqueCoverage >= totalZones`. Coverage 5/17 phải tiếp tục scan, không được STALE/STOP. Game forward raw announcement liên quan boss lên Manager timeline bằng telemetry `ANNOUNCEMENT_RAW`, giúp nhìn trực tiếp death text thật. Commits `b210ba5`, `ce4af3b`; `ce4af3b` full workflow SUCCESS.
+- Zone partition rule chốt: Game báo `totalZones = int_63.Length` cho toàn map; `Khu bắt đầu` chỉ xoay thứ tự danh sách, không cắt bỏ khu trước đó. 1 account nhận toàn bộ zone list; N account được chia contiguous cân bằng bằng quotient/remainder, chênh tối đa 1 khu; account dư Standby. Không overlap trong cùng generation. Commits `30d12fc`, `e9468fc`; `e9468fc` full workflow SUCCESS.
+
 
 
 

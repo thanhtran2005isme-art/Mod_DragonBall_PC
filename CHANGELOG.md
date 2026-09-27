@@ -5,6 +5,8 @@ Không dùng file này để giải thích kiến trúc dài; chi tiết nằm t
 
 ## 2026-09-27
 
+- Boss Hunt partition: 1 account quét toàn bộ khu; N account chia đều toàn bộ zone list theo block cân bằng, `Khu bắt đầu` chỉ xoay thứ tự. Commits `30d12fc`, `e9468fc`; full workflow SUCCESS.
+
 - Fix lifecycle Boss Hunt: parser death hỗ trợ thêm killer đứng giữa `bị ... tiêu diệt/hạ gục/đánh bại`, raw announcement diagnostics, giữ Assigned/TotalZones và chặn scan vô hạn bằng STALE sau 3 cycle. Commit `0fa2a2e` full workflow SUCCESS.
 
 - Fix vòng Manager `ACCEPT` nhưng Boss Hunt vẫn 0 account: tách HELLO `cmd=0` và ACK `cmd=99`, retry handshake trên cùng socket, sync boss cache sau ACK và thêm diagnostic pre-handshake close. Commit `7771a15` full workflow SUCCESS.

@@ -382,3 +382,15 @@ Dữ liệu này đến từ `117 TELEMETRY` + `118 HEARTBEAT`, không suy ngư�
 - Zone fail không được tính là clear coverage.
 - Nếu coverage chưa đủ, session tiếp tục scan và status phải cho thấy coverage hiện tại.
 - Raw announcement liên quan boss được forward lên Manager timeline để audit death/killer parser trực tiếp.
+
+## D-035 — Chia đều toàn bộ zone list theo số account
+
+**Trạng thái:** active — 2026-09-27
+
+- `totalZones` lấy từ toàn bộ zone list của map (`int_63.Length`), không lấy từ `startZone..maxZone`.
+- `Khu bắt đầu` chỉ xoay thứ tự quét: ví dụ 17 khu, start K5 -> `K5..K16,K0..K4`.
+- 1 account nhận 100% danh sách khu.
+- N account chia contiguous cân bằng; số khu giữa hai account chênh tối đa 1.
+- Với 17 khu / 3 account -> 6 + 6 + 5.
+- Nếu account nhiều hơn khu, account dư nhận assignment rỗng và Standby.
+- Không có overlap trong cùng assignment generation.
