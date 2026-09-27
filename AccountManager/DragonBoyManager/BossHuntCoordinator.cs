@@ -47,6 +47,7 @@ namespace DragonBoyManager
         public DateTime ScanStartedAtUtc = DateTime.MinValue;
         public int ZoneClearCount;
         public int FailureCount;
+        public int TimeoutCount;
         public int EntityCount = -1;
         public int BossCount = -1;
         public int TargetHp = -1;
@@ -643,6 +644,7 @@ namespace DragonBoyManager
             if (string.IsNullOrEmpty(payload.bossName) || payload.mapId < 0)
                 return;
 
+            BossHuntCatalog.RememberBoss(payload.bossName);
             DateTime observedUtc = ReadObservedUtc(payload.observedAtTicks);
             BossHuntBossSnapshot canonical;
             bool shouldBroadcast = false;
@@ -954,6 +956,8 @@ namespace DragonBoyManager
                     worker.Failed = true;
                     worker.Unresponsive = false;
                     worker.FailureCount++;
+                    if (!string.IsNullOrEmpty(payload.detail) && payload.detail.IndexOf("TIMEOUT", StringComparison.OrdinalIgnoreCase) >= 0)
+                        worker.TimeoutCount++;
                     worker.Status = (MainController.language == 0 ? "Lỗi: " : "Failed: ") +
                                     (string.IsNullOrEmpty(payload.detail) ? "UNKNOWN" : payload.detail);
                     worker.LastAction = "FAILED";
@@ -1085,6 +1089,7 @@ namespace DragonBoyManager
                     worker.Failed = true;
                     worker.Ready = false;
                     worker.FailureCount++;
+                    worker.TimeoutCount++;
                     worker.Status = MainController.language == 0 ? "Không phản hồi >8s" : "No heartbeat >8s";
                     worker.LastEventUtc = now;
                     worker.LastAction = "WATCHDOG_TIMEOUT";
@@ -1500,6 +1505,7 @@ namespace DragonBoyManager
                 ScanStartedAtUtc = source.ScanStartedAtUtc,
                 ZoneClearCount = source.ZoneClearCount,
                 FailureCount = source.FailureCount,
+                TimeoutCount = source.TimeoutCount,
                 EntityCount = source.EntityCount,
                 BossCount = source.BossCount,
                 TargetHp = source.TargetHp,

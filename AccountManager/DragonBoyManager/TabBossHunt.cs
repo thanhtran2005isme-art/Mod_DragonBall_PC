@@ -14,6 +14,7 @@ namespace DragonBoyManager
         private readonly NumericUpDown numericStartZone = new NumericUpDown();
         private readonly Button buttonStart = new Button();
         private readonly Button buttonStop = new Button();
+        private readonly Button buttonLog = new Button();
         private readonly Label labelBoss = new Label();
         private readonly Label labelStartZone = new Label();
         private readonly Label labelConnected = new Label();
@@ -31,6 +32,7 @@ namespace DragonBoyManager
             ForeColor = Color.White;
             Font = new Font("Segoe UI", 9F, FontStyle.Regular);
             BuildUi();
+            RefreshBossCatalog();
             BossHuntCoordinator.Instance.Changed += Coordinator_Changed;
             timer.Interval = 500;
             timer.Tick += delegate
@@ -61,10 +63,11 @@ namespace DragonBoyManager
             labelStartZone.Text = vi ? "Khu bắt đầu:" : "Start zone:";
             buttonStart.Text = vi ? "BẮT ĐẦU DÒ" : "START SCAN";
             buttonStop.Text = vi ? "DỪNG" : "STOP";
+            buttonLog.Text = vi ? "LOG" : "LOG";
 
             string[] headers = vi
-                ? new string[] { "ID", "Tài khoản", "Gen", "Worker", "Map", "Khu", "Được giao", "Đã dò", "Vòng", "Entity", "Boss", "HP", "Ở khu", "Lỗi khu", "Nhịp cuối", "Trạng thái" }
-                : new string[] { "ID", "Account", "Gen", "Worker", "Map", "Zone", "Assigned", "Scanned", "Cycle", "Entity", "Boss", "HP", "Zone age", "Zone fail", "Last signal", "Status" };
+                ? new string[] { "ID", "Tài khoản", "Gen", "Worker", "Map", "Khu", "Được giao", "Đã dò", "Vòng", "Hiệu suất", "Entity", "Boss", "HP", "Ở khu", "Lỗi khu", "Nhịp cuối", "Trạng thái" }
+                : new string[] { "ID", "Account", "Gen", "Worker", "Map", "Zone", "Assigned", "Scanned", "Cycle", "Performance", "Entity", "Boss", "HP", "Zone age", "Zone fail", "Last signal", "Status" };
             for (int i = 0; i < headers.Length && i < grid.Columns.Count; i++)
                 grid.Columns[i].HeaderText = headers[i];
 
@@ -77,15 +80,9 @@ namespace DragonBoyManager
             labelBoss.SetBounds(14, 18, 86, 24);
             comboBoss.SetBounds(100, 15, 175, 26);
             comboBoss.DropDownStyle = ComboBoxStyle.DropDown;
-            comboBoss.Items.AddRange(new object[]
-            {
-                "Super Broly", "Black Goku", "Super Black Goku", "Fide Vàng", "Fide Đại Ca",
-                "Cooler", "Xên hoàn thiện", "Siêu bọ hung", "Xên bọ hung", "Xên con",
-                "Android 13", "Android 14", "Android 15", "Android 19", "Dr.Kôrê",
-                "Bojack", "Cumber", "Tiểu đội trưởng", "Số 1", "Số 2", "Số 3", "Số 4"
-            });
             comboBoss.Text = "Super Broly";
             comboBoss.TextChanged += delegate { ApplySnapshot(BossHuntCoordinator.Instance.GetSnapshot()); };
+            comboBoss.DropDown += delegate { RefreshBossCatalog(); };
 
             labelStartZone.SetBounds(285, 18, 85, 24);
             numericStartZone.SetBounds(370, 15, 55, 26);
@@ -99,6 +96,19 @@ namespace DragonBoyManager
             buttonStop.Click += delegate
             {
                 BossHuntCoordinator.Instance.Stop(MainController.language == 0 ? "Người dùng dừng" : "Stopped by user");
+            };
+
+            buttonLog.SetBounds(650, 13, 74, 30);
+            buttonLog.Click += delegate
+            {
+                try
+                {
+                    BossHuntLogViewer viewer = new BossHuntLogViewer();
+                    viewer.Show(this);
+                }
+                catch
+                {
+                }
             };
 
             labelConnected.SetBounds(14, 52, 245, 24);
@@ -123,7 +133,7 @@ namespace DragonBoyManager
             grid.DefaultCellStyle.SelectionForeColor = Color.White;
             grid.ScrollBars = ScrollBars.Both;
 
-            int[] widths = new int[] { 42, 110, 42, 58, 135, 42, 150, 160, 42, 50, 45, 70, 58, 120, 105, 250 };
+            int[] widths = new int[] { 42, 110, 42, 58, 135, 42, 150, 160, 42, 135, 50, 45, 70, 58, 120, 105, 250 };
             for (int i = 0; i < widths.Length; i++)
                 grid.Columns.Add(new DataGridViewTextBoxColumn { Width = widths[i] });
 
@@ -158,6 +168,7 @@ namespace DragonBoyManager
             Controls.Add(numericStartZone);
             Controls.Add(buttonStart);
             Controls.Add(buttonStop);
+            Controls.Add(buttonLog);
             Controls.Add(labelConnected);
             Controls.Add(labelState);
             Controls.Add(grid);
@@ -170,6 +181,9 @@ namespace DragonBoyManager
             BossHuntSnapshot snapshot = BossHuntCoordinator.Instance.GetSnapshot();
             if (snapshot.State == BossHuntState.Scanning || snapshot.State == BossHuntState.Rallying || snapshot.State == BossHuntState.Fighting)
                 return;
+
+            BossHuntCatalog.RememberBoss(comboBoss.Text);
+            RefreshBossCatalog();
 
             string error;
             if (!BossHuntCoordinator.Instance.Start(comboBoss.Text, (int)numericStartZone.Value, out error))
@@ -231,6 +245,7 @@ namespace DragonBoyManager
                     string.IsNullOrEmpty(worker.AssignedZones) ? "-" : worker.AssignedZones,
                     GetScannedText(worker),
                     worker.ScanCycle > 0 ? worker.ScanCycle.ToString() : "-",
+                    GetPerformanceText(worker),
                     worker.EntityCount >= 0 ? worker.EntityCount.ToString() : "-",
                     worker.BossCount >= 0 ? worker.BossCount.ToString() : "-",
                     worker.TargetHp >= 0 ? FormatNumber(worker.TargetHp) : "-",
@@ -355,6 +370,34 @@ namespace DragonBoyManager
                 case BossHuntState.Stopped: return "Status: Stopped" + suffix;
                 default: return "Status: Idle";
             }
+        }
+
+        private void RefreshBossCatalog()
+        {
+            string current = comboBoss.Text;
+            List<string> names = BossHuntCatalog.GetBossNames();
+            comboBoss.BeginUpdate();
+            try
+            {
+                comboBoss.Items.Clear();
+                for (int i = 0; i < names.Count; i++)
+                    comboBoss.Items.Add(names[i]);
+            }
+            finally
+            {
+                comboBoss.EndUpdate();
+            }
+            comboBoss.Text = current;
+        }
+
+        private static string GetPerformanceText(BossHuntWorkerSnapshot worker)
+        {
+            double minutes = 0.0;
+            if (worker.ScanStartedAtUtc != DateTime.MinValue)
+                minutes = DateTime.UtcNow.Subtract(worker.ScanStartedAtUtc).TotalMinutes;
+            double perMinute = minutes > 0.05 ? worker.ZoneClearCount / minutes : 0.0;
+            return worker.ZoneClearCount + " khu | " + perMinute.ToString("0.0") + "/m | F" +
+                   worker.FailureCount + " | TO" + worker.TimeoutCount;
         }
 
         private static string GetScannedText(BossHuntWorkerSnapshot worker)

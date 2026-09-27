@@ -1,0 +1,24 @@
+# Boss Hunt catalog - one boss name per line
+# Có thể thêm boss mới vào file này mà không cần sửa source.
+Super Broly
+Black Goku
+Super Black Goku
+Fide Vàng
+Fide Đại Ca
+Cooler
+Xên hoàn thiện
+Siêu bọ hung
+Xên bọ hung
+Xên con
+Android 13
+Android 14
+Android 15
+Android 19
+Dr.Kôrê
+Bojack
+Cumber
+Tiểu đội trưởng
+Số 1
+Số 2
+Số 3
+Số 4
