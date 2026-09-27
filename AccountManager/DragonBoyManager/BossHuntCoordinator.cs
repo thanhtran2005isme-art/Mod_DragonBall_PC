@@ -15,6 +15,14 @@ namespace DragonBoyManager
         Stopped
     }
 
+    public enum BossPresenceState
+    {
+        Unknown,
+        Alive,
+        Dead,
+        Stale
+    }
+
     public sealed class BossHuntWorkerSnapshot
     {
         public int AccountId;
@@ -32,6 +40,15 @@ namespace DragonBoyManager
         public DateTime LastHeartbeatUtc = DateTime.MinValue;
         public DateTime LastEventUtc = DateTime.MinValue;
         public int ScanCycle;
+        public string AssignedZones = "";
+        public int TotalZones;
+        public int EntityCount = -1;
+        public int BossCount = -1;
+        public int TargetHp = -1;
+        public DateTime ZoneEnteredAtUtc = DateTime.MinValue;
+        public int ZoneFailureCount;
+        public string LastZoneFailure = "";
+        public string LastAction = "";
         public string DuplicateWarning = "";
         public List<string> ScannedZones = new List<string>();
         public List<string> ZoneHistory = new List<string>();
@@ -44,6 +61,7 @@ namespace DragonBoyManager
         public string MapName = "";
         public int Zone = -1;
         public bool Alive;
+        public BossPresenceState Presence = BossPresenceState.Unknown;
         public DateTime SpawnedAtUtc = DateTime.MinValue;
         public DateTime DiedAtUtc = DateTime.MinValue;
         public string Killer = "";
@@ -66,6 +84,14 @@ namespace DragonBoyManager
         public string RawMessage = "";
     }
 
+    public sealed class BossHuntTimelineEntry
+    {
+        public DateTime AtUtc = DateTime.MinValue;
+        public int AccountId = -1;
+        public string EventName = "";
+        public string Detail = "";
+    }
+
     public sealed class BossHuntSnapshot
     {
         public int SessionId;
@@ -77,10 +103,14 @@ namespace DragonBoyManager
         public string FoundMapName = "";
         public int FoundZone = -1;
         public int FinderAccountId = -1;
+        public string FinderUsername = "";
+        public int UniqueCoverageCount;
+        public int CoverageTotalZones;
         public string StopReason = "";
         public BossHuntBossSnapshot TargetBoss;
         public List<BossHuntWorkerSnapshot> Workers = new List<BossHuntWorkerSnapshot>();
         public List<BossHuntBossEventSnapshot> RecentBossEvents = new List<BossHuntBossEventSnapshot>();
+        public List<BossHuntTimelineEntry> RecentTimeline = new List<BossHuntTimelineEntry>();
     }
 
     internal sealed class BossHuntPayload
@@ -104,6 +134,8 @@ namespace DragonBoyManager
         public int bossCount;
         public int targetHp = -1;
         public int scanCycle;
+        public int totalZones;
+        public string assignedZones;
     }
 
     internal sealed class BossHuntZoneLedgerEntry
@@ -146,6 +178,7 @@ namespace DragonBoyManager
         private readonly List<BossHuntBossEventSnapshot> _bossEvents = new List<BossHuntBossEventSnapshot>();
         private readonly Dictionary<string, BossHuntZoneLedgerEntry> _zoneLedger = new Dictionary<string, BossHuntZoneLedgerEntry>();
         private readonly Dictionary<int, string> _activeZoneByAccount = new Dictionary<int, string>();
+        private readonly List<BossHuntTimelineEntry> _timeline = new List<BossHuntTimelineEntry>();
         private readonly Timer _watchdog;
 
         private int _sessionSeed;
@@ -276,6 +309,7 @@ namespace DragonBoyManager
                 _sessionAccounts.Clear();
                 _zoneLedger.Clear();
                 _activeZoneByAccount.Clear();
+                _timeline.Clear();
 
                 DateTime now = DateTime.UtcNow;
                 for (int i = 0; i < accounts.Count; i++)
@@ -294,6 +328,7 @@ namespace DragonBoyManager
                     };
                 }
                 _sessionAccounts.AddRange(accounts);
+                AddTimelineLocked("SESSION_START", -1, "boss=" + bossName + ";workers=" + accounts.Count + ";generation=" + generation);
                 knownBoss = CloneBoss(FindLatestBossLocked(bossName, true));
             }
 
@@ -318,6 +353,7 @@ namespace DragonBoyManager
                 targets = new List<Account>(_sessionAccounts);
                 payload = CreatePayload();
                 payload.detail = _stopReason;
+                AddTimelineLocked("SESSION_STOP", -1, _stopReason);
 
                 foreach (BossHuntWorkerSnapshot worker in _workers.Values)
                 {
@@ -455,7 +491,10 @@ namespace DragonBoyManager
                         worker.Ready = true;
                         worker.Failed = false;
                         worker.Unresponsive = false;
+                        worker.TargetHp = payload.targetHp;
+                        worker.LastAction = "READY";
                         worker.Status = MainController.language == 0 ? "Đã tới - đang đánh" : "Ready - fighting";
+                        AddTimelineLocked("READY", account.ID, "map=" + payload.mapId + ";zone=" + payload.zone + ";hp=" + payload.targetHp);
                     }
 
                     bool anyReady;
@@ -488,10 +527,12 @@ namespace DragonBoyManager
                     return;
 
                 worker.Status = MainController.language == 0 ? "Mất kết nối" : "Disconnected";
+                worker.LastAction = "DISCONNECTED";
                 worker.Ready = false;
                 worker.Failed = true;
                 worker.Unresponsive = false;
                 worker.LastEventUtc = DateTime.UtcNow;
+                AddTimelineLocked("DISCONNECTED", account.ID, "");
                 ClearActiveZoneLocked(account.ID);
 
                 if (!IsRunningState(_state))
@@ -552,6 +593,9 @@ namespace DragonBoyManager
                     FoundMapName = _foundMapName,
                     FoundZone = _foundZone,
                     FinderAccountId = _finderAccountId,
+                    FinderUsername = GetWorkerUsernameLocked(_finderAccountId),
+                    UniqueCoverageCount = GetUniqueCoverageCountLocked(),
+                    CoverageTotalZones = GetCoverageTotalZonesLocked(),
                     StopReason = _stopReason,
                     TargetBoss = CloneBoss(FindLatestBossLocked(_bossName, false))
                 };
@@ -563,6 +607,10 @@ namespace DragonBoyManager
                 int start = Math.Max(0, _bossEvents.Count - 30);
                 for (int i = start; i < _bossEvents.Count; i++)
                     snapshot.RecentBossEvents.Add(CloneBossEvent(_bossEvents[i]));
+
+                int timelineStart = Math.Max(0, _timeline.Count - 80);
+                for (int i = timelineStart; i < _timeline.Count; i++)
+                    snapshot.RecentTimeline.Add(CloneTimeline(_timeline[i]));
 
                 return snapshot;
             }
@@ -616,7 +664,11 @@ namespace DragonBoyManager
                 }
 
                 if (newEvent)
+                {
                     AddBossEventLocked("SPAWN", record, observedUtc, account.ID, "", payload.rawMessage);
+                    if (_sessionId > 0 && BossMatches(record.BossName, _bossName))
+                        AddTimelineLocked("BOSS_SPAWN", account.ID, record.MapName + " K" + record.Zone + " | " + (payload.rawMessage ?? ""));
+                }
 
                 canonical = CloneBoss(record);
             }
@@ -655,7 +707,11 @@ namespace DragonBoyManager
                     record.LastSourceAccountId = account.ID;
                     AddSourceAccount(record, account.ID);
                     if (newEvent)
+                    {
                         AddBossEventLocked("DEATH", record, observedUtc, account.ID, killer, payload.rawMessage);
+                        if (_sessionId > 0 && BossMatches(record.BossName, _bossName))
+                            AddTimelineLocked("BOSS_DEATH", account.ID, "killer=" + killer + " | " + (payload.rawMessage ?? ""));
+                    }
                     updatedAny = true;
                 }
 
@@ -674,6 +730,8 @@ namespace DragonBoyManager
                     AddSourceAccount(record, account.ID);
                     _bossRecords[key] = record;
                     AddBossEventLocked("DEATH", record, observedUtc, account.ID, killer, payload.rawMessage);
+                    if (_sessionId > 0 && BossMatches(record.BossName, _bossName))
+                        AddTimelineLocked("BOSS_DEATH", account.ID, "killer=" + killer + " | " + (payload.rawMessage ?? ""));
                 }
 
                 matchesCurrent = IsRunningState(_state) && BossMatches(payload.bossName, _bossName);
@@ -723,6 +781,10 @@ namespace DragonBoyManager
                 worker.MapName = payload.mapName ?? "";
                 worker.Zone = payload.zone;
                 worker.ScanCycle = payload.scanCycle;
+                worker.EntityCount = payload.entityCount;
+                worker.BossCount = payload.bossCount;
+                worker.TargetHp = payload.targetHp;
+                worker.LastAction = string.IsNullOrEmpty(payload.detail) ? worker.LastAction : payload.detail;
             }
         }
 
@@ -744,21 +806,77 @@ namespace DragonBoyManager
 
                 TouchWorkerLocked(account, payload);
                 worker.ScanCycle = payload.scanCycle;
+                worker.EntityCount = payload.entityCount;
+                worker.BossCount = payload.bossCount;
+                if (payload.targetHp >= 0)
+                    worker.TargetHp = payload.targetHp;
                 string eventName = payload.eventName ?? "";
+                worker.LastAction = eventName;
 
-                if (eventName == "ZONE_ENTER")
+                if (eventName == "ZONE_PLAN")
+                {
+                    worker.AssignedZones = payload.assignedZones ?? "";
+                    worker.TotalZones = payload.totalZones;
+                    AddTimelineLocked("ZONE_PLAN", account.ID, "assigned=" + worker.AssignedZones + ";total=" + worker.TotalZones);
+                    changed = true;
+                }
+                else if (eventName == "ZONE_ENTER")
                 {
                     RecordZoneEnterLocked(worker, payload);
+                    AddTimelineLocked("ZONE_ENTER", account.ID, "K" + payload.zone + ";cycle=" + payload.scanCycle +
+                        ";entities=" + payload.entityCount + ";bosses=" + payload.bossCount);
                     changed = true;
                 }
                 else if (eventName == "ZONE_CLEAR")
                 {
                     RecordZoneClearLocked(worker, payload);
+                    AddTimelineLocked("ZONE_CLEAR", account.ID, "K" + payload.zone + ";cycle=" + payload.scanCycle +
+                        ";entities=" + payload.entityCount + ";bosses=" + payload.bossCount);
                     changed = true;
                 }
                 else if (eventName == "ZONE_FAILED")
                 {
+                    worker.ZoneFailureCount++;
+                    worker.LastZoneFailure = "K" + payload.zone + " " + (payload.detail ?? "");
                     AppendZoneHistory(worker, "G" + payload.assignmentGeneration + " K" + payload.zone + " FAIL");
+                    AddTimelineLocked("ZONE_FAILED", account.ID, worker.LastZoneFailure);
+                    changed = true;
+                }
+                else if (eventName == "ENTITY_SNAPSHOT")
+                {
+                    changed = true;
+                }
+                else if (eventName == "SCAN_ROUTE")
+                {
+                    worker.Status = (MainController.language == 0 ? "Đang tới map boss" : "Routing to boss map") +
+                                    " | " + (payload.detail ?? "");
+                    AddTimelineLocked("SCAN_ROUTE", account.ID, payload.detail ?? "");
+                    changed = true;
+                }
+                else if (eventName == "RALLY_ROUTE")
+                {
+                    worker.Status = (MainController.language == 0 ? "Rally - đang tới map" : "Rally - routing map") +
+                                    " | " + (payload.detail ?? "");
+                    AddTimelineLocked("RALLY_ROUTE", account.ID, payload.detail ?? "");
+                    changed = true;
+                }
+                else if (eventName == "RALLY_ZONE")
+                {
+                    worker.Status = (MainController.language == 0 ? "Rally - đang vào khu" : "Rally - entering zone") +
+                                    " | " + (payload.detail ?? "");
+                    AddTimelineLocked("RALLY_ZONE", account.ID, payload.detail ?? "");
+                    changed = true;
+                }
+                else if (eventName == "RALLY_ZONE_ARRIVED")
+                {
+                    worker.Status = MainController.language == 0 ? "Rally - đã tới khu, chờ boss" : "Rally - zone reached, waiting target";
+                    AddTimelineLocked("RALLY_ZONE_ARRIVED", account.ID, "K" + payload.zone);
+                    changed = true;
+                }
+                else if (eventName == "FIGHTING")
+                {
+                    worker.Status = MainController.language == 0 ? "Đang đánh boss" : "Fighting boss";
+                    AddTimelineLocked("FIGHTING", account.ID, "hp=" + payload.targetHp);
                     changed = true;
                 }
             }
@@ -791,6 +909,8 @@ namespace DragonBoyManager
                     worker.Unresponsive = false;
                     worker.Status = (MainController.language == 0 ? "Lỗi: " : "Failed: ") +
                                     (string.IsNullOrEmpty(payload.detail) ? "UNKNOWN" : payload.detail);
+                    worker.LastAction = "FAILED";
+                    AddTimelineLocked("FAILED", account.ID, payload.detail ?? "UNKNOWN");
                     ClearActiveZoneLocked(account.ID);
                 }
 
@@ -856,7 +976,10 @@ namespace DragonBoyManager
                     finder.Ready = false;
                     finder.Failed = false;
                     finder.Unresponsive = false;
+                    finder.TargetHp = payload.targetHp;
+                    finder.LastAction = "FOUND";
                     finder.Status = MainController.language == 0 ? "Đã tìm thấy boss" : "Boss found";
+                    AddTimelineLocked("FOUND", account.ID, _foundMapName + " K" + _foundZone + ";hp=" + payload.targetHp);
                 }
 
                 targets = new List<Account>();
@@ -871,6 +994,7 @@ namespace DragonBoyManager
                         worker.Status = MainController.language == 0 ? "Đang tới boss" : "Rallying";
                 }
                 rally = CreatePayload();
+                AddTimelineLocked("RALLY", account.ID, _foundMapName + " K" + _foundZone + ";targets=" + targets.Count);
             }
 
             BossHuntDiagnostics.Log("MANAGER", "RALLY_BROADCAST", rally.sessionId, account.ID, rally.bossName, BossHuntState.Rallying.ToString(),
@@ -915,6 +1039,8 @@ namespace DragonBoyManager
                     worker.Ready = false;
                     worker.Status = MainController.language == 0 ? "Không phản hồi >8s" : "No heartbeat >8s";
                     worker.LastEventUtc = now;
+                    worker.LastAction = "WATCHDOG_TIMEOUT";
+                    AddTimelineLocked("WATCHDOG_TIMEOUT", account.ID, ">8s");
                     ClearActiveZoneLocked(account.ID);
                     timedOut.Add(account);
                     changed = true;
@@ -1008,6 +1134,8 @@ namespace DragonBoyManager
                 BossHuntDiagnostics.Log("MANAGER", "ASSIGN", sessionId, accounts[i].ID, bossName, BossHuntState.Scanning.ToString(),
                     "generation=" + generation + ";worker=" + i + "/" + count + ";startZone=" + startZone +
                     ";canonicalMap=" + payload.mapId + ";canonicalZone=" + payload.zone);
+                lock (_sync)
+                    AddTimelineLocked("ASSIGN", accounts[i].ID, "G" + generation + " W" + (i + 1) + "/" + count);
                 Send(accounts[i], CmdStartScan, payload);
             }
         }
@@ -1042,6 +1170,13 @@ namespace DragonBoyManager
                 worker.Unresponsive = false;
                 worker.Zone = -1;
                 worker.ScanCycle = 0;
+                worker.AssignedZones = "";
+                worker.TotalZones = 0;
+                worker.EntityCount = -1;
+                worker.BossCount = -1;
+                worker.TargetHp = -1;
+                worker.ZoneEnteredAtUtc = DateTime.MinValue;
+                worker.LastAction = "ASSIGNED";
                 worker.DuplicateWarning = "";
                 worker.LastHeartbeatUtc = now;
                 worker.LastEventUtc = now;
@@ -1128,10 +1263,12 @@ namespace DragonBoyManager
                 BossHuntDiagnostics.Log("MANAGER", "DUPLICATE_ZONE", _sessionId, worker.AccountId, _bossName, _state.ToString(),
                     "generation=" + payload.assignmentGeneration + ";map=" + payload.mapId + ";zone=" + payload.zone +
                     ";other=" + conflictAccountId);
+                AddTimelineLocked("DUPLICATE_ZONE", worker.AccountId, "K" + payload.zone + " vs #" + conflictAccountId);
             }
 
             entry.ActiveAccountId = worker.AccountId;
             entry.LastEnterUtc = DateTime.UtcNow;
+            worker.ZoneEnteredAtUtc = entry.LastEnterUtc;
             _activeZoneByAccount[worker.AccountId] = key;
             AppendZoneHistory(worker, "G" + payload.assignmentGeneration + " K" + payload.zone + " ENTER");
         }
@@ -1155,6 +1292,7 @@ namespace DragonBoyManager
                 entry.ActiveAccountId = -1;
             entry.LastScannedByAccountId = worker.AccountId;
             entry.LastClearUtc = DateTime.UtcNow;
+            worker.ZoneEnteredAtUtc = DateTime.MinValue;
             _activeZoneByAccount.Remove(worker.AccountId);
 
             string token = "G" + payload.assignmentGeneration + ":M" + payload.mapId + ":K" + payload.zone;
@@ -1254,6 +1392,7 @@ namespace DragonBoyManager
                 MapName = source.MapName,
                 Zone = source.Zone,
                 Alive = source.Alive,
+                Presence = GetPresence(source),
                 SpawnedAtUtc = source.SpawnedAtUtc,
                 DiedAtUtc = source.DiedAtUtc,
                 Killer = source.Killer,
@@ -1300,11 +1439,87 @@ namespace DragonBoyManager
                 LastHeartbeatUtc = source.LastHeartbeatUtc,
                 LastEventUtc = source.LastEventUtc,
                 ScanCycle = source.ScanCycle,
+                AssignedZones = source.AssignedZones,
+                TotalZones = source.TotalZones,
+                EntityCount = source.EntityCount,
+                BossCount = source.BossCount,
+                TargetHp = source.TargetHp,
+                ZoneEnteredAtUtc = source.ZoneEnteredAtUtc,
+                ZoneFailureCount = source.ZoneFailureCount,
+                LastZoneFailure = source.LastZoneFailure,
+                LastAction = source.LastAction,
                 DuplicateWarning = source.DuplicateWarning
             };
             clone.ScannedZones.AddRange(source.ScannedZones);
             clone.ZoneHistory.AddRange(source.ZoneHistory);
             return clone;
+        }
+
+        private static BossPresenceState GetPresence(BossHuntBossSnapshot boss)
+        {
+            if (boss == null)
+                return BossPresenceState.Unknown;
+            if (!boss.Alive)
+                return BossPresenceState.Dead;
+            if (boss.SpawnedAtUtc == DateTime.MinValue)
+                return BossPresenceState.Unknown;
+            if (DateTime.UtcNow.Subtract(boss.SpawnedAtUtc).TotalMinutes > BossLocationFreshMinutes)
+                return BossPresenceState.Stale;
+            return BossPresenceState.Alive;
+        }
+
+        private string GetWorkerUsernameLocked(int accountId)
+        {
+            BossHuntWorkerSnapshot worker;
+            if (accountId > 0 && _workers.TryGetValue(accountId, out worker))
+                return worker.Username ?? "";
+            return "";
+        }
+
+        private int GetUniqueCoverageCountLocked()
+        {
+            int count = 0;
+            foreach (BossHuntZoneLedgerEntry entry in _zoneLedger.Values)
+            {
+                if (entry.Generation == _assignmentGeneration && entry.LastClearUtc != DateTime.MinValue)
+                    count++;
+            }
+            return count;
+        }
+
+        private int GetCoverageTotalZonesLocked()
+        {
+            int total = 0;
+            foreach (BossHuntWorkerSnapshot worker in _workers.Values)
+            {
+                if (worker.AssignmentGeneration == _assignmentGeneration && worker.TotalZones > total)
+                    total = worker.TotalZones;
+            }
+            return total;
+        }
+
+        private void AddTimelineLocked(string eventName, int accountId, string detail)
+        {
+            _timeline.Add(new BossHuntTimelineEntry
+            {
+                AtUtc = DateTime.UtcNow,
+                AccountId = accountId,
+                EventName = eventName ?? "",
+                Detail = detail ?? ""
+            });
+            if (_timeline.Count > 300)
+                _timeline.RemoveAt(0);
+        }
+
+        private static BossHuntTimelineEntry CloneTimeline(BossHuntTimelineEntry source)
+        {
+            return new BossHuntTimelineEntry
+            {
+                AtUtc = source.AtUtc,
+                AccountId = source.AccountId,
+                EventName = source.EventName,
+                Detail = source.Detail
+            };
         }
 
         private BossHuntPayload CreatePayload()
