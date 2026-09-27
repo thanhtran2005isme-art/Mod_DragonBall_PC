@@ -190,7 +190,6 @@ namespace DragonBoyManager
 						}
 
 						BossHuntDiagnostics.Log("MANAGER_SOCKET", "HANDSHAKE", 0, state.account.ID, "", "SOCKET", "");
-						BossHuntCoordinator.Instance.HandleConnected(state.account);
 						try
 						{
 							Send(state.workSocket, new vMessage
@@ -204,6 +203,7 @@ namespace DragonBoyManager
 						{
 							ManagerRuntimeDiagnostics.Log("HANDSHAKE_ACK_TX_FAILED account=" + accountId, ackEx);
 						}
+						BossHuntCoordinator.Instance.HandleConnected(state.account);
 						if (MainController.instance != null)
 							MainController.instance.REFRESH = true;
 					}
