@@ -9,6 +9,17 @@ namespace DragonBoyManager
     {
         private static readonly object Sync = new object();
 
+        private static int revision;
+
+        public static int Revision
+        {
+            get
+            {
+                lock (Sync)
+                    return revision;
+            }
+        }
+
         public static string GetCatalogPath()
         {
             string root = AppDomain.CurrentDomain.BaseDirectory ?? "";
@@ -46,8 +57,12 @@ namespace DragonBoyManager
 
         public static void RememberBoss(string bossName)
         {
-            bossName = (bossName ?? "").Trim();
-            if (bossName.Length == 0)
+            RememberBosses(new string[] { bossName });
+        }
+
+        public static void RememberBosses(IEnumerable<string> bossNames)
+        {
+            if (bossNames == null)
                 return;
 
             lock (Sync)
@@ -55,31 +70,81 @@ namespace DragonBoyManager
                 try
                 {
                     string path = GetCatalogPath();
-                    List<string> current = new List<string>();
-                    if (File.Exists(path))
+                    List<string> current = ReadCatalogUnsafe(path);
+                    bool changed = false;
+
+                    foreach (string raw in bossNames)
                     {
-                        string[] lines = File.ReadAllLines(path, Encoding.UTF8);
-                        for (int i = 0; i < lines.Length; i++)
-                        {
-                            string value = (lines[i] ?? "").Trim();
-                            if (value.Length == 0 || value.StartsWith("#", StringComparison.Ordinal))
-                                continue;
-                            AddUnique(current, value);
-                        }
+                        string value = CanonicalizeForCatalog(raw, current);
+                        if (value.Length == 0)
+                            continue;
+
+                        int before = current.Count;
+                        AddUnique(current, value);
+                        if (current.Count != before)
+                            changed = true;
                     }
 
+                    if (!changed)
+                        return;
+
+                    current.Sort(StringComparer.CurrentCultureIgnoreCase);
+                    StringBuilder builder = new StringBuilder();
+                    builder.AppendLine("# Boss Hunt catalog - one boss name per line");
+                    builder.AppendLine("# Tự đồng bộ từ các Game client; có thể thêm boss thủ công.");
                     for (int i = 0; i < current.Count; i++)
-                    {
-                        if (current[i].Equals(bossName, StringComparison.OrdinalIgnoreCase))
-                            return;
-                    }
+                        builder.AppendLine(current[i]);
 
-                    File.AppendAllText(path, bossName + Environment.NewLine, Encoding.UTF8);
+                    File.WriteAllText(path, builder.ToString(), Encoding.UTF8);
+                    revision++;
                 }
                 catch
                 {
                 }
             }
+        }
+
+        private static List<string> ReadCatalogUnsafe(string path)
+        {
+            List<string> current = new List<string>();
+            if (!File.Exists(path))
+                return current;
+
+            string[] lines = File.ReadAllLines(path, Encoding.UTF8);
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string value = (lines[i] ?? "").Trim();
+                if (value.Length == 0 || value.StartsWith("#", StringComparison.Ordinal))
+                    continue;
+                AddUnique(current, value);
+            }
+            return current;
+        }
+
+        private static string CanonicalizeForCatalog(string raw, List<string> current)
+        {
+            string value = (raw ?? "").Trim().Trim('[', ']', ':', '-', '.', ' ');
+            if (value.Length == 0)
+                return "";
+
+            string best = "";
+            for (int i = 0; i < current.Count; i++)
+            {
+                string candidate = current[i];
+                if (value.Equals(candidate, StringComparison.OrdinalIgnoreCase))
+                    return candidate;
+                if (!value.StartsWith(candidate, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (value.Length == candidate.Length)
+                    return candidate;
+
+                char next = value[candidate.Length];
+                if ((char.IsWhiteSpace(next) || next == '-' || next == '(' || next == '[') &&
+                    candidate.Length > best.Length)
+                    best = candidate;
+            }
+
+            return best.Length > 0 ? best : value;
         }
 
         private static void AddUnique(List<string> values, string value)
