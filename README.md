@@ -23,16 +23,22 @@ Pull:
 
 ```bat
 cd /d C:\Users\Admin\Downloads\ModThanhLC-2.0-patch1
-git pull origin main
+
+git fetch origin
+git checkout feat-boss-hunt-manager
+git pull origin feat-boss-hunt-manager
+
 git log -5 --oneline
 ```
 
 Build gameplay / GameAssembly:
 
 ```bat
-taskkill /F /IM "Dragon ball_237b.exe" 2>nul
+"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe" ModThanhLC.sln /t:restore /p:Configuration=Release
 
-"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe" GameAssembly\GameAssembly.csproj /t:rebuild /p:Configuration=Release
+nuget.exe restore ModThanhLC.sln
+
+"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe" ModThanhLC.sln /t:rebuild /p:Configuration=Release
 ```
 
 Output chính:
@@ -45,8 +51,8 @@ DLL : Output\Dragon ball_237b_Data\Managed\Assembly-CSharp.dll
 Nếu DLL bị lock:
 
 ```bat
-taskkill /F /IM "Dragon ball_237b.exe"
-taskkill /F /IM DragonBoyManager.exe
+taskkill /F /IM "Dragon ball_237b.exe" 2>nul
+taskkill /F /IM DragonBoyManager.exe 2>nul
 ```
 
 ## File/class quan trọng
