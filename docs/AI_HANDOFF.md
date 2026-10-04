@@ -2,7 +2,7 @@
 
 > Repo: `thanhtran2005isme-art/Mod_DragonBall_PC`  
 > Branch chính: `main`  
-> Cập nhật handoff: 2026-09-27  
+> Cập nhật handoff: 2026-10-04  
 > Đây là bản tóm tắt hiện tại. Chi tiết cũ chuyển sang `docs/history/`.
 
 ## 1. Mục tiêu của file này
@@ -245,16 +245,6 @@ bfdc638 Bắt KOL trực tiếp từ packet 22 thực tế
 - Boss catalog runtime sync: repo không có master list boss đầy đủ; seed 23 tên chỉ là fallback. Game gửi `CmdBossCatalog=119` ngay sau handshake và mỗi ~15s, lấy tên từ `GClass158.list_3`, `GClass156` cache và target hiện tại. Manager batch-merge vào `Data/BossHuntBosses.txt`, canonicalize instance về family đã biết và tăng revision để dropdown tự refresh. Commits `1d31b26`, `cceae42`, `23b054e`, `e2c19f2`, `9071a6e`; `9071a6e` full workflow SUCCESS.
 - Combat-death source: `GClass12` packet `-60` mang attacker charId + target charId + server `isDie`. Khi target là boss `GClass78` (`int_13 < 0`) và `isDie=true`, Game enqueue `ObserveCombatCharacterDeath(...)`; `BossZoneScanner.Update()` validate concrete locked target + map + zone rồi gửi `CmdBossDeath` kèm `killerId/killerName/raw= combat:-60...`. Manager lưu killer ID/name và dừng đúng session target. Commits `58e2ea9`, `ee557c8`, `dba8863`, `dcbba04`, `b763a80`, `09ee59f`; HEAD `09ee59f` full workflow SUCCESS.
 
-
-
-
-
-
-
-
-
-
-
 - Full solution local từng fail ở PostBuild copy của một số project dù source compile được; gameplay thường nên build riêng.
 - DLL `Assembly-CSharp.dll` có thể bị game/manager lock.
 - `GameAssembly` là .NET Framework 3.5, dễ lỗi nếu dùng API mới.
@@ -336,3 +326,10 @@ Nếu nội dung cũ dài ra, chuyển nó sang `docs/history/YYYY-MM.md` thay v
 - Commits: `4a43600`, `508dda1`, `4c571e9`.
 - Cần rebuild + test với >=2 connected accounts để xác nhận acc khác tự tới đúng K3.
 
+### FOUND concrete instance hardening — 2026-10-04
+
+- `BossZoneScanner` không còn ưu tiên session lock generic khi đã có entity thật. Khi gửi `FOUND`, tên resolve trực tiếp từ entity hiện tại trở thành `targetBossName`, sau đó session được re-lock bằng đúng concrete name + map + khu hiện tại trước khi gửi Manager.
+- Nếu `START_SCAN` đã mang `targetBossName` cụ thể từ Manager/reconnect, client khóa target đó **trước khi** tìm entity; vì vậy không nhảy sang boss khác cùng family chỉ vì entity đó đứng trước trong `GClass158.list_3`.
+- Nếu Manager chưa khóa instance cụ thể, scanner vẫn có thể tìm theo family; khi gặp entity thật thì promote sang concrete instance tại `FOUND`.
+- Code commits: `073c660` và `ef651813`.
+- Full-solution MSBuild của workflow `37211229825` đã qua bước `Biên dịch dự án`; vẫn cần runtime test với >=2 account, đặc biệt case có hai boss cùng family trong map/khu và case reconnect giữ nguyên target instance.
