@@ -357,8 +357,11 @@ namespace AssemblyCSharp.Functions
             GClass78 currentTarget = FindTargetBoss();
             if (currentTarget != null)
             {
+                string concreteTarget = ResolveBossEntityName(currentTarget);
+                if (string.IsNullOrEmpty(concreteTarget))
+                    concreteTarget = string.IsNullOrEmpty(payload.targetBossName) ? _bossName : payload.targetBossName;
                 LockSessionTarget(
-                    string.IsNullOrEmpty(payload.targetBossName) ? _bossName : payload.targetBossName,
+                    concreteTarget,
                     GClass20.int_37,
                     GClass20.int_39,
                     payload.observedAtTicks);
@@ -1747,13 +1750,20 @@ namespace AssemblyCSharp.Functions
 
                 if (cmd == CmdFound && currentTarget != null)
                 {
-                    string concreteName = _sessionTargetLocked && !string.IsNullOrEmpty(_sessionTargetBossName)
-                        ? _sessionTargetBossName
-                        : ResolveBossEntityName(currentTarget);
-                    payload.targetBossName = concreteName;
-                    payload.observedAtTicks = _sessionTargetObservedAtTicks > 0L
+                    string concreteName = ResolveBossEntityName(currentTarget);
+                    if (string.IsNullOrEmpty(concreteName))
+                    {
+                        concreteName = _sessionTargetLocked && !string.IsNullOrEmpty(_sessionTargetBossName)
+                            ? _sessionTargetBossName
+                            : _bossName;
+                    }
+
+                    long foundObservedAtTicks = _sessionTargetObservedAtTicks > 0L
                         ? _sessionTargetObservedAtTicks
                         : DateTime.UtcNow.Ticks;
+                    LockSessionTarget(concreteName, payload.mapId, payload.zone, foundObservedAtTicks);
+                    payload.targetBossName = concreteName;
+                    payload.observedAtTicks = foundObservedAtTicks;
                     Trace("TX_FOUND",
                         "target=" + concreteName +
                         ";map=" + payload.mapId +
