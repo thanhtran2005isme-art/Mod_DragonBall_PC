@@ -354,12 +354,22 @@ namespace AssemblyCSharp.Functions
             ClearAnnouncements();
             Trace("START_SCAN", "generation=" + _assignmentGeneration + ";worker=" + _workerIndex + "/" + _workerCount + ";startZone=" + _startZone);
 
+            string requestedTarget = (payload.targetBossName ?? "").Trim();
+            if (requestedTarget.Length > 0)
+            {
+                LockSessionTarget(
+                    requestedTarget,
+                    payload.mapId,
+                    payload.zone,
+                    payload.observedAtTicks);
+            }
+
             GClass78 currentTarget = FindTargetBoss();
             if (currentTarget != null)
             {
                 string concreteTarget = ResolveBossEntityName(currentTarget);
                 if (string.IsNullOrEmpty(concreteTarget))
-                    concreteTarget = string.IsNullOrEmpty(payload.targetBossName) ? _bossName : payload.targetBossName;
+                    concreteTarget = requestedTarget.Length > 0 ? requestedTarget : _bossName;
                 LockSessionTarget(
                     concreteTarget,
                     GClass20.int_37,
@@ -371,13 +381,14 @@ namespace AssemblyCSharp.Functions
 
             if (payload.mapId >= 0)
             {
+                string targetName = requestedTarget.Length > 0 ? requestedTarget : _bossName;
                 LockSessionTarget(
-                    string.IsNullOrEmpty(payload.targetBossName) ? _bossName : payload.targetBossName,
+                    targetName,
                     payload.mapId,
                     payload.zone,
                     payload.observedAtTicks);
                 GClass156.ApplyBossLocationSync(
-                    string.IsNullOrEmpty(payload.targetBossName) ? _bossName : payload.targetBossName,
+                    targetName,
                     payload.mapName,
                     payload.mapId,
                     payload.zone,
