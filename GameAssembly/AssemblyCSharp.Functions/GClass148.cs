@@ -154,6 +154,19 @@ namespace AssemblyCSharp.Functions
 
 		public void method_3(string text)
 		{
+			int sourceCommand = GClass149.GetRecentIncomingCommand();
+			if (sourceCommand != int.MinValue)
+			{
+				BossHuntDiagnostics.Log(
+					"GAME_SERVER_TEXT",
+					"CMD_" + sourceCommand,
+					0,
+					"",
+					"DISPLAY",
+					text ?? "");
+				BossZoneScanner.Instance.ObserveAnnouncement(text);
+			}
+
 			if (bool_0)
 			{
 				if (text.ToLower().Contains("Không thể chuyển map quá nhanh"))
