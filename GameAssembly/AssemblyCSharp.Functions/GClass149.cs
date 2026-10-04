@@ -27,6 +27,8 @@ namespace AssemblyCSharp.Functions
 		}
 
 		private static DateTime traceUntil = DateTime.MinValue;
+		private static sbyte lastIncomingCommand;
+		private static long lastIncomingCommandAt;
 
 		public static void smethod_2(string path, string message)
 		{
@@ -50,8 +52,30 @@ namespace AssemblyCSharp.Functions
 
 		public static void smethod_4(sbyte command)
 		{
+			lastIncomingCommand = command;
+			lastIncomingCommandAt = GClass203.smethod_18();
+
+			if (command == -25 || command == 92 || command == 93 || command == 94)
+			{
+				BossHuntDiagnostics.Log(
+					"SERVER_PACKET",
+					"CMD_" + command,
+					0,
+					"",
+					"RX",
+					"candidate-global-text");
+			}
+
 			if (DateTime.Now <= traceUntil)
 				smethod_2("Data/Errors/ui_protocol.log", "RX command=" + command);
+		}
+
+		public static int GetRecentIncomingCommand()
+		{
+			long now = GClass203.smethod_18();
+			if (lastIncomingCommandAt <= 0L || now - lastIncomingCommandAt > 500L)
+				return int.MinValue;
+			return lastIncomingCommand;
 		}
 
 		private static string lastDiagnosticError = "";
